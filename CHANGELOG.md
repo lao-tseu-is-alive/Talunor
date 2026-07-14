@@ -14,6 +14,30 @@ changed but the *lessons learned* while getting there.
 - **Iteration 2** — tools & actions: a tool registry and a ReAct-style
   act/observe loop, so the agent can *do* things, not just talk.
 
+## [0.5.2] - 2026-07-14 — Fix: OSC 11 escape-sequence garbage in the TUI
+
+### Fixed
+
+- On TUI start, a stray sequence like `]11;rgb:3030/0a0a/2424` appeared next to
+  the input. `glamour.WithAutoStyle` was querying the terminal background (OSC 11)
+  from inside the Bubble Tea event loop (when the Glamour renderer is built on the
+  first `WindowSizeMsg`); the terminal's reply raced Bubble Tea's input reader and
+  was painted to the screen instead of consumed.
+
+  Fix: detect the background **once, before** `tea.NewProgram(...).Run()` (via
+  `lipgloss.HasDarkBackground()`, handled synchronously while the terminal is
+  still in normal mode) and build Glamour with an explicit
+  `WithStandardStyle("dark"|"light")` — no query inside the render loop.
+  Verified with a PTY harness: zero OSC 11 queries emitted after the alternate
+  screen is entered.
+
+### Lessons learned
+
+1. **Never query the terminal from inside the render loop.** Any code that emits
+   a terminal query (background color, cursor position, device attributes) and
+   reads the reply will fight the TUI framework's own input reader. Do such
+   detection once, up front, before the program takes over the terminal.
+
 ## [0.5.1] - 2026-07-14 — Iteration 1 polish: help, memory inspection, config
 
 UX and configuration fixes surfaced by using the agent: commands were not
@@ -333,7 +357,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.3.0...v0.4.0

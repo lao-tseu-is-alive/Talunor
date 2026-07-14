@@ -71,9 +71,10 @@ type Model struct {
 	modelName    string
 	memCount     int
 
-	vp   viewport.Model
-	ti   textinput.Model
-	glam *glamour.TermRenderer
+	vp        viewport.Model
+	ti        textinput.Model
+	glam      *glamour.TermRenderer
+	glamStyle string // "dark" | "light", detected once before the program starts.
 
 	turns        []turn
 	streaming    bool
@@ -103,13 +104,22 @@ func New(ctx context.Context, ag *agent.Agent, providerName, modelName string, m
 		memCount:     memCount,
 		vp:           viewport.New(0, 0),
 		ti:           ti,
+		glamStyle:    "dark", // safe default; Run overrides it after detection.
 	}
 }
 
 // Run starts the program.
 func Run(ctx context.Context, ag *agent.Agent, providerName, modelName string, memCount int) error {
-	p := tea.NewProgram(New(ctx, ag, providerName, modelName, memCount),
-		tea.WithAltScreen(), tea.WithMouseCellMotion())
+	m := New(ctx, ag, providerName, modelName, memCount)
+	// Detect the terminal background NOW, before Bubble Tea takes over the
+	// terminal. Doing it here means the OSC 11 query/response is handled
+	// synchronously; querying later (e.g. via glamour.WithAutoStyle inside the
+	// event loop) leaks the response onto the screen as garbage.
+	m.glamStyle = "dark"
+	if !lipgloss.HasDarkBackground() {
+		m.glamStyle = "light"
+	}
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err
 }
@@ -334,8 +344,11 @@ func (m *Model) layout() {
 	m.vp.Height = vpH
 	m.ti.Width = m.width - len(m.ti.Prompt) - 1
 
+	// Use an explicit, pre-detected style: glamour.WithAutoStyle would query the
+	// terminal background here (inside the event loop) and leak the OSC 11
+	// response onto the screen.
 	if r, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStandardStyle(m.glamStyle),
 		glamour.WithWordWrap(m.contentWidth()),
 	); err == nil {
 		m.glam = r
