@@ -23,12 +23,8 @@ import (
 	"strings"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
+	"github.com/lao-tseu-is-alive/Talunor/internal/render"
 	"github.com/lao-tseu-is-alive/Talunor/internal/version"
-)
-
-const (
-	ansiDim   = "\x1b[2m"
-	ansiReset = "\x1b[0m"
 )
 
 func main() {
@@ -66,40 +62,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	return render(ch)
-}
-
-// render streams chunks to the terminal: reasoning dimmed, answer bright, with a
-// blank line separating the two once the answer begins.
-func render(ch <-chan llm.Chunk) error {
-	inReasoning := false
-	for c := range ch {
-		if c.Err != nil {
-			if inReasoning {
-				fmt.Print(ansiReset)
-			}
-			return c.Err
-		}
-		if c.Reasoning != "" {
-			if !inReasoning {
-				fmt.Print(ansiDim)
-				inReasoning = true
-			}
-			fmt.Print(c.Reasoning)
-		}
-		if c.Content != "" {
-			if inReasoning {
-				fmt.Print(ansiReset + "\n\n")
-				inReasoning = false
-			}
-			fmt.Print(c.Content)
-		}
-	}
-	if inReasoning {
-		fmt.Print(ansiReset)
-	}
-	fmt.Println()
-	return nil
+	return render.Stream(os.Stdout, ch)
 }
 
 func readPrompt() (string, error) {

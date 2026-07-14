@@ -60,6 +60,10 @@ test:
 chat:
 	go run -ldflags "$(LDFLAGS)" ./cmd/chat "$(PROMPT)"
 
+## run: start the interactive agent REPL (persistent memory across sessions)
+run: deps
+	go run -ldflags "$(LDFLAGS)" ./cmd/talunor
+
 ## tidy: sync go.mod/go.sum
 tidy:
 	go mod tidy

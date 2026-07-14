@@ -11,8 +11,64 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- Layer 4 — Agent loop: wire Perceive → Recall → Reason → Store into a single
-  cognitive turn over the memory + provider.
+- Layer 5 — TUI: a Bubble Tea + Glamour front-end over the agent loop.
+
+## [0.4.0] - 2026-07-14 — Layer 4: Agent loop
+
+The three substrates connect into one cognitive turn. This is the first version
+that **remembers across turns** and injects relevant long-term memories into its
+reasoning.
+
+### Added
+
+- `internal/agent` — the cognitive loop:
+  - `Agent.Turn(ctx, input)` runs perceive → recall → reason → store and returns
+    the assistant's reply as a stream. It recalls **before** storing the input
+    (so the current message is not retrieved as its own match), records the user
+    turn immediately, and records the assistant turn only once the stream
+    completes cleanly.
+  - `Config` / `DefaultConfig` — system prompt, recall `k` + distance threshold,
+    short-term capacity, provider options.
+- `internal/render` — a shared console renderer (`Stream`) extracted so
+  `cmd/chat` and `cmd/talunor` don't duplicate the reasoning-dimmed/answer-bright
+  logic.
+- `cmd/talunor` — the interactive agent REPL over a **persistent** database, so
+  long-term memory accumulates across sessions. Slash commands `/exit`, `/quit`,
+  `/mem`; Ctrl-C cancels cleanly.
+- `internal/agent` tests: prompt-assembly order (no model/store needed) and a
+  full-loop integration test (a seeded fact is recalled into the prompt and both
+  turns are persisted) using a fake provider.
+- `make run` starts the REPL.
+
+### Changed
+
+- `cmd/chat` now uses `internal/render` instead of its own inline renderer.
+
+### Design decisions
+
+- **Recall before store.** Storing the user input first would make KNN return
+  that very message as the nearest match. Recalling against prior memory first
+  keeps retrieval meaningful.
+- **Store the assistant turn only on clean completion.** A cancelled or errored
+  stream leaves a partial/empty answer that should not pollute memory; the user
+  turn is stored regardless because it genuinely happened.
+- **Two memory tiers, both injected.** Short-term turns give verbatim recent
+  continuity; long-term recall (thresholded) surfaces older relevant facts. The
+  agent orchestrates both; neither substrate knows about the other.
+- **Tee-while-streaming.** `Turn` forwards chunks to the caller as they arrive
+  while accumulating the answer for storage — the user sees tokens live and the
+  memory write happens exactly once, at the end.
+
+### Lessons learned
+
+1. **Order in the loop is a correctness issue, not a detail.** Recall-then-store
+   vs. store-then-recall changes what the model sees; the former is required.
+2. **Streaming and "learning" must cohabit.** Returning the raw provider stream
+   would make it impossible to capture the full answer for storage. Wrapping the
+   stream in a tee goroutine keeps live output *and* records the completed turn.
+3. **Extract the renderer once you have a second caller.** `cmd/chat` and
+   `cmd/talunor` share identical terminal rendering — `internal/render` removes
+   the duplication before it drifts.
 
 ## [0.3.0] - 2026-07-14 — Layer 3: LLM provider
 
@@ -183,7 +239,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lao-tseu-is-alive/Talunor/releases/tag/v0.1.0

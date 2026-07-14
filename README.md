@@ -6,7 +6,7 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.3.0** — Layers 1–3 of Iteration 1. See [CHANGELOG.md](CHANGELOG.md)
+> Current version: **v0.4.0** — Layers 1–4 of Iteration 1. See [CHANGELOG.md](CHANGELOG.md)
 > for the version-by-version build log and lessons learned.
 
 ## Why it's interesting
@@ -28,11 +28,13 @@ Perception ─► Memory recall (KNN) ─► Reasoning (LLM) ─► Action ─�
 
 internal/memory   SQLite store + short-term ring buffer (embeddings, KNN)  [Layers 1-2 ✓]
 internal/llm      Provider interface + OpenAI-compatible adapter (Ollama)  [Layer 3 ✓]
-internal/agent    the cognitive loop                                       [Layer 4]
+internal/agent    the cognitive loop (perceive→recall→reason→store)        [Layer 4 ✓]
+internal/render   shared streaming console renderer                        [✓]
 internal/tui      Bubble Tea + Glamour                                     [Layer 5]
 internal/version  build identity                                           [✓]
 cmd/doctor        memory substrate smoke test                              [✓]
 cmd/chat          LLM provider smoke test (streaming)                      [✓]
+cmd/talunor       interactive agent REPL (persistent memory)               [✓]
 ```
 
 ## Status
@@ -44,8 +46,8 @@ cmd/chat          LLM provider smoke test (streaming)                      [✓]
 | 1 | **DB foundation** — load extensions, in-DB embeddings, KNN | ✅ done (v0.1.0) |
 | 2 | **Memory API** — `Remember` / `Recall` (KNN + threshold), short-term ring buffer | ✅ done (v0.2.0) |
 | 3 | **LLM provider** — `Provider` interface + Ollama (OpenAI-compatible) adapter, streaming | ✅ done (v0.3.0) |
-| 4 | **Agent loop** — Perceive → Recall → Reason → Store | ⏳ next |
-| 5 | **TUI** — Bubble Tea + Glamour | ⬜ |
+| 4 | **Agent loop** — Perceive → Recall → Reason → Store | ✅ done (v0.4.0) |
+| 5 | **TUI** — Bubble Tea + Glamour | ⏳ next |
 
 ### Later iterations
 
@@ -99,9 +101,37 @@ A thinking model's reasoning streams in dimmed, then its answer in full
 brightness — a visible reminder that "reasoning" and "answer" are distinct.
 Override the model with `TALUNOR_MODEL=qwen2.5-coder:14b`.
 
+Run the interactive agent — it remembers across turns (and across sessions, via
+a persistent `talunor.db`):
+
+```bash
+make run          # or: go run ./cmd/talunor
+```
+
+```
+you> My name is Cedric and I love the Go programming language.
+talunor> Ah, Cedric! Go is a fantastic choice …
+
+you> What is my name and which language do I love?
+talunor> Your name is Cedric, and you love the Go programming language.
+```
+
+The second answer comes from memory: the agent recalls the earlier turn (short-
+term buffer + long-term KNN) and injects it into the prompt. Slash commands:
+`/mem` (memory stats), `/exit`.
+
 ## Lessons learned so far
 
 Full details per version in [CHANGELOG.md](CHANGELOG.md). Highlights:
+
+**Layer 4 (agent loop)**
+
+- **Loop order is a correctness issue**: recall must happen *before* the input is
+  stored, or KNN returns the current message as its own top match.
+- Streaming and "learning" cohabit via a tee goroutine — the user sees tokens
+  live while the completed turn is captured once for storage.
+- The assistant turn is stored only on clean completion; a cancelled/errored
+  stream must not pollute memory.
 
 **Layer 3 (LLM provider)**
 
@@ -135,11 +165,14 @@ Full details per version in [CHANGELOG.md](CHANGELOG.md). Highlights:
 ```
 cmd/doctor/            memory substrate smoke test
 cmd/chat/              LLM provider smoke test (streaming)
+cmd/talunor/           interactive agent REPL (persistent memory)
 internal/memory/       SQLite store: extensions, in-DB embeddings, KNN
 internal/llm/          provider interface + OpenAI-compatible adapter
+internal/agent/        the cognitive loop
+internal/render/       shared streaming console renderer
 internal/version/      build identity
 ext/                   fetched .so extensions + GGUF model (gitignored)
-Makefile               deps / doctor / chat / test / build
+Makefile               deps / doctor / chat / run / test / build
 CHANGELOG.md           version-by-version build log + lessons
 ```
 
