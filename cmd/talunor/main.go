@@ -1,10 +1,12 @@
-// Command talunor is the interactive agent: a multi-turn REPL over the cognitive
-// loop (perceive → recall → reason → store). Unlike cmd/chat, it uses a
-// persistent database, so long-term memory accumulates across sessions and is
-// recalled into later conversations. It is the precursor to the Bubble Tea TUI
-// (Layer 5).
+// Command talunor is the interactive agent over the cognitive loop
+// (perceive → recall → reason → store). It uses a persistent database, so
+// long-term memory accumulates across sessions and is recalled into later
+// conversations.
 //
-// Commands: /exit or /quit to leave, /mem to show memory stats.
+// By default it launches the Bubble Tea TUI (markdown via Glamour). Pass --plain
+// for a minimal line-based REPL instead.
+//
+// REPL commands: /exit or /quit to leave, /mem to show memory stats.
 //
 // Environment: TALUNOR_MODEL, TALUNOR_OLLAMA_URL (see cmd/chat).
 package main
@@ -13,6 +15,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -22,18 +25,21 @@ import (
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
 	"github.com/lao-tseu-is-alive/Talunor/internal/render"
+	"github.com/lao-tseu-is-alive/Talunor/internal/tui"
 	"github.com/lao-tseu-is-alive/Talunor/internal/version"
 )
 
 func main() {
-	if err := run(); err != nil {
+	plain := flag.Bool("plain", false, "use the plain line-based REPL instead of the TUI")
+	flag.Parse()
+	if err := run(*plain); err != nil {
 		fmt.Fprintln(os.Stderr, "talunor: "+err.Error())
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	// Ctrl-C cancels the current turn / exits the REPL cleanly.
+func run(plain bool) error {
+	// Ctrl-C cancels the current turn / exits cleanly.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
@@ -50,12 +56,14 @@ func run() error {
 	}
 
 	ag := agent.New(store, provider, agent.DefaultConfig())
-
 	n, _ := store.Count(ctx)
-	fmt.Printf("%s\n%s → %s | %d memories | type /exit to quit\n\n",
-		version.String(), provider.Name(), model, n)
 
-	return repl(ctx, ag, store)
+	if plain {
+		fmt.Printf("%s\n%s → %s | %d memories | type /exit to quit\n\n",
+			version.String(), provider.Name(), model, n)
+		return repl(ctx, ag, store)
+	}
+	return tui.Run(ctx, ag, provider.Name(), model, n)
 }
 
 func repl(ctx context.Context, ag *agent.Agent, store *memory.Store) error {

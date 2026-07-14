@@ -6,7 +6,8 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.4.0** — Layers 1–4 of Iteration 1. See [CHANGELOG.md](CHANGELOG.md)
+> Current version: **v0.5.0** — **Iteration 1 complete**: a conversational agent
+> with multi-tier memory and a Bubble Tea TUI. See [CHANGELOG.md](CHANGELOG.md)
 > for the version-by-version build log and lessons learned.
 
 ## Why it's interesting
@@ -30,7 +31,7 @@ internal/memory   SQLite store + short-term ring buffer (embeddings, KNN)  [Laye
 internal/llm      Provider interface + OpenAI-compatible adapter (Ollama)  [Layer 3 ✓]
 internal/agent    the cognitive loop (perceive→recall→reason→store)        [Layer 4 ✓]
 internal/render   shared streaming console renderer                        [✓]
-internal/tui      Bubble Tea + Glamour                                     [Layer 5]
+internal/tui      Bubble Tea + Glamour front-end (default)                 [Layer 5 ✓]
 internal/version  build identity                                           [✓]
 cmd/doctor        memory substrate smoke test                              [✓]
 cmd/chat          LLM provider smoke test (streaming)                      [✓]
@@ -47,7 +48,10 @@ cmd/talunor       interactive agent REPL (persistent memory)               [✓]
 | 2 | **Memory API** — `Remember` / `Recall` (KNN + threshold), short-term ring buffer | ✅ done (v0.2.0) |
 | 3 | **LLM provider** — `Provider` interface + Ollama (OpenAI-compatible) adapter, streaming | ✅ done (v0.3.0) |
 | 4 | **Agent loop** — Perceive → Recall → Reason → Store | ✅ done (v0.4.0) |
-| 5 | **TUI** — Bubble Tea + Glamour | ⏳ next |
+| 5 | **TUI** — Bubble Tea + Glamour (default front-end) | ✅ done (v0.5.0) |
+
+**Iteration 1 is complete** — Talunor is a working memory-augmented conversational
+agent. Iteration 2 (below) starts giving it the ability to *act*.
 
 ### Later iterations
 
@@ -101,12 +105,16 @@ A thinking model's reasoning streams in dimmed, then its answer in full
 brightness — a visible reminder that "reasoning" and "answer" are distinct.
 Override the model with `TALUNOR_MODEL=qwen2.5-coder:14b`.
 
-Run the interactive agent — it remembers across turns (and across sessions, via
-a persistent `talunor.db`):
+Run the interactive agent — a Bubble Tea TUI with Glamour-rendered markdown. It
+remembers across turns (and across sessions, via a persistent `talunor.db`):
 
 ```bash
-make run          # or: go run ./cmd/talunor
+make run                 # TUI (default)
+go run ./cmd/talunor --plain   # minimal line-based REPL instead
 ```
+
+Try telling it something, then asking about it in a later turn — even after
+restarting:
 
 ```
 you> My name is Cedric and I love the Go programming language.
@@ -117,12 +125,24 @@ talunor> Your name is Cedric, and you love the Go programming language.
 ```
 
 The second answer comes from memory: the agent recalls the earlier turn (short-
-term buffer + long-term KNN) and injects it into the prompt. Slash commands:
-`/mem` (memory stats), `/exit`.
+term buffer + long-term KNN) and injects it into the prompt. In the TUI, a
+thinking model's reasoning streams dimmed, then the answer renders as formatted
+markdown; scroll with the mouse wheel or PgUp/PgDn, quit with Ctrl-C. The
+`--plain` REPL adds slash commands `/mem` and `/exit`.
 
 ## Lessons learned so far
 
 Full details per version in [CHANGELOG.md](CHANGELOG.md). Highlights:
+
+**Layer 5 (TUI)**
+
+- A streaming channel maps cleanly onto Bubble Tea's `Cmd`/`Msg` model: one
+  chunk per command, re-issued each update — no background goroutine mutating the
+  model, no mutexes.
+- Render raw text while streaming, run Glamour once on completion — smooth *and*
+  correct (the reasoning/answer split from Layer 3, now visual).
+- A TUI is testable without a terminal: feed synthetic `tea.Msg`s through
+  `Update` and pump the returned `Cmd`s.
 
 **Layer 4 (agent loop)**
 
@@ -170,6 +190,7 @@ internal/memory/       SQLite store: extensions, in-DB embeddings, KNN
 internal/llm/          provider interface + OpenAI-compatible adapter
 internal/agent/        the cognitive loop
 internal/render/       shared streaming console renderer
+internal/tui/          Bubble Tea + Glamour front-end
 internal/version/      build identity
 ext/                   fetched .so extensions + GGUF model (gitignored)
 Makefile               deps / doctor / chat / run / test / build

@@ -165,3 +165,6 @@ func (a *Agent) buildMessages(hits []memory.Hit, input string) []llm.Message {
 
 // ShortTermLen reports how many turns are currently in immediate context.
 func (a *Agent) ShortTermLen() int { return a.short.Len() }
+
+// MemoryCount reports how many long-term memories are stored.
+func (a *Agent) MemoryCount(ctx context.Context) (int, error) { return a.store.Count(ctx) }

@@ -11,7 +11,58 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- Layer 5 — TUI: a Bubble Tea + Glamour front-end over the agent loop.
+- **Iteration 2** — tools & actions: a tool registry and a ReAct-style
+  act/observe loop, so the agent can *do* things, not just talk.
+
+## [0.5.0] - 2026-07-14 — Layer 5: TUI (completes Iteration 1)
+
+A Bubble Tea + Glamour terminal UI, now the default front-end. **Iteration 1 —
+a conversational agent with multi-tier memory — is complete.**
+
+### Added
+
+- `internal/tui` — a Bubble Tea model over the agent loop:
+  - Scrollable transcript (viewport) + text input; tokens stream in live.
+  - **Glamour** renders the assistant's markdown (code blocks, lists, bold)
+    once a reply completes; during streaming the raw text is shown (cheap, no
+    flicker), and a thinking model's reasoning streams dimmed.
+  - Status bar: provider · model · memory count · state · key hints.
+  - Mouse-wheel / PgUp-PgDn scrolling; Ctrl-C or Esc to quit.
+- `cmd/talunor` now launches the **TUI by default**; `--plain` selects the
+  original line-based REPL.
+- `Agent.MemoryCount` — powers the status bar.
+- `internal/tui` headless tests: drive the `Update` loop (window size →
+  keystrokes → pump the stream to completion) with a fake provider and a real
+  store — no terminal needed — asserting the reply renders and both turns
+  persist, and that Enter mid-stream is ignored.
+
+### Design decisions
+
+- **Channel → tea.Msg bridge.** `waitForChunk` reads exactly one `llm.Chunk`
+  and returns it as a message; each `Update` re-issues it to pull the next.
+  Tokens land in the UI event loop with no background goroutine mutating shared
+  state — the Bubble Tea way.
+- **Render raw while streaming, Glamour on completion.** Re-running a markdown
+  renderer per token flickers and burns CPU; showing raw text live and
+  formatting once at the end is smooth and correct.
+- **Pointer model.** The model is used as a `*Model` so the streaming
+  accumulators are never copied by the event loop (a value model would copy a
+  `strings.Builder`, which panics; even with plain strings, a pointer keeps the
+  bridge honest).
+- **TUI default, REPL as `--plain`.** The rich UI is what you want day-to-day;
+  the REPL remains for scripting, piping, and debugging.
+
+### Lessons learned
+
+1. **A streaming channel maps cleanly onto Bubble Tea's `Cmd`/`Msg` model** —
+   one chunk per command, re-issued each update. No mutexes, no leaked
+   goroutines writing to the model.
+2. **Separate "live" and "final" rendering.** The cheap raw pass keeps the UI
+   responsive; the expensive Glamour pass runs once. This is the same
+   reasoning/answer split from Layer 3, now visual.
+3. **A TUI is testable without a terminal.** Feeding synthetic `tea.Msg`s
+   through `Update` and pumping the returned `Cmd`s exercises the whole
+   interaction deterministically.
 
 ## [0.4.0] - 2026-07-14 — Layer 4: Agent loop
 
@@ -239,7 +290,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.1.0...v0.2.0
