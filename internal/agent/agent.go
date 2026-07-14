@@ -177,7 +177,8 @@ const HelpText = `Commands:
   /list [n]    list the most recent n memories (default 10)
   /clear       clear the on-screen transcript (TUI only; does not erase memory)
   /exit, /quit quit
-Keys (TUI): enter = send · ctrl+c / esc = quit · PgUp/PgDn or mouse wheel = scroll`
+Keys (TUI): enter = send · ctrl+c / esc = quit · ↑/↓ or PgUp/PgDn = scroll
+(Mouse selection works: click-drag to select and copy text.)`
 
 // Help returns the command help text.
 func (a *Agent) Help() string { return HelpText }

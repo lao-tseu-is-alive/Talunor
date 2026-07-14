@@ -14,6 +14,31 @@ changed but the *lessons learned* while getting there.
 - **Iteration 2** — tools & actions: a tool registry and a ReAct-style
   act/observe loop, so the agent can *do* things, not just talk.
 
+## [0.5.3] - 2026-07-14 — TUI text selection + AGENTS.md
+
+### Changed
+
+- **TUI no longer captures the mouse.** `tea.WithMouseCellMotion` was grabbing
+  mouse events, which disables the terminal's own click-drag text selection —
+  making it impossible to select and copy a transcript. Dropped it so selection
+  works again; keyboard scrolling covers navigation: ↑/↓ now scroll the
+  transcript alongside PgUp/PgDn (single-line input doesn't need them). Status
+  bar and `/help` hints updated.
+
+### Added
+
+- **`AGENTS.md`** — an orientation guide for AI/human contributors: the working
+  agreement (one layer = one minor, release checklist), the package map, build
+  commands, all the hard-won gotchas (SQLite extensions, thinking models, TUI
+  terminal-query pitfall), and testing conventions.
+
+### Lessons learned
+
+1. **Mouse capture and text selection are mutually exclusive** in a terminal.
+   A TUI that grabs the mouse for scrolling/clicks takes away the user's ability
+   to select and copy — for a tool whose output people want to share, selection
+   wins. Provide keyboard scrolling instead.
+
 ## [0.5.2] - 2026-07-14 — Fix: OSC 11 escape-sequence garbage in the TUI
 
 ### Fixed
@@ -357,7 +382,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.4.0...v0.5.0

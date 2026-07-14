@@ -119,7 +119,11 @@ func Run(ctx context.Context, ag *agent.Agent, providerName, modelName string, m
 	if !lipgloss.HasDarkBackground() {
 		m.glamStyle = "light"
 	}
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	// No mouse capture: enabling it would let the app grab mouse events but
+	// disable the terminal's own click-drag text selection. Keeping selection
+	// (to copy/share a transcript) matters more than wheel scrolling — keyboard
+	// scrolling (↑/↓, PgUp/PgDn) covers navigation.
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
 }
@@ -144,7 +148,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.submit()
 			}
 			return m, nil
-		case tea.KeyPgUp, tea.KeyPgDown, tea.KeyCtrlU, tea.KeyCtrlD:
+		case tea.KeyPgUp, tea.KeyPgDown, tea.KeyCtrlU, tea.KeyCtrlD, tea.KeyUp, tea.KeyDown:
 			var cmd tea.Cmd
 			m.vp, cmd = m.vp.Update(msg) // scroll the transcript.
 			return m, cmd
@@ -331,7 +335,7 @@ func (m *Model) status() string {
 	if m.streaming {
 		state = "thinking…"
 	}
-	return statusBar.Render(fmt.Sprintf("%s · %s · %d memories · %s · enter send · ctrl+c quit",
+	return statusBar.Render(fmt.Sprintf("%s · %s · %d memories · %s · enter send · ↑↓/PgUp/PgDn scroll · ctrl+c quit",
 		m.providerName, m.modelName, m.memCount, state))
 }
 

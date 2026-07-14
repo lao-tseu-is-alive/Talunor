@@ -127,7 +127,9 @@ talunor> Your name is Cedric, and you love the Go programming language.
 The second answer comes from memory: the agent recalls the earlier turn (short-
 term buffer + long-term KNN) and injects it into the prompt. In the TUI, a
 thinking model's reasoning streams dimmed, then the answer renders as formatted
-markdown; scroll with the mouse wheel or PgUp/PgDn, quit with Ctrl-C.
+markdown; scroll with ↑/↓ or PgUp/PgDn, quit with Ctrl-C. The mouse is left free
+so you can click-drag to select and copy text (e.g. to share a transcript); the
+`--plain` REPL is also fully selectable and pipeable.
 
 ### Commands
 
@@ -229,6 +231,7 @@ internal/version/      build identity
 ext/                   fetched .so extensions + GGUF model (gitignored)
 Makefile               deps / doctor / chat / run / test / build
 CHANGELOG.md           version-by-version build log + lessons
+AGENTS.md              orientation guide for AI/human contributors
 ```
 
 ## License
