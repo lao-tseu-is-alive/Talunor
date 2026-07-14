@@ -11,8 +11,63 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- Layer 3 — LLM provider: a `Provider` interface + an Ollama (OpenAI-compatible)
-  streaming adapter.
+- Layer 4 — Agent loop: wire Perceive → Recall → Reason → Store into a single
+  cognitive turn over the memory + provider.
+
+## [0.3.0] - 2026-07-14 — Layer 3: LLM provider
+
+The reasoning backend. A tiny streaming provider interface with an
+OpenAI-compatible adapter, defaulting to a local Ollama server.
+
+### Added
+
+- `internal/llm` — the `Provider` interface (`Chat` streams a completion as a
+  channel of `Chunk`s) plus:
+  - `OpenAICompatible` — one adapter for every backend that speaks the OpenAI
+    `/chat/completions` streaming API (Ollama now; OpenAI / OpenRouter later).
+  - `NewOllama(model)` — a local Ollama provider (default model
+    `qwen3:latest`, base URL `http://localhost:11434/v1`).
+  - `Collect(...)` — drains a stream into the full answer string (for
+    non-streaming callers and tests).
+  - Types: `Message`, `Options` (model / temperature / max tokens), `Chunk`
+    (carries `Content` **and** `Reasoning`).
+- `cmd/chat` — one-shot smoke test: streams a prompt's reply to the terminal,
+  rendering a thinking model's reasoning dimmed and its answer in full
+  brightness. Prompt from args or stdin; `TALUNOR_MODEL` /
+  `TALUNOR_OLLAMA_URL` env overrides.
+- `internal/llm` tests: stream assembly, reasoning/answer separation, non-200
+  setup error, in-stream error, connection refused — all against a mocked SSE
+  server, so no live model is needed in CI.
+- `make chat PROMPT="…"`.
+
+### Design decisions
+
+- **One adapter for three providers.** Ollama, OpenAI and OpenRouter all speak
+  the OpenAI-compatible API, so `OpenAICompatible` covers them via base-URL +
+  key. Only Anthropic (different Messages API) will need its own adapter.
+- **Streaming as the primitive**, with `Collect` layered on top — not the other
+  way around. The TUI (Layer 5) needs token-by-token output; a blocking call
+  would have to be retrofitted, so streaming is the base and blocking is the
+  convenience.
+- **Setup errors vs. stream errors are distinct.** Connection refused / non-200
+  come back as the `Chat` return error (fail fast, before any token); a failure
+  mid-stream arrives as a terminal `Chunk.Err`. Callers can tell "never started"
+  from "died partway".
+- **No client-level HTTP timeout.** Long generations are normal; cancellation is
+  the caller's `context`, not a fixed deadline.
+
+### Lessons learned
+
+1. **Thinking models split reasoning from the answer.** Ollama maps qwen3's
+   chain-of-thought to a separate `reasoning` field in each SSE delta, leaving
+   `content` empty until thinking finishes — so a small `max_tokens` can return
+   an *empty* answer that spent its whole budget thinking. `Chunk` carries both
+   fields, and `cmd/chat` renders reasoning dimmed so the distinction is visible.
+2. **Test streaming without a model.** An `httptest` server replaying canned
+   `data:` events exercises the whole SSE parser (assembly, `[DONE]`, error
+   payloads, cancellation) deterministically and fast.
+3. **The OpenAI-compatible surface is a real lever.** Pointing the same adapter
+   at Ollama today and OpenAI/OpenRouter later costs only a base-URL and a key.
 
 ## [0.2.0] - 2026-07-14 — Layer 2: Memory API
 
@@ -128,6 +183,7 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lao-tseu-is-alive/Talunor/releases/tag/v0.1.0

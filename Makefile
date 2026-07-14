@@ -55,6 +55,11 @@ build: deps
 test:
 	go test ./...
 
+## chat: stream one prompt to a local Ollama model (LLM provider smoke test)
+##   usage: make chat PROMPT="explain vector search in one sentence"
+chat:
+	go run -ldflags "$(LDFLAGS)" ./cmd/chat "$(PROMPT)"
+
 ## tidy: sync go.mod/go.sum
 tidy:
 	go mod tidy
