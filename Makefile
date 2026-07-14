@@ -1,0 +1,64 @@
+# Talunor — autonomous agent MVP
+# Loadable SQLite extensions + embedding model are fetched (not vendored in git).
+
+AI_VERSION     := 1.0.4
+VECTOR_VERSION := 1.0.0
+
+# Linux x86_64 CPU builds. Override on other platforms.
+AI_ASSET     := ai-linux-cpu-x86_64-$(AI_VERSION).tar.gz
+VECTOR_ASSET := vector-linux-x86_64-$(VECTOR_VERSION).tar.gz
+AI_URL       := https://github.com/sqliteai/sqlite-ai/releases/download/$(AI_VERSION)/$(AI_ASSET)
+VECTOR_URL   := https://github.com/sqliteai/sqlite-vector/releases/download/$(VECTOR_VERSION)/$(VECTOR_ASSET)
+
+# all-MiniLM-L6-v2, 384-dim sentence embeddings, F16 GGUF.
+EMBED_MODEL := ext/models/all-MiniLM-L6-v2.f16.gguf
+EMBED_URL   := https://huggingface.co/second-state/All-MiniLM-L6-v2-Embedding-GGUF/resolve/main/all-MiniLM-L6-v2-ggml-model-f16.gguf
+
+export CGO_ENABLED := 1
+
+# Build metadata injected into internal/version at link time.
+VERSION_PKG := github.com/lao-tseu-is-alive/Talunor/internal/version
+GIT_COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_DATE  := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS     := -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(BUILD_DATE)
+
+.PHONY: deps doctor build tidy clean distclean
+
+## deps: download the SQLite extensions and the embedding model into ext/
+deps: ext/vector.so ext/ai.so $(EMBED_MODEL)
+
+ext/ai.so:
+	@mkdir -p ext
+	curl -sL -o ext/ai.tar.gz "$(AI_URL)"
+	tar xzf ext/ai.tar.gz -C ext ./ai.so
+	rm -f ext/ai.tar.gz
+
+ext/vector.so:
+	@mkdir -p ext
+	curl -sL -o ext/vector.tar.gz "$(VECTOR_URL)"
+	tar xzf ext/vector.tar.gz -C ext ./vector.so
+	rm -f ext/vector.tar.gz
+
+$(EMBED_MODEL):
+	@mkdir -p ext/models
+	curl -sL -o $(EMBED_MODEL) "$(EMBED_URL)"
+
+## doctor: smoke-test the memory substrate (extensions + embedding + KNN)
+doctor: deps
+	go run -ldflags "$(LDFLAGS)" ./cmd/doctor
+
+## build: compile all binaries into bin/
+build: deps
+	go build -ldflags "$(LDFLAGS)" -o bin/ ./...
+
+## tidy: sync go.mod/go.sum
+tidy:
+	go mod tidy
+
+## clean: remove build output and the local database
+clean:
+	rm -rf bin talunor.db talunor.db-shm talunor.db-wal
+
+## distclean: also remove fetched extensions and models
+distclean: clean
+	rm -f ext/*.so ext/models/*.gguf

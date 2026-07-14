@@ -28,5 +28,17 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+
+# Claude Code local (machine-specific) settings and transient temp files
+.claude/settings.local.json
+.claude/*.tmp.*
+
+# Talunor: fetched artifacts (rebuild with `make deps`) and runtime data
+/ext/*.so
+/ext/models/*.gguf
+*.db
+*.db-shm
+*.db-wal
+/bin/
