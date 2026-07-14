@@ -14,6 +14,49 @@ changed but the *lessons learned* while getting there.
 - **Iteration 2** — tools & actions: a tool registry and a ReAct-style
   act/observe loop, so the agent can *do* things, not just talk.
 
+## [0.5.1] - 2026-07-14 — Iteration 1 polish: help, memory inspection, config
+
+UX and configuration fixes surfaced by using the agent: commands were not
+discoverable, memory persistence was invisible and tied to the working
+directory, and there was no way to see what was stored.
+
+### Added
+
+- **Slash commands in the TUI *and* the REPL**: `/help`, `/mem` (count + database
+  path), `/list [n]` (recent memories), `/exit`; the TUI also has `/clear` (clears
+  the on-screen transcript, not the stored memory). Commands run locally and
+  never hit the LLM. The TUI shows `Type /help for commands` on start.
+- `talunor --list N` — dump the most recent N stored memories and exit
+  (non-interactive inspection; no model needed).
+- `Store.List`, `Store.Path`; `Agent.Help` / `MemoryStats` / `ListMemories` and a
+  shared `agent.FormatMemories`.
+- Startup line now shows the database path so persistence is visible.
+
+### Changed
+
+- **Database path is configurable and stable.** `TALUNOR_DB` overrides it;
+  otherwise it defaults to `$XDG_DATA_HOME/talunor/talunor.db` (or
+  `~/.local/share/talunor/talunor.db`), created automatically. Memory now
+  persists across sessions regardless of the working directory — previously it
+  was a hardcoded `./talunor.db`, so it only persisted when launched from the
+  same folder.
+- Extension/model paths also honour env overrides (`TALUNOR_VECTOR_EXT`,
+  `TALUNOR_AI_EXT`, `TALUNOR_EMBED_MODEL`) so the binary is not tied to the repo
+  root.
+
+### Lessons learned
+
+1. **Discoverability is a feature.** A capable agent with hidden commands feels
+   broken; `/help` and a visible startup hint cost little and change the
+   experience. Centralising the command help (`agent.HelpText`) keeps the TUI and
+   REPL in sync.
+2. **"Persistent" must also mean "findable".** A CWD-relative database silently
+   forks memory per launch directory. A stable XDG location plus showing the path
+   makes persistence real and debuggable.
+3. **Make stored state inspectable.** `--list` / `/list` read only text columns,
+   so they work as a plain window into the database even though writes need the
+   extensions loaded.
+
 ## [0.5.0] - 2026-07-14 — Layer 5: TUI (completes Iteration 1)
 
 A Bubble Tea + Glamour terminal UI, now the default front-end. **Iteration 1 —
@@ -290,7 +333,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.2.0...v0.3.0

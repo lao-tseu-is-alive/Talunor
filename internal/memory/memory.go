@@ -111,3 +111,39 @@ func (s *Store) Count(ctx context.Context) (int, error) {
 	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM memories`).Scan(&n)
 	return n, err
 }
+
+// List returns the most recent memories, newest first (limit clamped to a
+// sensible default when non-positive). It reads only text columns, so it works
+// as a plain inspection of what is stored.
+func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, kind, COALESCE(role, ''), content, created_at
+		FROM memories
+		ORDER BY id DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list memories: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Memory
+	for rows.Next() {
+		var (
+			m         Memory
+			kind      string
+			createdAt string
+		)
+		if err := rows.Scan(&m.ID, &kind, &m.Role, &m.Content, &createdAt); err != nil {
+			return nil, err
+		}
+		m.Kind = Kind(kind)
+		if ts, err := time.Parse(sqliteTimeLayout, createdAt); err == nil {
+			m.CreatedAt = ts
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}

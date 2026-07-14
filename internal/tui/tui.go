@@ -12,6 +12,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -27,6 +28,7 @@ import (
 const (
 	roleUser      = "user"
 	roleAssistant = "assistant"
+	roleInfo      = "info" // local command output (help, /mem, /list), shown dimmed.
 )
 
 var (
@@ -88,7 +90,7 @@ type Model struct {
 // first WindowSizeMsg.
 func New(ctx context.Context, ag *agent.Agent, providerName, modelName string, memCount int) *Model {
 	ti := textinput.New()
-	ti.Placeholder = "Ask Talunor…"
+	ti.Placeholder = "Ask Talunor…  (/help for commands)"
 	ti.Prompt = "you> "
 	ti.Focus()
 	ti.CharLimit = 0
@@ -179,7 +181,8 @@ func (m *Model) View() string {
 	return m.vp.View() + "\n" + m.status() + "\n" + m.ti.View()
 }
 
-// submit sends the current input through a cognitive turn.
+// submit handles the current input: a slash command runs locally, anything else
+// is sent through a cognitive turn.
 func (m *Model) submit() tea.Cmd {
 	text := strings.TrimSpace(m.ti.Value())
 	if text == "" {
@@ -187,6 +190,11 @@ func (m *Model) submit() tea.Cmd {
 	}
 	m.ti.Reset()
 	m.errText = ""
+
+	if strings.HasPrefix(text, "/") {
+		return m.runCommand(text)
+	}
+
 	m.appendTurn(roleUser, text)
 
 	ch, err := m.ag.Turn(m.ctx, text)
@@ -201,6 +209,46 @@ func (m *Model) submit() tea.Cmd {
 	m.curReasoning = ""
 	m.refresh()
 	return waitForChunk(ch)
+}
+
+// runCommand handles a slash command, showing its output in the transcript.
+// It returns tea.Quit for /exit, otherwise nil.
+func (m *Model) runCommand(line string) tea.Cmd {
+	fields := strings.Fields(line)
+	switch fields[0] {
+	case "/exit", "/quit":
+		return tea.Quit
+	case "/help":
+		m.appendInfo(m.ag.Help())
+	case "/mem":
+		if s, err := m.ag.MemoryStats(m.ctx); err != nil {
+			m.errText = err.Error()
+		} else {
+			m.appendInfo(s)
+		}
+	case "/list":
+		n := 10
+		if len(fields) > 1 {
+			if v, err := strconv.Atoi(fields[1]); err == nil {
+				n = v
+			}
+		}
+		if s, err := m.ag.ListMemories(m.ctx, n); err != nil {
+			m.errText = err.Error()
+		} else {
+			m.appendInfo(s)
+		}
+	case "/clear":
+		m.turns = nil
+	default:
+		m.appendInfo("unknown command " + fields[0] + " — try /help")
+	}
+	m.refresh()
+	return nil
+}
+
+func (m *Model) appendInfo(text string) {
+	m.turns = append(m.turns, turn{role: roleInfo, raw: text, rendered: m.renderTurn(roleInfo, text)})
 }
 
 func (m *Model) finishStream() {
@@ -231,6 +279,8 @@ func (m *Model) renderTurn(role, raw string) string {
 			body = m.wrap(raw)
 		}
 		return asstHeader.Render("Talunor") + "\n" + body
+	case roleInfo:
+		return dimStyle.Render(m.wrap(raw))
 	default:
 		return m.wrap(raw)
 	}
@@ -239,7 +289,7 @@ func (m *Model) renderTurn(role, raw string) string {
 // conversation builds the full transcript, including the in-progress reply.
 func (m *Model) conversation() string {
 	if len(m.turns) == 0 && !m.streaming {
-		return dimStyle.Render("Talunor is ready. Ask anything — your memory persists across sessions.")
+		return dimStyle.Render("Talunor is ready. Ask anything — your memory persists across sessions.\nType /help for commands.")
 	}
 	var b strings.Builder
 	for _, t := range m.turns {

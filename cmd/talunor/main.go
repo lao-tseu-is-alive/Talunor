@@ -4,11 +4,12 @@
 // conversations.
 //
 // By default it launches the Bubble Tea TUI (markdown via Glamour). Pass --plain
-// for a minimal line-based REPL instead.
+// for a minimal line-based REPL, or --list to dump stored memories and exit.
 //
-// REPL commands: /exit or /quit to leave, /mem to show memory stats.
+// Commands (TUI and REPL): /help, /mem, /list [n], /clear (TUI), /exit.
 //
-// Environment: TALUNOR_MODEL, TALUNOR_OLLAMA_URL (see cmd/chat).
+// Environment: TALUNOR_MODEL, TALUNOR_OLLAMA_URL (see cmd/chat), TALUNOR_DB and
+// the extension/model path overrides (see internal/memory.DefaultConfig).
 package main
 
 import (
@@ -19,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/agent"
@@ -31,14 +33,15 @@ import (
 
 func main() {
 	plain := flag.Bool("plain", false, "use the plain line-based REPL instead of the TUI")
+	list := flag.Int("list", 0, "dump the most recent N stored memories and exit")
 	flag.Parse()
-	if err := run(*plain); err != nil {
+	if err := run(*plain, *list); err != nil {
 		fmt.Fprintln(os.Stderr, "talunor: "+err.Error())
 		os.Exit(1)
 	}
 }
 
-func run(plain bool) error {
+func run(plain bool, list int) error {
 	// Ctrl-C cancels the current turn / exits cleanly.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -48,6 +51,16 @@ func run(plain bool) error {
 		return err
 	}
 	defer store.Close()
+
+	// --list: inspect stored memory non-interactively, then exit.
+	if list > 0 {
+		mems, err := store.List(ctx, list)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("database: %s\n%s", store.Path(), agent.FormatMemories(mems))
+		return nil
+	}
 
 	model := envOr("TALUNOR_MODEL", llm.DefaultOllamaModel)
 	var provider llm.Provider = llm.NewOllama(model)
@@ -59,14 +72,14 @@ func run(plain bool) error {
 	n, _ := store.Count(ctx)
 
 	if plain {
-		fmt.Printf("%s\n%s → %s | %d memories | type /exit to quit\n\n",
-			version.String(), provider.Name(), model, n)
-		return repl(ctx, ag, store)
+		fmt.Printf("%s\n%s → %s | %d memories | db: %s\ntype /help for commands\n\n",
+			version.String(), provider.Name(), model, n, store.Path())
+		return repl(ctx, ag)
 	}
 	return tui.Run(ctx, ag, provider.Name(), model, n)
 }
 
-func repl(ctx context.Context, ag *agent.Agent, store *memory.Store) error {
+func repl(ctx context.Context, ag *agent.Agent) error {
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
@@ -81,7 +94,7 @@ func repl(ctx context.Context, ag *agent.Agent, store *memory.Store) error {
 			continue
 		}
 		if strings.HasPrefix(line, "/") {
-			done, err := command(ctx, line, store)
+			done, err := command(ctx, line, ag)
 			if done || err != nil {
 				return err
 			}
@@ -105,20 +118,35 @@ func repl(ctx context.Context, ag *agent.Agent, store *memory.Store) error {
 }
 
 // command handles slash commands. It returns done=true when the REPL should end.
-func command(ctx context.Context, line string, store *memory.Store) (done bool, err error) {
-	switch line {
+func command(ctx context.Context, line string, ag *agent.Agent) (done bool, err error) {
+	fields := strings.Fields(line)
+	switch fields[0] {
 	case "/exit", "/quit":
 		return true, nil
+	case "/help":
+		fmt.Println(ag.Help())
 	case "/mem":
-		n, err := store.Count(ctx)
+		stats, err := ag.MemoryStats(ctx)
 		if err != nil {
 			return false, err
 		}
-		fmt.Printf("[%d long-term memories stored]\n", n)
-		return false, nil
+		fmt.Println(stats)
+	case "/list":
+		n := 10
+		if len(fields) > 1 {
+			if v, e := strconv.Atoi(fields[1]); e == nil {
+				n = v
+			}
+		}
+		out, err := ag.ListMemories(ctx, n)
+		if err != nil {
+			return false, err
+		}
+		fmt.Println(out)
 	default:
-		return false, nil
+		fmt.Printf("unknown command %q — try /help\n", fields[0])
 	}
+	return false, nil
 }
 
 func envOr(key, def string) string {

@@ -85,6 +85,28 @@ func TestModelDriveTurn(t *testing.T) {
 	}
 }
 
+// TestSlashCommandDoesNotHitProvider ensures /help runs locally: it shows output
+// and never starts a turn (so nothing is stored and no stream command runs).
+func TestSlashCommandDoesNotHitProvider(t *testing.T) {
+	store := testStore(t)
+	ag := agent.New(store, fakeProvider{reply: "should not be called"}, agent.DefaultConfig())
+	var m tea.Model = tui.New(context.Background(), ag, "fake", "test-model", 0)
+
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/help")})
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if cmd != nil {
+		t.Error("/help should not return a stream command")
+	}
+	if !strings.Contains(m.View(), "Commands:") {
+		t.Errorf("view missing help text:\n%s", m.View())
+	}
+	if n, _ := store.Count(context.Background()); n != 0 {
+		t.Errorf("stored count = %d; want 0 (command must not persist a turn)", n)
+	}
+}
+
 // TestEnterIgnoredWhileStreaming ensures a second submit mid-stream is a no-op.
 func TestEnterIgnoredWhileStreaming(t *testing.T) {
 	store := testStore(t)

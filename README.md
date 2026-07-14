@@ -6,9 +6,9 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.5.0** — **Iteration 1 complete**: a conversational agent
-> with multi-tier memory and a Bubble Tea TUI. See [CHANGELOG.md](CHANGELOG.md)
-> for the version-by-version build log and lessons learned.
+> Current version: **v0.5.1** — **Iteration 1 complete** (+ polish): a
+> conversational agent with multi-tier memory and a Bubble Tea TUI. See
+> [CHANGELOG.md](CHANGELOG.md) for the version-by-version build log and lessons.
 
 ## Why it's interesting
 
@@ -127,8 +127,42 @@ talunor> Your name is Cedric, and you love the Go programming language.
 The second answer comes from memory: the agent recalls the earlier turn (short-
 term buffer + long-term KNN) and injects it into the prompt. In the TUI, a
 thinking model's reasoning streams dimmed, then the answer renders as formatted
-markdown; scroll with the mouse wheel or PgUp/PgDn, quit with Ctrl-C. The
-`--plain` REPL adds slash commands `/mem` and `/exit`.
+markdown; scroll with the mouse wheel or PgUp/PgDn, quit with Ctrl-C.
+
+### Commands
+
+Both the TUI and the `--plain` REPL understand:
+
+| Command | Effect |
+|---------|--------|
+| `/help` | list commands |
+| `/mem` | memory stats (count + database file) |
+| `/list [n]` | list the most recent `n` memories (default 10) |
+| `/clear` | clear the on-screen transcript (TUI only; does not erase memory) |
+| `/exit`, `/quit` | quit |
+
+Inspect stored memory without starting a session:
+
+```bash
+go run ./cmd/talunor --list 20     # dump the 20 most recent memories and exit
+```
+
+### Where memory lives
+
+Long-term memory is a single SQLite file. Its location is
+`$TALUNOR_DB`, else `$XDG_DATA_HOME/talunor/talunor.db`, else
+`~/.local/share/talunor/talunor.db` (created automatically) — so it persists
+across sessions no matter where you launch from. The startup line prints the
+active path.
+
+### Environment
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `TALUNOR_MODEL` | Ollama model | `qwen3:latest` |
+| `TALUNOR_OLLAMA_URL` | Ollama OpenAI-compatible base URL | `http://localhost:11434/v1` |
+| `TALUNOR_DB` | database file | per-user data dir (above) |
+| `TALUNOR_VECTOR_EXT` / `TALUNOR_AI_EXT` / `TALUNOR_EMBED_MODEL` | extension / model paths | under `ext/` |
 
 ## Lessons learned so far
 

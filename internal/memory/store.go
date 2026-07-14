@@ -15,6 +15,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
@@ -39,15 +41,48 @@ type Config struct {
 }
 
 // DefaultConfig returns a Config pointing at the artifacts fetched by
-// `make deps` and a local talunor.db database file.
+// `make deps`. Every path can be overridden by an environment variable so the
+// binary is not tied to being run from the repository root:
+//
+//	TALUNOR_DB           database file (default: a stable per-user data dir)
+//	TALUNOR_VECTOR_EXT   sqlite-vector shared object (no .so suffix)
+//	TALUNOR_AI_EXT       sqlite-ai shared object (no .so suffix)
+//	TALUNOR_EMBED_MODEL  GGUF embedding model
 func DefaultConfig() Config {
 	return Config{
-		DBPath: "talunor.db",
+		DBPath: DefaultDBPath(),
 		// No ".so" suffix: SQLite's load_extension appends the platform suffix.
-		VectorExtPath:  "ext/vector",
-		AIExtPath:      "ext/ai",
-		EmbedModelPath: "ext/models/all-MiniLM-L6-v2.f16.gguf",
+		VectorExtPath:  envOr("TALUNOR_VECTOR_EXT", "ext/vector"),
+		AIExtPath:      envOr("TALUNOR_AI_EXT", "ext/ai"),
+		EmbedModelPath: envOr("TALUNOR_EMBED_MODEL", "ext/models/all-MiniLM-L6-v2.f16.gguf"),
 	}
+}
+
+// DefaultDBPath resolves the database file location. It honours TALUNOR_DB, then
+// falls back to a stable per-user location ($XDG_DATA_HOME/talunor/talunor.db,
+// or ~/.local/share/talunor/talunor.db) so memory persists across sessions
+// regardless of the working directory. As a last resort it uses ./talunor.db.
+func DefaultDBPath() string {
+	if p := os.Getenv("TALUNOR_DB"); p != "" {
+		return p
+	}
+	dir := os.Getenv("XDG_DATA_HOME")
+	if dir == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			dir = filepath.Join(home, ".local", "share")
+		}
+	}
+	if dir == "" {
+		return "talunor.db"
+	}
+	return filepath.Join(dir, "talunor", "talunor.db")
+}
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 // Store owns the database handle and the resident embedding model.
@@ -89,6 +124,15 @@ func registerDriver(cfg Config) {
 // embedding model, applies the schema, and initialises vector search.
 func Open(cfg Config) (*Store, error) {
 	registerDriver(cfg)
+
+	// Ensure the parent directory exists for a file-backed database.
+	if cfg.DBPath != ":memory:" {
+		if dir := filepath.Dir(cfg.DBPath); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, fmt.Errorf("create database dir %s: %w", dir, err)
+			}
+		}
+	}
 
 	db, err := sql.Open(driverName, cfg.DBPath)
 	if err != nil {
@@ -150,6 +194,9 @@ func (s *Store) bootstrap(ctx context.Context) error {
 
 // Dim returns the embedding dimension reported by the loaded model.
 func (s *Store) Dim() int { return s.dim }
+
+// Path returns the database file path (":memory:" for an ephemeral store).
+func (s *Store) Path() string { return s.cfg.DBPath }
 
 // Embed returns the embedding of text as a FLOAT32 BLOB, computed in-process by
 // sqlite-ai. The BLOB is directly storable in memories.embedding and directly

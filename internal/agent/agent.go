@@ -14,6 +14,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
@@ -168,3 +169,60 @@ func (a *Agent) ShortTermLen() int { return a.short.Len() }
 
 // MemoryCount reports how many long-term memories are stored.
 func (a *Agent) MemoryCount(ctx context.Context) (int, error) { return a.store.Count(ctx) }
+
+// HelpText lists the slash commands understood by both the TUI and the REPL.
+const HelpText = `Commands:
+  /help        show this help
+  /mem         memory stats (count + database file)
+  /list [n]    list the most recent n memories (default 10)
+  /clear       clear the on-screen transcript (TUI only; does not erase memory)
+  /exit, /quit quit
+Keys (TUI): enter = send · ctrl+c / esc = quit · PgUp/PgDn or mouse wheel = scroll`
+
+// Help returns the command help text.
+func (a *Agent) Help() string { return HelpText }
+
+// MemoryStats returns a one-line summary of stored memory and where it lives.
+func (a *Agent) MemoryStats(ctx context.Context) (string, error) {
+	n, err := a.store.Count(ctx)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d memories stored in %s", n, a.store.Path()), nil
+}
+
+// ListMemories returns a formatted listing of the most recent n memories.
+func (a *Agent) ListMemories(ctx context.Context, n int) (string, error) {
+	mems, err := a.store.List(ctx, n)
+	if err != nil {
+		return "", err
+	}
+	return FormatMemories(mems), nil
+}
+
+// FormatMemories renders memories (newest first) as a compact, readable list.
+func FormatMemories(mems []memory.Memory) string {
+	if len(mems) == 0 {
+		return "(no memories yet)"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Most recent %d memories (newest first):\n", len(mems))
+	for _, m := range mems {
+		label := m.Role
+		if label == "" {
+			label = string(m.Kind)
+		}
+		fmt.Fprintf(&b, "  #%d [%s] %s  %s\n",
+			m.ID, label, m.CreatedAt.Format("2006-01-02 15:04"), oneLine(m.Content, 70))
+	}
+	return b.String()
+}
+
+// oneLine collapses whitespace and truncates s to at most max runes.
+func oneLine(s string, max int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > max {
+		return string(r[:max-1]) + "…"
+	}
+	return s
+}

@@ -124,6 +124,27 @@ func TestRememberReturnsRow(t *testing.T) {
 	}
 }
 
+func TestListReturnsNewestFirst(t *testing.T) {
+	store, ctx := openWithCorpus(t)
+	mems, err := store.List(ctx, 3)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(mems) != 3 {
+		t.Fatalf("got %d; want 3", len(mems))
+	}
+	// Newest first ⇒ descending ids.
+	for i := 1; i < len(mems); i++ {
+		if mems[i].ID >= mems[i-1].ID {
+			t.Errorf("not newest-first: %d then %d", mems[i-1].ID, mems[i].ID)
+		}
+	}
+	// The last-inserted corpus entry must be first.
+	if mems[0].Content != corpus[len(corpus)-1] {
+		t.Errorf("first = %q; want %q", mems[0].Content, corpus[len(corpus)-1])
+	}
+}
+
 func TestShortTermRingBuffer(t *testing.T) {
 	st := memory.NewShortTerm(3)
 	if st.Len() != 0 {
