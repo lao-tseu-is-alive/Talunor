@@ -151,10 +151,6 @@ func (s *Store) bootstrap(ctx context.Context) error {
 // Dim returns the embedding dimension reported by the loaded model.
 func (s *Store) Dim() int { return s.dim }
 
-// DB exposes the underlying handle. Temporary: Layer 1 callers (the doctor)
-// run raw SQL through it; Layer 2 replaces this with typed methods.
-func (s *Store) DB() *sql.DB { return s.db }
-
 // Embed returns the embedding of text as a FLOAT32 BLOB, computed in-process by
 // sqlite-ai. The BLOB is directly storable in memories.embedding and directly
 // usable as a query vector for KNN search.

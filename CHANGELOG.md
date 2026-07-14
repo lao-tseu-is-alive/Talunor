@@ -11,8 +11,63 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- Layer 2 — Memory API: `Remember` / `Recall` (KNN + cosine threshold) and a
-  short-term ring buffer.
+- Layer 3 — LLM provider: a `Provider` interface + an Ollama (OpenAI-compatible)
+  streaming adapter.
+
+## [0.2.0] - 2026-07-14 — Layer 2: Memory API
+
+A typed memory API over the Layer 1 substrate, plus the short-term tier. The
+`doctor` now exercises the public API instead of raw SQL.
+
+### Added
+
+- `Store.Remember(ctx, kind, role, content)` — embeds content in-DB and inserts
+  it in one call, returning the persisted row (id + timestamp via SQL
+  `RETURNING`).
+- `Store.Recall(ctx, query, k, maxDistance)` — the semantic-retrieval step: KNN
+  over stored embeddings, nearest-first, with an optional cosine-distance
+  threshold so only genuinely relevant memories are returned. This is what gets
+  injected into the prompt before an LLM call.
+- `Store.Count(ctx)` — number of stored memories.
+- `ShortTerm` — the immediate-context tier: a fixed-capacity, concurrency-safe
+  ring buffer of the most recent turns, kept verbatim (no embedding/retrieval).
+- Typed model: `Kind` (`turn` / `doc_chunk`), `Memory`, `Hit` (memory +
+  distance), `Turn`.
+- `internal/memory` test suite: retrieval ranking, threshold filtering,
+  `Remember` round-trip, and ring-buffer behaviour. Tests skip cleanly if
+  `make deps` has not been run.
+
+### Changed
+
+- `cmd/doctor` now uses `Remember` / `Recall` and demonstrates the short-term
+  buffer, instead of issuing raw SQL.
+
+### Removed
+
+- `Store.DB()` — the temporary Layer 1 escape hatch; the typed API replaces it.
+
+### Design decisions
+
+- **Two tiers, cleanly separated.** `ShortTerm` is pure in-memory recency;
+  `Store` is embedded long-term recall. The agent loop (Layer 4) will write to
+  both and read both, but neither knows about the other.
+- **Threshold as a caller parameter** (`maxDistance`), not a hardcoded constant:
+  retrieval relevance is a policy the caller owns. `0` means "no threshold".
+  Empirically, related memories sit below ~0.7 cosine distance and unrelated ones
+  above ~0.85, so ~0.75 is a sensible default (used by the doctor).
+
+### Lessons learned
+
+1. **A relevance threshold matters as much as top-k.** Plain KNN always returns
+   `k` rows, including irrelevant ones when the store is sparse or the query is
+   off-topic. Injecting those into a prompt is worse than injecting nothing.
+   Filtering by cosine distance keeps recall precise (the doctor's first query
+   now returns exactly one memory instead of three).
+2. **`RETURNING` avoids a second round trip.** SQLite (bundled with
+   `mattn/go-sqlite3`) supports `INSERT … RETURNING id, created_at`, so
+   `Remember` gets the generated id and timestamp without a follow-up `SELECT`.
+3. **`Recent()` must return a copy.** Handing out the internal slice would let
+   callers mutate short-term memory by accident; a test pins this contract.
 
 ## [0.1.0] - 2026-07-14 — Layer 1: DB foundation
 
@@ -73,5 +128,6 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lao-tseu-is-alive/Talunor/releases/tag/v0.1.0

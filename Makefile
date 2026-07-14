@@ -51,6 +51,10 @@ doctor: deps
 build: deps
 	go build -ldflags "$(LDFLAGS)" -o bin/ ./...
 
+## test: run the test suite (skips memory tests if deps are missing)
+test:
+	go test ./...
+
 ## tidy: sync go.mod/go.sum
 tidy:
 	go mod tidy

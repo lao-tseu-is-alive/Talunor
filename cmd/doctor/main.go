@@ -1,7 +1,8 @@
-// Command doctor smoke-tests Talunor's memory substrate: it loads the SQLite
-// extensions and the embedding model, embeds a handful of sentences, stores
-// them, then runs a KNN query and prints the ranking. If the nearest neighbour
-// of a query is semantically the right sentence, the whole Layer 1 stack works.
+// Command doctor smoke-tests Talunor's memory. It loads the SQLite extensions
+// and embedding model, then exercises the typed memory API: it Remembers a small
+// corpus, Recalls it by meaning with a relevance threshold, and demonstrates the
+// short-term ring buffer. If the recalled memory is semantically the right one,
+// the memory stack (Layers 1–2) works.
 package main
 
 import (
@@ -23,6 +24,10 @@ var corpus = []string{
 	"SQLite stores an entire relational database in a single file.",
 }
 
+// relevanceThreshold is the maximum cosine distance we treat as "relevant".
+// Unrelated corpus sentences sit well above this; genuine matches sit below.
+const relevanceThreshold = 0.75
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "doctor: "+err.Error())
@@ -34,8 +39,8 @@ func run() error {
 	ctx := context.Background()
 	fmt.Println(version.String())
 
-	// Use an ephemeral in-memory database so the smoke test is repeatable and
-	// leaves nothing behind. Extension/model paths come from `make deps`.
+	// Ephemeral in-memory database so the smoke test is repeatable and leaves
+	// nothing behind. Extension/model paths come from `make deps`.
 	cfg := memory.DefaultConfig()
 	cfg.DBPath = ":memory:"
 
@@ -47,66 +52,62 @@ func run() error {
 	defer store.Close()
 	fmt.Printf("✓ store open — embedding dimension = %d\n\n", store.Dim())
 
-	// Embed and store the corpus.
-	fmt.Println("• embedding and storing corpus…")
+	// Long-term memory: Remember embeds + stores in one call.
+	fmt.Println("• remembering corpus…")
 	for _, text := range corpus {
-		emb, err := store.Embed(ctx, text)
-		if err != nil {
+		if _, err := store.Remember(ctx, memory.KindDocChunk, "", text); err != nil {
 			return err
 		}
-		if _, err := store.DB().ExecContext(ctx,
-			`INSERT INTO memories(kind, content, embedding) VALUES('doc_chunk', ?, ?)`,
-			text, emb); err != nil {
-			return fmt.Errorf("insert: %w", err)
-		}
 	}
-	fmt.Printf("✓ stored %d memories\n\n", len(corpus))
+	n, err := store.Count(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("✓ stored %d memories\n\n", n)
 
-	// Query with a paraphrase that shares no keywords with the target sentence
-	// ("single file" / "one file" vs. the stored wording). Semantic search
-	// should still surface the SQLite fact first.
-	query := "Which technology keeps a whole database in one file?"
-	fmt.Printf("• KNN query: %q\n", query)
-	if err := knn(ctx, store, query, 3); err != nil {
+	// Semantic recall with a relevance threshold. The first query has a clear
+	// match; the second shows the threshold letting only relevant memories
+	// through.
+	if err := recall(ctx, store, "Which technology keeps a whole database in one file?"); err != nil {
+		return err
+	}
+	if err := recall(ctx, store, "Tell me about a famous French landmark."); err != nil {
 		return err
 	}
 
-	query2 := "Tell me about a famous French landmark."
-	fmt.Printf("\n• KNN query: %q\n", query2)
-	if err := knn(ctx, store, query2, 3); err != nil {
-		return err
+	// Short-term memory: a ring buffer of the most recent turns, kept verbatim.
+	fmt.Println("\n• short-term buffer (capacity 3), after 5 turns:")
+	st := memory.NewShortTerm(3)
+	for _, turn := range []memory.Turn{
+		{Role: "user", Content: "hi"},
+		{Role: "assistant", Content: "hello!"},
+		{Role: "user", Content: "what's my memory model?"},
+		{Role: "assistant", Content: "short-term ring + long-term KNN"},
+		{Role: "user", Content: "nice"},
+	} {
+		st.Add(turn.Role, turn.Content)
+	}
+	for _, turn := range st.Recent() {
+		fmt.Printf("   %-9s %s\n", turn.Role+":", turn.Content)
 	}
 
-	fmt.Println("\n✓ Layer 1 substrate OK: extensions + in-DB embeddings + KNN all working.")
+	fmt.Println("\n✓ Layers 1–2 OK: in-DB embeddings, KNN recall (thresholded), short-term buffer.")
 	return nil
 }
 
-// knn embeds the query, runs sqlite-vector's brute-force scan, and prints the
-// top-k memories ranked by cosine distance (smaller = closer).
-func knn(ctx context.Context, store *memory.Store, query string, k int) error {
-	qvec, err := store.Embed(ctx, query)
+// recall runs a thresholded semantic search and prints the relevant hits.
+func recall(ctx context.Context, store *memory.Store, query string) error {
+	fmt.Printf("• recall: %q  (threshold d≤%.2f)\n", query, relevanceThreshold)
+	hits, err := store.Recall(ctx, query, 5, relevanceThreshold)
 	if err != nil {
 		return err
 	}
-	rows, err := store.DB().QueryContext(ctx, `
-		SELECT m.content, v.distance
-		FROM vector_full_scan('memories', 'embedding', ?, ?) AS v
-		JOIN memories m ON m.id = v.rowid
-		ORDER BY v.distance`, qvec, k)
-	if err != nil {
-		return fmt.Errorf("vector_full_scan: %w", err)
+	if len(hits) == 0 {
+		fmt.Println("   (no memory passed the relevance threshold)")
+		return nil
 	}
-	defer rows.Close()
-
-	rank := 0
-	for rows.Next() {
-		rank++
-		var content string
-		var dist float64
-		if err := rows.Scan(&content, &dist); err != nil {
-			return err
-		}
-		fmt.Printf("   %d. [d=%.4f] %s\n", rank, dist, content)
+	for i, h := range hits {
+		fmt.Printf("   %d. [d=%.4f] %s\n", i+1, h.Distance, h.Content)
 	}
-	return rows.Err()
+	return nil
 }
