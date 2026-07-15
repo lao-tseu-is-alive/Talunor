@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Talunor — self-contained image.
+# Talunor — self-contained, minimal-surface image.
 #
 # Unlike a static Go service, Talunor is cgo: it links glibc and, at runtime,
 # dlopens two SQLite extensions (sqlite-vector, sqlite-ai) and loads a GGUF
@@ -8,19 +8,24 @@
 # first-boot download and embeddings run fully offline. The only external
 # dependency is the chat LLM (a local Ollama), reached over the network.
 #
-# Build args (optional): COMMIT and BUILD_DATE feed internal/version via
-# -ldflags. The semantic Version is a const in the source, so tagged builds carry
-# the right version automatically.
+# Base choice — why distroless:
+#   The runtime is gcr.io/distroless/cc, which contains only glibc, libstdc++,
+#   libgcc and ca-certificates — exactly what the Go binary and ai.so need
+#   (ai.so's NEEDED = libstdc++, libgcc_s, libm, libc). It ships no shell, no
+#   apt, no perl/util-linux, so almost all of a general debian image's CVEs (most
+#   of them unfixable distro triage) simply do not exist here.
+#   distroless/cc is debian12 (glibc 2.36); the prebuilt extensions require at
+#   most GLIBC_2.34 / GLIBCXX_3.4.29 (checked with `objdump -T`), so bookworm is
+#   comfortably new enough. The builder therefore also targets bookworm, so the
+#   Go binary never demands a newer glibc than the runtime provides.
 #
-# Debian trixie (glibc 2.41) is used for both stages: the prebuilt sqliteai
-# extensions were linked against an older glibc, and newer glibc is backward
-# compatible, so trixie safely satisfies both them and the Go binary.
+# Build args (optional): COMMIT and BUILD_DATE feed internal/version via
+# -ldflags. The semantic Version is a const in the source.
 
 # ---- builder ---------------------------------------------------------------
-FROM golang:1.26-trixie AS builder
+FROM golang:1.26-bookworm AS builder
 
-# make + curl drive `make deps` (fetches the extensions + model); the golang
-# image already provides gcc/git for the cgo build.
+# make + curl drive `make deps`; the golang image already provides gcc/git.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends make curl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
@@ -47,13 +52,9 @@ RUN go build \
       -o /out/talunor ./cmd/talunor
 
 # ---- runtime ---------------------------------------------------------------
-FROM debian:trixie-slim
-
-# ai.so (llama.cpp embedding runtime) needs libstdc++ and libgcc_s; libm/libc
-# come from the base. ca-certificates lets the agent reach an HTTPS LLM endpoint.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends libstdc++6 ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+# distroless/cc = glibc + libstdc++ + libgcc + ca-certificates (+ /tmp), nothing
+# else. Runs as root (default tag) so the /data volume is writable.
+FROM gcr.io/distroless/cc-debian12
 
 WORKDIR /app
 COPY --from=builder /out/talunor /usr/local/bin/talunor

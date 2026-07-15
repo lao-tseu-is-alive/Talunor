@@ -86,10 +86,14 @@ make nerdctl-build && make nerdctl-run   # self-contained image (or docker-*)
   self-contained linux/amd64 `.tar.gz` (binary + extensions + model + `run.sh`) to
   the GitHub Release; **`docker-publish.yml`** builds, Trivy-scans/gates, and
   pushes `ghcr.io/lao-tseu-is-alive/talunor` (`{{version}}` + `sha` tags).
-- **`Dockerfile`** is multi-stage (golang trixie builder runs `make deps` + cgo
-  build → debian trixie-slim runtime with `libstdc++6`), baking the extensions +
-  model in. **amd64-only** (sqliteai ships no arm64 assets). Third-party action
-  versions are pinned to commit SHAs (supply-chain), matching go-cloud-k8s-poc-2026.
+- **`Dockerfile`** is multi-stage (golang **bookworm** builder runs `make deps` +
+  cgo build → **`gcr.io/distroless/cc-debian12`** runtime), baking the extensions
+  + model in. Distroless/cc ships only glibc + libstdc++ + libgcc + ca-certs — the
+  exact needs of the binary and `ai.so` — so the OS CVE surface is tiny (~17 total,
+  0 HIGH/CRITICAL vs ~166/21 on debian-slim). Bookworm's glibc 2.36 satisfies the
+  extensions (they need ≤ GLIBC_2.34 / GLIBCXX_3.4.29, checked via `objdump -T`).
+  **amd64-only** (sqliteai ships no arm64 assets). Third-party action versions are
+  pinned to commit SHAs (supply-chain), matching go-cloud-k8s-poc-2026.
 
 ## Environment variables
 
