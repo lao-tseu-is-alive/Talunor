@@ -102,7 +102,11 @@ func TestTurnRecallsAndStores(t *testing.T) {
 	}
 
 	fake := &fakeProvider{reply: "Your favourite colour is teal."}
-	ag := New(store, fake, DefaultConfig())
+	// Disable reflection here: this test pins the base loop (recall + store both
+	// turns). Reflection is exercised separately, below.
+	cfg := DefaultConfig()
+	cfg.Extractor = DisableReflection()
+	ag := New(store, fake, cfg)
 
 	out, err := ag.Turn(ctx, "what is my favourite colour?")
 	if err != nil {
@@ -133,6 +137,123 @@ func TestTurnRecallsAndStores(t *testing.T) {
 	if ag.ShortTermLen() != 2 {
 		t.Errorf("short-term len = %d; want 2 (user + assistant)", ag.ShortTermLen())
 	}
+}
+
+// fakeExtractor returns canned facts, ignoring the input — lets us drive the
+// reflection path deterministically without an LLM.
+type fakeExtractor struct{ facts []string }
+
+func (f fakeExtractor) Extract(context.Context, string) ([]string, error) { return f.facts, nil }
+
+// TestParseFacts checks the model-output parser without any model or store.
+func TestParseFacts(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"none sentinel", "NONE", nil},
+		{"none lowercase", "none", nil},
+		{"one fact", "User's name is Carlos.", []string{"User's name is Carlos."}},
+		{"strips bullets", "- User likes Go.\n* User likes TypeScript.", []string{"User likes Go.", "User likes TypeScript."}},
+		{"strips numbering + blanks", "1. User uses Bun.\n\n2. User codes in Go.\n", []string{"User uses Bun.", "User codes in Go."}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseFacts(tc.in)
+			if len(got) != len(tc.want) {
+				t.Fatalf("parseFacts(%q) = %v; want %v", tc.in, got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("fact %d = %q; want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestReflectionStoresAndRecallsFact proves Fix B end to end: after a turn whose
+// message states a durable fact, a *distilled* fact is stored (memory.KindFact),
+// and a later, differently-worded question recalls it. A fake extractor stands
+// in for the LLM so the test is deterministic; retrieval uses the real embedder.
+func TestReflectionStoresAndRecallsFact(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+
+	cfg := DefaultConfig()
+	cfg.Extractor = fakeExtractor{facts: []string{"User's favourite languages are Go and TypeScript."}}
+	ag := New(store, &fakeProvider{reply: "Nice to meet you, Carlos!"}, cfg)
+
+	// Turn 1: the user states the fact amid chit-chat.
+	out, err := ag.Turn(ctx, "hy my name is Carlos and i like to develop in Go and Typescript with Bun")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	if _, err := drain(out); err != nil { // draining waits for reflection to finish.
+		t.Fatalf("drain: %v", err)
+	}
+
+	// A fact memory must now exist (user turn + assistant turn + 1 fact = 3).
+	facts := factContents(t, ctx, store)
+	if len(facts) != 1 || !strings.Contains(facts[0], "Go and TypeScript") {
+		t.Fatalf("expected one distilled fact about the languages, got %v", facts)
+	}
+
+	// Turn 2 (differently worded): recall must surface the fact.
+	hits, err := store.Recall(ctx, "can you write me an hello word using my favorite languages ?", 8, 0.75)
+	if err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	var recalledFact bool
+	for _, h := range hits {
+		if h.Kind == memory.KindFact && strings.Contains(h.Content, "Go and TypeScript") {
+			recalledFact = true
+		}
+	}
+	if !recalledFact {
+		t.Errorf("distilled fact was not recalled for the re-ask; got %d hits", len(hits))
+	}
+}
+
+// TestReflectionDeduplicates checks that restating a known fact does not pile up
+// near-duplicate fact rows.
+func TestReflectionDeduplicates(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+
+	cfg := DefaultConfig()
+	cfg.Extractor = fakeExtractor{facts: []string{"User's favourite language is Go."}}
+	ag := New(store, &fakeProvider{reply: "ok"}, cfg)
+
+	for i := range 3 { // same fact extracted three times.
+		out, err := ag.Turn(ctx, "reminder that i love Go")
+		if err != nil {
+			t.Fatalf("turn %d: %v", i, err)
+		}
+		if _, err := drain(out); err != nil {
+			t.Fatalf("drain %d: %v", i, err)
+		}
+	}
+	if facts := factContents(t, ctx, store); len(facts) != 1 {
+		t.Errorf("dedup failed: %d fact rows, want 1: %v", len(facts), facts)
+	}
+}
+
+// factContents returns the content of every stored KindFact memory.
+func factContents(t *testing.T, ctx context.Context, store *memory.Store) []string {
+	t.Helper()
+	mems, err := store.List(ctx, 100)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var out []string
+	for _, m := range mems {
+		if m.Kind == memory.KindFact {
+			out = append(out, m.Content)
+		}
+	}
+	return out
 }
 
 func drain(ch <-chan llm.Chunk) (string, error) {

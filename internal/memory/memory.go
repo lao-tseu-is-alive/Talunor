@@ -10,10 +10,16 @@ import (
 type Kind string
 
 const (
-	// KindTurn is a single conversation message (has a role).
+	// KindTurn is a single conversation message (has a role). This is *episodic*
+	// memory: the verbatim record of what was said, and when.
 	KindTurn Kind = "turn"
 	// KindDocChunk is a chunk of an ingested document (no role).
 	KindDocChunk Kind = "doc_chunk"
+	// KindFact is a durable, distilled statement the agent chose to remember —
+	// written by its reflection step, not copied verbatim from a message. This is
+	// *semantic* memory: timeless knowledge ("User likes Go"), independent of the
+	// turn that produced it. It has no role.
+	KindFact Kind = "fact"
 )
 
 // sqliteTimeLayout is how SQLite's datetime('now') formats timestamps (UTC).

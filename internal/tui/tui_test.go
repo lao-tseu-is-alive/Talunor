@@ -27,6 +27,15 @@ func (f fakeProvider) Chat(_ context.Context, _ []llm.Message, _ llm.Options) (<
 	return ch, nil
 }
 
+// newAgent builds an agent for UI tests with reflection disabled: these tests
+// drive the Bubble Tea loop and assert exact stored-turn counts, so the extra
+// LLM extraction call (which would run over the fake provider) is turned off.
+func newAgent(store *memory.Store, reply string) *agent.Agent {
+	cfg := agent.DefaultConfig()
+	cfg.Extractor = agent.DisableReflection()
+	return agent.New(store, fakeProvider{reply: reply}, cfg)
+}
+
 func testStore(t *testing.T) *memory.Store {
 	t.Helper()
 	_, file, _, _ := runtime.Caller(0)
@@ -53,7 +62,7 @@ func testStore(t *testing.T) *memory.Store {
 // stream commands to completion. The rendered view must contain the reply.
 func TestModelDriveTurn(t *testing.T) {
 	store := testStore(t)
-	ag := agent.New(store, fakeProvider{reply: "**teal** is your colour"}, agent.DefaultConfig())
+	ag := newAgent(store, "**teal** is your colour")
 
 	var m tea.Model = tui.New(context.Background(), ag, "fake", "test-model", 0)
 
@@ -89,7 +98,7 @@ func TestModelDriveTurn(t *testing.T) {
 // and never starts a turn (so nothing is stored and no stream command runs).
 func TestSlashCommandDoesNotHitProvider(t *testing.T) {
 	store := testStore(t)
-	ag := agent.New(store, fakeProvider{reply: "should not be called"}, agent.DefaultConfig())
+	ag := newAgent(store, "should not be called")
 	var m tea.Model = tui.New(context.Background(), ag, "fake", "test-model", 0)
 
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -110,7 +119,7 @@ func TestSlashCommandDoesNotHitProvider(t *testing.T) {
 // TestEnterIgnoredWhileStreaming ensures a second submit mid-stream is a no-op.
 func TestEnterIgnoredWhileStreaming(t *testing.T) {
 	store := testStore(t)
-	ag := agent.New(store, fakeProvider{reply: "ok"}, agent.DefaultConfig())
+	ag := newAgent(store, "ok")
 	var m tea.Model = tui.New(context.Background(), ag, "fake", "test-model", 0)
 
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})

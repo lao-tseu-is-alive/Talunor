@@ -14,6 +14,77 @@ changed but the *lessons learned* while getting there.
 - **Iteration 2** — tools & actions: a tool registry and a ReAct-style
   act/observe loop, so the agent can *do* things, not just talk.
 
+## [0.5.5] - 2026-07-15 — Semantic memory: reflection distils facts (Fix B)
+
+A follow-up to 0.5.4. Fix A stopped the agent's own questions from polluting
+recall; this adds the deeper fix — the agent now **writes its own memory**.
+
+> An early taste of **Iteration 4 (learning/reflection)**, pulled forward as a
+> memory-quality feature. `v0.6.0` remains reserved for Iteration 2 (tools).
+
+### The problem it addresses
+
+Even after 0.5.4, durable facts lived only inside verbatim conversation turns,
+and a chatty turn is a *noisy carrier* for a fact. The message
+*"hy my name is Carlos and i like to develop in Go and Typescript with Bun. and
+you?"* sits at cosine distance **0.72** from a query like *"my favorite
+languages"* — the signal ("Go and TypeScript") is diluted by greeting and
+small-talk, leaving it near the noise floor (*"ok Talunor see you"* is 0.74).
+Retrieval is a signal-to-noise problem; distilling the fact fixes the signal.
+
+### Added
+
+- **Semantic memory tier** — `memory.KindFact`: a durable, distilled statement
+  ("User's favourite languages are Go and TypeScript."), distinct from episodic
+  `KindTurn` rows (verbatim messages). Facts have no role and are eligible for
+  recall like any other memory — but they win on merit because they embed close
+  to how a future question is phrased.
+- **Reflection step** (`internal/agent/reflect.go`) — after each turn, a
+  `FactExtractor` distils durable facts from the user's message and stores the
+  new ones as `KindFact`:
+  - `llmExtractor` asks the agent's own provider (temperature 0, no token cap so
+    a thinking model isn't starved) with a strict prompt: durable facts only,
+    one third-person sentence per line, or `NONE`. `parseFacts` cleans the reply.
+  - The interface is pluggable and best-effort: tests inject a fake extractor;
+    `DisableReflection()` turns it off; any extraction/storage error is swallowed
+    so it can never disturb the reply the user already received.
+  - **Deduplication** (`Agent.factKnown`, `Config.DedupMaxDistance = 0.20`):
+    restating a known fact does not accumulate near-duplicate rows — checked
+    against existing *facts* only, so the first distillation of a turn is never
+    blocked by the raw turn sitting nearby.
+- Reflection runs in the **learn phase** (`learnWhileStreaming`), after every
+  token has streamed to the caller but before the stream closes — off the
+  user-visible critical path, yet deterministic (when the stream ends, learning
+  is done), which keeps it testable.
+- Tests: `TestParseFacts` (parser, no model); `TestReflectionStoresAndRecallsFact`
+  (replays the reported session — a distilled fact is stored and recalled for a
+  differently-worded re-ask); `TestReflectionDeduplicates`.
+
+### Changed
+
+- `agent.New` installs a default LLM-based extractor when `Config.Extractor` is
+  nil; inject `DisableReflection()` to opt out. UI/loop tests that assert exact
+  stored-turn counts now disable reflection (they exercise plumbing, not
+  learning).
+
+### Lessons learned
+
+1. **The LLM is a memory *writer*, not only a reader.** The highest-leverage
+   retrieval fix is often upstream of retrieval: change *what you store*. Asking
+   the model to distil a message into clean facts (reflection) makes later recall
+   easy, because the stored text now embeds close to how the question will be
+   asked.
+2. **Retrieval is signal-to-noise, not keyword matching.** A fact buried in
+   greeting and small-talk embeds far from the query even when the words are
+   present. Distillation raises the signal; that is what moved the fact from
+   distance 0.72 (below the noise floor) to a confident recall.
+3. **Semantic memory needs curation too** — dedup by similarity, or reflection
+   rebuilds the very pollution 0.5.4 removed.
+4. **Reflection costs a second model call per turn.** Here it blocks the
+   turn-complete signal (a visible pause after the answer). Production systems do
+   this asynchronously or in batches — the honest next lesson, and why Iteration 4
+   (consolidation, salience/decay, async learning) exists.
+
 ## [0.5.4] - 2026-07-15 — Fix: recall loop (assistant turns pollute retrieval) + `/forget`
 
 ### Fixed
@@ -440,7 +511,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.5...HEAD
+[0.5.5]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.1...v0.5.2

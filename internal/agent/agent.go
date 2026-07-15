@@ -36,6 +36,16 @@ type Config struct {
 	ShortTermCap int
 	// Options is passed through to the provider on every call.
 	Options llm.Options
+
+	// Extractor is the reflection step: after each turn it distils durable facts
+	// from the user's message into semantic memory (memory.KindFact). If nil, New
+	// installs a default LLM-based extractor over the agent's own provider; inject
+	// DisableReflection() to turn reflection off.
+	Extractor FactExtractor
+	// DedupMaxDistance suppresses storing a freshly-extracted fact when an
+	// existing fact lies within this cosine distance, so restating something does
+	// not pile up near-duplicate facts. Small = "only skip near-identical facts".
+	DedupMaxDistance float64
 }
 
 // DefaultConfig returns sensible defaults for a conversational agent.
@@ -46,16 +56,18 @@ func DefaultConfig() Config {
 			"otherwise ignore them and answer normally. Do not mention the memory system unless asked.",
 		RecallK:           8,
 		RecallMaxDistance: 0.75,
-		ShortTermCap:      6, // ~3 exchanges.
+		ShortTermCap:      6,    // ~3 exchanges.
+		DedupMaxDistance:  0.20, // near-identical facts only.
 	}
 }
 
 // Agent owns the memory substrates and the LLM provider and runs the loop.
 type Agent struct {
-	store    *memory.Store
-	short    *memory.ShortTerm
-	provider llm.Provider
-	cfg      Config
+	store     *memory.Store
+	short     *memory.ShortTerm
+	provider  llm.Provider
+	extractor FactExtractor
+	cfg       Config
 }
 
 // New builds an Agent. Zero-valued config fields fall back to DefaultConfig.
@@ -70,11 +82,20 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 	if cfg.ShortTermCap <= 0 {
 		cfg.ShortTermCap = def.ShortTermCap
 	}
+	if cfg.DedupMaxDistance <= 0 {
+		cfg.DedupMaxDistance = def.DedupMaxDistance
+	}
+	// Default reflection: the agent uses its own LLM provider to write its
+	// semantic memory. Callers disable it with DisableReflection().
+	if cfg.Extractor == nil {
+		cfg.Extractor = newLLMExtractor(provider, cfg.Options)
+	}
 	return &Agent{
-		store:    store,
-		short:    memory.NewShortTerm(cfg.ShortTermCap),
-		provider: provider,
-		cfg:      cfg,
+		store:     store,
+		short:     memory.NewShortTerm(cfg.ShortTermCap),
+		provider:  provider,
+		extractor: cfg.Extractor,
+		cfg:       cfg,
 	}
 }
 
@@ -107,13 +128,17 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 	// Tee the stream to the caller while accumulating the answer; store it on
 	// clean completion.
 	out := make(chan llm.Chunk)
-	go a.learnWhileStreaming(ctx, stream, out)
+	go a.learnWhileStreaming(ctx, input, stream, out)
 	return out, nil
 }
 
 // learnWhileStreaming forwards chunks to out, accumulates the answer content,
-// and on successful completion records the assistant turn.
-func (a *Agent) learnWhileStreaming(ctx context.Context, in <-chan llm.Chunk, out chan<- llm.Chunk) {
+// and on successful completion records the assistant turn and reflects on the
+// user's message. Reflection runs *after* every chunk has been forwarded (the
+// caller has already seen the whole reply) but *before* the channel closes, so
+// that when a caller observes the stream end, learning is finished — keeping the
+// loop deterministic and testable.
+func (a *Agent) learnWhileStreaming(ctx context.Context, input string, in <-chan llm.Chunk, out chan<- llm.Chunk) {
 	defer close(out)
 	var answer strings.Builder
 	for c := range in {
@@ -139,6 +164,46 @@ func (a *Agent) learnWhileStreaming(ctx context.Context, in <-chan llm.Chunk, ou
 		// caller already received.
 		_, _ = a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, text)
 	}
+	// Reflect: distil durable facts from the user's message into semantic memory.
+	a.reflect(ctx, input)
+}
+
+// reflect is the agent's learning step: it asks the extractor for durable facts
+// in the user's message and stores each new one as semantic memory
+// (memory.KindFact). It is best-effort — an extraction or storage failure must
+// never disturb the reply the caller already received — and it deduplicates
+// against existing facts so restating something does not accumulate copies.
+func (a *Agent) reflect(ctx context.Context, input string) {
+	if a.extractor == nil {
+		return
+	}
+	facts, err := a.extractor.Extract(ctx, input)
+	if err != nil {
+		return
+	}
+	for _, f := range facts {
+		if a.factKnown(ctx, f) {
+			continue
+		}
+		_, _ = a.store.Remember(ctx, memory.KindFact, "", f)
+	}
+}
+
+// factKnown reports whether a fact semantically equivalent to the given one is
+// already stored, so reflect can skip near-duplicates. Only existing KindFact
+// rows count: a raw conversation turn that happens to sit nearby must not block
+// the *first* distillation of that turn into a fact.
+func (a *Agent) factKnown(ctx context.Context, fact string) bool {
+	hits, err := a.store.Recall(ctx, fact, 3, a.cfg.DedupMaxDistance)
+	if err != nil {
+		return false
+	}
+	for _, h := range hits {
+		if h.Kind == memory.KindFact {
+			return true
+		}
+	}
+	return false
 }
 
 // buildMessages assembles the prompt: system prompt, an optional block of

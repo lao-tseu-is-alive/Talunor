@@ -6,7 +6,7 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.5.4** — **Iteration 1 complete** (+ polish): a
+> Current version: **v0.5.5** — **Iteration 1 complete** (+ polish): a
 > conversational agent with multi-tier memory and a Bubble Tea TUI. See
 > [CHANGELOG.md](CHANGELOG.md) for the version-by-version build log and lessons.
 
@@ -19,6 +19,11 @@ reads as a guided tour of how to build a full cognitive-loop agent
   extension stores embeddings as `FLOAT32` BLOBs and does KNN over them.
 - **One file is the whole brain.** The agent's long-term memory is a single
   SQLite database file.
+- **The agent writes its own memory.** After each turn a *reflection* step asks
+  the model to distil durable facts from what you said ("User's favourite
+  languages are Go and TypeScript") and stores them as **semantic** memory,
+  separate from the verbatim **episodic** turns — so later questions recall a
+  clean fact instead of a noisy sentence.
 
 ## Architecture (target)
 

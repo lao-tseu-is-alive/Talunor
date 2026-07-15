@@ -41,10 +41,13 @@ cmd/chat/       one-shot LLM streaming smoke test
 cmd/talunor/    the app: TUI by default, --plain REPL, --list dump
 internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    Remember/Recall (thresholded; recall excludes assistant
-                   turns), Forget(id), short-term ring buffer
+                   turns), Forget(id), short-term ring buffer. Kinds: turn
+                   (episodic), fact (semantic), doc_chunk
 internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenAI/…)
-internal/agent/    the cognitive loop: Turn = perceive→recall→reason→store;
-                   also slash-command helpers (Help/MemoryStats/ListMemories/
+internal/agent/    the cognitive loop: Turn = perceive→recall→reason→store→
+                   reflect. reflect.go = FactExtractor (LLM distils durable
+                   facts into KindFact; DisableReflection() to opt out). Also
+                   slash-command helpers (Help/MemoryStats/ListMemories/
                    ForgetMemory, MemoryID)
 internal/render/   shared console stream renderer (reasoning dimmed, answer bright)
 internal/tui/      Bubble Tea + Glamour front-end
@@ -54,7 +57,9 @@ ext/               fetched .so extensions + GGUF model (gitignored)
 
 Data flow of one turn: input → `Store.Recall` (KNN, thresholded) + `ShortTerm`
 recent turns → build prompt → `Provider.Chat` (stream) → render live →
-`Store.Remember` both turns on clean completion.
+`Store.Remember` both turns on clean completion → **reflect**: extractor distils
+durable facts from the user message and stores new ones as `KindFact` (deduped).
+Reflection runs after the reply has streamed but before the stream closes.
 
 ## Build, test, run
 
@@ -144,7 +149,8 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
 ## Roadmap / status
 
 - **Iteration 1 COMPLETE (v0.5.x):** conversational agent, multi-tier memory,
-  streaming Ollama provider, agent loop, Bubble Tea TUI, config + commands.
+  streaming Ollama provider, agent loop, Bubble Tea TUI, config + commands. v0.5.5
+  adds reflection (semantic-memory facts) — an early taste of Iteration 4.
 - **Next — Iteration 2:** tools & actions (tool registry, ReAct act/observe
   loop), then guardrails/approval gates (the original goal, à la pi-go/Claude),
   then learning/reflection. Expect ~v0.6.0–v0.8.0, same checkpoint rhythm.
