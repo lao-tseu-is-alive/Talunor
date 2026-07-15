@@ -36,6 +36,7 @@ var (
 	asstHeader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5")) // magenta
 	dimStyle   = lipgloss.NewStyle().Faint(true)
 	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true) // red
+	warnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true) // yellow
 	statusBar  = lipgloss.NewStyle().Faint(true)
 )
 
@@ -81,6 +82,7 @@ type Model struct {
 	stream       <-chan llm.Chunk
 	curContent   string
 	curReasoning string
+	pending      *llm.ApprovalRequest // a tool call awaiting the user's y/n.
 	errText      string
 
 	width, height int
@@ -140,6 +142,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// A pending tool approval captures y/n before anything else.
+		if m.pending != nil {
+			return m.answerApproval(msg)
+		}
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
@@ -162,6 +168,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if c.Err != nil {
 			m.finishStream()
 			m.errText = c.Err.Error()
+			m.refresh()
+			return m, nil
+		}
+		if c.Approval != nil {
+			// Pause the stream and wait for the user's y/n (handled in KeyMsg).
+			m.pending = c.Approval
 			m.refresh()
 			return m, nil
 		}
@@ -225,6 +237,21 @@ func (m *Model) submit() tea.Cmd {
 	return waitForChunk(ch)
 }
 
+// answerApproval resolves a pending tool-approval request from a keypress: only
+// 'y'/'Y' allows; Ctrl-C denies and quits; anything else denies. It then resumes
+// the paused reply stream.
+func (m *Model) answerApproval(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	allow := msg.Type == tea.KeyRunes && len(msg.Runes) > 0 &&
+		(msg.Runes[0] == 'y' || msg.Runes[0] == 'Y')
+	m.pending.Respond(allow)
+	m.pending = nil
+	if msg.Type == tea.KeyCtrlC {
+		return m, tea.Quit
+	}
+	m.refresh()
+	return m, waitForChunk(m.stream) // resume streaming.
+}
+
 // runCommand handles a slash command, showing its output in the transcript.
 // It returns tea.Quit for /exit, otherwise nil.
 func (m *Model) runCommand(line string) tea.Cmd {
@@ -284,6 +311,7 @@ func (m *Model) finishStream() {
 	m.stream = nil
 	m.curContent = ""
 	m.curReasoning = ""
+	m.pending = nil
 }
 
 func (m *Model) appendTurn(role, raw string) {
@@ -333,6 +361,14 @@ func (m *Model) conversation() string {
 		}
 		b.WriteString(m.wrap(m.curContent))
 	}
+	if m.pending != nil {
+		b.WriteString("\n\n")
+		b.WriteString(warnStyle.Render(fmt.Sprintf("⚠️  Allow tool %q to run?", m.pending.Tool)))
+		b.WriteString("\n")
+		b.WriteString(dimStyle.Render(m.wrap(m.pending.Args)))
+		b.WriteString("\n")
+		b.WriteString(warnStyle.Render("[y] allow    [any other key] deny"))
+	}
 	return b.String()
 }
 
@@ -348,6 +384,9 @@ func (m *Model) status() string {
 	state := "ready"
 	if m.streaming {
 		state = "thinking…"
+	}
+	if m.pending != nil {
+		state = "awaiting approval — press y to allow, any other key to deny"
 	}
 	return statusBar.Render(fmt.Sprintf("%s · %s · %d memories · %s · enter send · ↑↓/PgUp/PgDn scroll · ctrl+c quit",
 		m.providerName, m.modelName, m.memCount, state))

@@ -52,7 +52,8 @@ internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/obs
                    the final answer. reflect.go = FactExtractor (LLM distils facts
                    into KindFact; DisableReflection()). Slash-command helpers too.
 internal/tools/    action layer: Tool interface + Registry; builtins Calculator
-                   (AST-safe), Clock, RecallMemory (searches the store)
+                   (AST-safe), Clock, RecallMemory (searches the store).
+                   Approvable = optional interface: a tool that needs human OK
 internal/render/   shared console stream renderer (reasoning dimmed, answer bright)
 internal/tui/      Bubble Tea + Glamour front-end
 internal/version/  build identity (Version const; Commit/Date via -ldflags)
@@ -64,7 +65,10 @@ recent turns → build prompt → **act/observe loop**: `Provider.Chat` with too
 while it returns tool calls, run them and append observations, then call again
 (cap `MaxToolIters`); the final answer streams live, tool activity shows dimmed →
 `Store.Remember` user + final answer → **reflect** (extractor distils durable
-facts into `KindFact`, deduped). Learning runs before the stream closes.
+facts into `KindFact`, deduped). Learning runs before the stream closes. A tool
+that implements `tools.Approvable` pauses the loop: the agent emits an
+`llm.ApprovalRequest` on the stream and blocks on `Decision`; TUI/REPL prompt y/n
+(deny → observation, fail closed).
 
 ## Build, test, run
 

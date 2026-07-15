@@ -11,8 +11,14 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Iteration 3, next** — planning & guardrails: an explicit planner and
-  approval gates before actions.
+- **Approval gate (landed on `main`, not yet released).** The ReAct loop can
+  pause on a tool marked "requires approval" (the optional `tools.Approvable`
+  interface) and wait for a human decision: it emits an `ApprovalRequest` on the
+  chunk stream and blocks; the TUI shows a y/n prompt, the REPL asks on stdin. A
+  denial (or a cancelled turn) becomes an observation the model can react to, so
+  it fails closed. Brings Iteration 3's guardrail forward — the prerequisite for a
+  safe `bash` tool. Ships (with the sandboxed bash tool) as **v0.8.0**.
+- **Iteration 3, later** — an explicit planner before multi-step actions.
 
 ## [0.7.0] - 2026-07-15 — Tools & actions: the ReAct act/observe loop
 

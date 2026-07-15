@@ -2,8 +2,10 @@ package tui_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -13,6 +15,7 @@ import (
 	"github.com/lao-tseu-is-alive/Talunor/internal/agent"
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
+	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tui"
 )
 
@@ -25,6 +28,37 @@ func (f fakeProvider) Chat(_ context.Context, _ []llm.Message, _ llm.Options) (<
 	ch <- llm.Chunk{Content: f.reply}
 	close(ch)
 	return ch, nil
+}
+
+// scriptedProvider returns one canned response per Chat call (for tool flows).
+type scriptedProvider struct {
+	steps [][]llm.Chunk
+	call  int
+}
+
+func (p *scriptedProvider) Name() string { return "scripted" }
+
+func (p *scriptedProvider) Chat(_ context.Context, _ []llm.Message, _ llm.Options) (<-chan llm.Chunk, error) {
+	step := p.steps[p.call]
+	p.call++
+	ch := make(chan llm.Chunk, len(step))
+	for _, c := range step {
+		ch <- c
+	}
+	close(ch)
+	return ch, nil
+}
+
+// dangerTool is a gated fake tool that records whether it ran.
+type dangerTool struct{ ran *bool }
+
+func (dangerTool) Name() string                    { return "danger" }
+func (dangerTool) Description() string              { return "side effects" }
+func (dangerTool) Schema() json.RawMessage          { return json.RawMessage(`{"type":"object"}`) }
+func (dangerTool) RequiresApproval() bool           { return true }
+func (d dangerTool) Execute(context.Context, json.RawMessage) (string, error) {
+	*d.ran = true
+	return "ok", nil
 }
 
 // newAgent builds an agent for UI tests with reflection disabled: these tests
@@ -115,6 +149,55 @@ func TestSlashCommandDoesNotHitProvider(t *testing.T) {
 		t.Errorf("stored count = %d; want 0 (command must not persist a turn)", n)
 	}
 }
+
+// TestTUIApprovalFlow drives a tool that needs approval through the Bubble Tea
+// loop: the prompt must appear and pause the stream, pressing 'y' must run the
+// tool and resume to the final answer.
+func TestTUIApprovalFlow(t *testing.T) {
+	store := testStore(t)
+	ran := false
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "danger", Args: `{}`}}}},
+		{{Content: "all finished"}},
+	}}
+	cfg := agent.DefaultConfig()
+	cfg.Tools = tools.NewRegistry(dangerTool{ran: &ran})
+	cfg.Extractor = agent.DisableReflection()
+	ag := agent.New(store, prov, cfg)
+
+	var m tea.Model = tui.New(context.Background(), ag, "fake", "test-model", 0)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("do it")})
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	// Pump until the loop pauses for approval (the approval msg returns no cmd).
+	for cmd != nil {
+		m, cmd = m.Update(cmd())
+	}
+	if !strings.Contains(m.View(), "Allow tool") {
+		t.Fatalf("expected an approval prompt; view:\n%s", m.View())
+	}
+	if ran {
+		t.Fatal("tool ran before approval")
+	}
+
+	// Approve with 'y' and pump to completion.
+	m, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	for cmd != nil {
+		m, cmd = m.Update(cmd())
+	}
+	if !ran {
+		t.Error("tool should have run after approval")
+	}
+	// Glamour styles per cell, so strip ANSI before matching the answer text.
+	if got := stripANSI(m.View()); !strings.Contains(got, "all finished") {
+		t.Errorf("expected the final answer after approval; view:\n%s", got)
+	}
+}
+
+var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
 
 // TestEnterIgnoredWhileStreaming ensures a second submit mid-stream is a no-op.
 func TestEnterIgnoredWhileStreaming(t *testing.T) {

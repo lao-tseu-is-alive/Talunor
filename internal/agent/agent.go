@@ -194,7 +194,10 @@ func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, o
 			if !a.send(ctx, out, llm.Chunk{Reasoning: fmt.Sprintf("🔧 %s(%s)\n", tc.Name, oneLine(tc.Args, 80))}) {
 				return
 			}
-			obs := a.tools.Execute(ctx, tc.Name, json.RawMessage(tc.Args))
+			obs, done := a.runTool(ctx, out, tc)
+			if done {
+				return // context cancelled mid-tool.
+			}
 			if !a.send(ctx, out, llm.Chunk{Reasoning: fmt.Sprintf("   ↳ %s\n", oneLine(obs, 120))}) {
 				return
 			}
@@ -208,6 +211,36 @@ func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, o
 		_, _ = a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, answer)
 	}
 	a.reflect(ctx, input)
+}
+
+// runTool runs one tool call, first asking the human for approval if the tool
+// requires it (a denied or cancelled request becomes an observation the model
+// can react to). It returns the observation and done=true if the context was
+// cancelled while waiting for approval (the caller should stop).
+func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCall) (obs string, done bool) {
+	if a.needsApproval(tc.Name) {
+		req := llm.NewApprovalRequest(tc.Name, tc.Args)
+		if !a.send(ctx, out, llm.Chunk{Approval: req}) {
+			return "", true
+		}
+		if !req.Decision(ctx) {
+			if ctx.Err() != nil {
+				return "", true
+			}
+			return "error: the user denied permission to run this tool", false
+		}
+	}
+	return a.tools.Execute(ctx, tc.Name, json.RawMessage(tc.Args)), false
+}
+
+// needsApproval reports whether the named tool requires human approval.
+func (a *Agent) needsApproval(name string) bool {
+	t, ok := a.tools.Get(name)
+	if !ok {
+		return false
+	}
+	ap, ok := t.(tools.Approvable)
+	return ok && ap.RequiresApproval()
 }
 
 // send delivers c unless the context is cancelled first; returns false if it was.

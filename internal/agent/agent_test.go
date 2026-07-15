@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -50,6 +51,87 @@ func (p *scriptedProvider) Chat(_ context.Context, msgs []llm.Message, _ llm.Opt
 	}
 	close(ch)
 	return ch, nil
+}
+
+// fakeTool is a tool that records whether it ran; it can require approval.
+type fakeTool struct {
+	approval bool
+	ran      *bool
+}
+
+func (fakeTool) Name() string                 { return "danger" }
+func (fakeTool) Description() string           { return "a side-effecting tool" }
+func (fakeTool) Schema() json.RawMessage       { return json.RawMessage(`{"type":"object"}`) }
+func (f fakeTool) RequiresApproval() bool      { return f.approval }
+func (f fakeTool) Execute(context.Context, json.RawMessage) (string, error) {
+	*f.ran = true
+	return "did the thing", nil
+}
+
+// drives a tool-requesting turn, calling respond on the approval request.
+func runApprovalTurn(t *testing.T, allow bool) (ran bool, final string, lastMsgs []llm.Message) {
+	t.Helper()
+	ctx := context.Background()
+	store := testStore(t)
+
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "danger", Args: `{}`}}}},
+		{{Content: "All done."}},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(fakeTool{approval: true, ran: &ran})
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	out, err := ag.Turn(ctx, "do the dangerous thing")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	var b strings.Builder
+	var sawApproval bool
+	for c := range out {
+		if c.Approval != nil {
+			sawApproval = true
+			if c.Approval.Tool != "danger" {
+				t.Errorf("approval tool = %q; want danger", c.Approval.Tool)
+			}
+			c.Approval.Respond(allow)
+			continue
+		}
+		b.WriteString(c.Content)
+	}
+	if !sawApproval {
+		t.Fatal("expected an approval request for the gated tool")
+	}
+	return ran, b.String(), prov.lastMsgs
+}
+
+// TestApprovalGateAllow: approving runs the tool, and its result reaches the model.
+func TestApprovalGateAllow(t *testing.T) {
+	ran, final, _ := runApprovalTurn(t, true)
+	if !ran {
+		t.Error("tool should have run after approval")
+	}
+	if !strings.Contains(final, "done") && !strings.Contains(final, "All done") {
+		t.Errorf("final answer = %q; want the completion", final)
+	}
+}
+
+// TestApprovalGateDeny: denying skips the tool; the model sees a denial observation.
+func TestApprovalGateDeny(t *testing.T) {
+	ran, _, lastMsgs := runApprovalTurn(t, false)
+	if ran {
+		t.Error("tool must NOT run when denied")
+	}
+	var sawDenial bool
+	for _, m := range lastMsgs {
+		if m.Role == llm.RoleTool && strings.Contains(m.Content, "denied") {
+			sawDenial = true
+		}
+	}
+	if !sawDenial {
+		t.Errorf("model should see a denial observation; msgs=%+v", lastMsgs)
+	}
 }
 
 // TestBuildMessagesOrder checks prompt assembly without needing a store or model.

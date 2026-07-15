@@ -132,10 +132,29 @@ func repl(ctx context.Context, ag *agent.Agent) error {
 			fmt.Fprintf(os.Stderr, "\n[error: %v]\n\n", err)
 			continue
 		}
-		if err := render.Stream(os.Stdout, out); err != nil {
+		if err := render.StreamWithApproval(os.Stdout, out, approver(in)); err != nil {
 			fmt.Fprintf(os.Stderr, "\n[stream error: %v]\n", err)
 		}
 		fmt.Println()
+	}
+}
+
+// approver prompts on the terminal for a tool-approval decision, reading the
+// answer from the REPL's scanner (safe: no other read is in flight during a
+// turn). Only an explicit "y"/"yes" allows; anything else (incl. EOF) denies.
+func approver(in *bufio.Scanner) render.ApproveFunc {
+	return func(req *llm.ApprovalRequest) bool {
+		fmt.Printf("\n\x1b[33m⚠️  Talunor wants to run tool %q with:\x1b[0m\n    %s\n[y/N] ",
+			req.Tool, req.Args)
+		if !in.Scan() {
+			return false
+		}
+		switch strings.ToLower(strings.TrimSpace(in.Text())) {
+		case "y", "yes":
+			return true
+		default:
+			return false
+		}
 	}
 }
 

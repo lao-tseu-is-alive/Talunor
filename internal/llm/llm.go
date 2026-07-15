@@ -71,13 +71,49 @@ type Options struct {
 // Chunk is one streamed piece of a completion. Thinking models (e.g. qwen3 via
 // Ollama) emit their chain-of-thought in Reasoning and the final answer in
 // Content; either may be empty on a given chunk. When the model finishes by
-// requesting tools, the terminal chunk carries the assembled ToolCalls. A
-// non-nil Err is terminal: it is the last Chunk on the channel.
+// requesting tools, the terminal chunk carries the assembled ToolCalls. When the
+// agent wants to run a tool that needs human approval it emits a chunk with
+// Approval set and blocks until the front-end responds. A non-nil Err is
+// terminal: it is the last Chunk on the channel.
 type Chunk struct {
 	Content   string
 	Reasoning string
 	ToolCalls []ToolCall
+	Approval  *ApprovalRequest
 	Err       error
+}
+
+// ApprovalRequest asks the human to allow (or deny) a tool call before it runs.
+// The agent sends it on the chunk stream and blocks on Decision; the front-end
+// prompts the user and calls Respond exactly once.
+type ApprovalRequest struct {
+	Tool  string // the tool's name.
+	Args  string // its JSON arguments (for the user to inspect).
+	reply chan bool
+}
+
+// NewApprovalRequest builds a request with a buffered reply channel.
+func NewApprovalRequest(tool, args string) *ApprovalRequest {
+	return &ApprovalRequest{Tool: tool, Args: args, reply: make(chan bool, 1)}
+}
+
+// Respond delivers the decision (true = allow). Extra calls are no-ops.
+func (r *ApprovalRequest) Respond(allow bool) {
+	select {
+	case r.reply <- allow:
+	default:
+	}
+}
+
+// Decision blocks until Respond is called, returning the decision; a cancelled
+// context denies (fail closed).
+func (r *ApprovalRequest) Decision(ctx context.Context) bool {
+	select {
+	case allow := <-r.reply:
+		return allow
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // Provider is an LLM backend that streams chat completions.

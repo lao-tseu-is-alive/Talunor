@@ -30,6 +30,14 @@ type Tool interface {
 	Execute(ctx context.Context, args json.RawMessage) (string, error)
 }
 
+// Approvable is an optional interface a Tool may implement to require explicit
+// human approval before each call. A tool that returns true is gated by the
+// agent's approval step; tools that don't implement it run freely. Use it for
+// anything with side effects (e.g. running shell commands).
+type Approvable interface {
+	RequiresApproval() bool
+}
+
 // Def is a tool's public definition, handed to the LLM. It is transport-neutral;
 // the provider adapter maps it onto the wire format (OpenAI "function" tools).
 type Def struct {
