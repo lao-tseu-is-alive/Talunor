@@ -59,7 +59,7 @@ jobs:
           # The input is 'version' (not 'trivy-version'); 0.71.2 post-dates the
           # malicious 0.69.4 and the yanked 0.69.1. trivy-action defaults to this
           # same version, so its internal install is a cache hit.
-          version: '0.71.2'
+          version: 'v0.71.2'
 
       # 3. Scan the built image and report to the Security tab.
       - name: Run Trivy vulnerability scanner
