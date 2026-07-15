@@ -252,6 +252,20 @@ func (m *Model) runCommand(line string) tea.Cmd {
 		} else {
 			m.appendInfo(s)
 		}
+	case "/forget":
+		id, ok := agent.MemoryID(fields)
+		if !ok {
+			m.appendInfo("usage: /forget <id>  (the #id shown by /list)")
+			break
+		}
+		if s, err := m.ag.ForgetMemory(m.ctx, id); err != nil {
+			m.errText = err.Error()
+		} else {
+			m.appendInfo(s)
+			if n, err := m.ag.MemoryCount(m.ctx); err == nil {
+				m.memCount = n
+			}
+		}
 	case "/clear":
 		m.turns = nil
 	default:

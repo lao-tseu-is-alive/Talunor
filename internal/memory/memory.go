@@ -19,6 +19,20 @@ const (
 // sqliteTimeLayout is how SQLite's datetime('now') formats timestamps (UTC).
 const sqliteTimeLayout = "2006-01-02 15:04:05"
 
+// roleAssistant is the stored role value for assistant turns (matches
+// llm.RoleAssistant). Recall excludes these: the assistant's own replies —
+// especially clarifying questions like "what is your favourite language?" — are
+// the strongest semantic match to a re-asked question, so retrieving them
+// crowds out the user's actual answer and lets a stuck exchange reinforce
+// itself. Only user turns and document chunks are semantically recalled.
+const roleAssistant = "assistant"
+
+// recallCandidateFactor over-fetches KNN neighbours before role filtering, so
+// dropping assistant turns does not starve the k user-relevant results. The
+// scan is brute-force over every stored vector regardless of the limit, so a
+// larger candidate set costs only a few extra rows scanned in Go.
+const recallCandidateFactor = 6
+
 // Memory is one persisted long-term memory row.
 type Memory struct {
 	ID        int64
@@ -63,25 +77,28 @@ func (s *Store) Remember(ctx context.Context, kind Kind, role, content string) (
 }
 
 // Recall returns up to k long-term memories most similar to query, nearest
-// first. If maxDistance > 0, memories farther than that cosine distance are
-// dropped, so only genuinely relevant ones are returned (a value of 0 keeps all
-// k). This is the semantic-retrieval step injected before each LLM call.
+// first. Assistant turns are excluded (see roleAssistant). If maxDistance > 0,
+// memories farther than that cosine distance are dropped, so only genuinely
+// relevant ones are returned (a value of 0 keeps all k). This is the
+// semantic-retrieval step injected before each LLM call.
 func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance float64) ([]Hit, error) {
 	qvec, err := s.Embed(ctx, query)
 	if err != nil {
 		return nil, err
 	}
+	// Over-fetch neighbours: assistant turns are filtered out below, so the raw
+	// KNN limit must exceed k to still yield k user-relevant hits.
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT m.id, m.kind, COALESCE(m.role, ''), m.content, m.created_at, v.distance
 		FROM vector_full_scan('memories', 'embedding', ?, ?) AS v
 		JOIN memories m ON m.id = v.rowid
-		ORDER BY v.distance`, qvec, k)
+		ORDER BY v.distance`, qvec, k*recallCandidateFactor)
 	if err != nil {
 		return nil, fmt.Errorf("recall scan: %w", err)
 	}
 	defer rows.Close()
 
-	var hits []Hit
+	hits := make([]Hit, 0, k)
 	for rows.Next() {
 		var (
 			h         Hit
@@ -96,13 +113,37 @@ func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance flo
 		if maxDistance > 0 && h.Distance > maxDistance {
 			break
 		}
+		// Skip assistant turns: they pollute recall (see roleAssistant).
+		if h.Role == roleAssistant {
+			continue
+		}
 		h.Kind = Kind(kind)
 		if ts, err := time.Parse(sqliteTimeLayout, createdAt); err == nil {
 			h.CreatedAt = ts
 		}
 		hits = append(hits, h)
+		if len(hits) >= k {
+			break
+		}
 	}
 	return hits, rows.Err()
+}
+
+// Forget deletes the memory with the given id. It reports whether a row was
+// actually removed (false means no such id existed), so callers can tell the
+// user. The embedding lives in the same row, and vector_full_scan reads that
+// column live, so a plain DELETE also removes it from KNN results — there is no
+// separate index to maintain.
+func (s *Store) Forget(ctx context.Context, id int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM memories WHERE id = ?`, id)
+	if err != nil {
+		return false, fmt.Errorf("forget memory %d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("forget memory %d: %w", id, err)
+	}
+	return n > 0, nil
 }
 
 // Count returns the number of stored long-term memories.

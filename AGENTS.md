@@ -40,10 +40,12 @@ cmd/doctor/     memory substrate smoke test (embed → store → KNN)
 cmd/chat/       one-shot LLM streaming smoke test
 cmd/talunor/    the app: TUI by default, --plain REPL, --list dump
 internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
-                   Remember/Recall (thresholded), short-term ring buffer
+                   Remember/Recall (thresholded; recall excludes assistant
+                   turns), Forget(id), short-term ring buffer
 internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenAI/…)
 internal/agent/    the cognitive loop: Turn = perceive→recall→reason→store;
-                   also slash-command helpers (Help/MemoryStats/ListMemories)
+                   also slash-command helpers (Help/MemoryStats/ListMemories/
+                   ForgetMemory, MemoryID)
 internal/render/   shared console stream renderer (reasoning dimmed, answer bright)
 internal/tui/      Bubble Tea + Glamour front-end
 internal/version/  build identity (Version const; Commit/Date via -ldflags)

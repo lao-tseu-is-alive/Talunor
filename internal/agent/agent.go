@@ -15,6 +15,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
@@ -43,7 +44,7 @@ func DefaultConfig() Config {
 		SystemPrompt: "You are Talunor, a helpful assistant with long-term memory. " +
 			"When the provided memories are relevant, use them to answer; " +
 			"otherwise ignore them and answer normally. Do not mention the memory system unless asked.",
-		RecallK:           5,
+		RecallK:           8,
 		RecallMaxDistance: 0.75,
 		ShortTermCap:      6, // ~3 exchanges.
 	}
@@ -175,6 +176,7 @@ const HelpText = `Commands:
   /help        show this help
   /mem         memory stats (count + database file)
   /list [n]    list the most recent n memories (default 10)
+  /forget <id> delete the memory with that #id (as shown by /list)
   /clear       clear the on-screen transcript (TUI only; does not erase memory)
   /exit, /quit quit
 Keys (TUI): enter = send · ctrl+c / esc = quit · ↑/↓ or PgUp/PgDn = scroll
@@ -199,6 +201,34 @@ func (a *Agent) ListMemories(ctx context.Context, n int) (string, error) {
 		return "", err
 	}
 	return FormatMemories(mems), nil
+}
+
+// MemoryID parses the id argument of a slash command whose fields have been
+// split on whitespace (e.g. "/forget 7" → 7). It reports ok=false when the id
+// is missing or not a valid integer, so callers can show usage help.
+func MemoryID(fields []string) (id int64, ok bool) {
+	if len(fields) < 2 {
+		return 0, false
+	}
+	id, err := strconv.ParseInt(fields[1], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return id, true
+}
+
+// ForgetMemory deletes the long-term memory with the given id (the #id shown by
+// ListMemories) and returns a one-line, display-ready result. Forgetting a
+// long-term memory does not alter the current session's short-term context.
+func (a *Agent) ForgetMemory(ctx context.Context, id int64) (string, error) {
+	ok, err := a.store.Forget(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return fmt.Sprintf("no memory #%d to forget", id), nil
+	}
+	return fmt.Sprintf("forgot memory #%d", id), nil
 }
 
 // FormatMemories renders memories (newest first) as a compact, readable list.

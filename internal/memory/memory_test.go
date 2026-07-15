@@ -101,6 +101,97 @@ func TestRecallThresholdFiltersUnrelated(t *testing.T) {
 	}
 }
 
+// TestRecallExcludesAssistantTurns reproduces the "stuck loop" bug: after a
+// conversation where the user stated a fact once and the assistant then asked
+// for it several times, recalling on a re-ask of that question must surface the
+// user's original fact — not the assistant's own repeated clarifying questions,
+// which are the closest semantic matches and used to crowd the fact out of the
+// top-k.
+func TestRecallExcludesAssistantTurns(t *testing.T) {
+	ctx := context.Background()
+	store, err := memory.Open(testConfig(t))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	// Replay the exact shape of the reported session.
+	convo := []struct{ role, content string }{
+		{"user", "hy my name is Carlos and i like to develop in Go and Typescript with Bun. and you ?"},
+		{"assistant", "Hello, Carlos! Nice to meet you. I'm Talunor. What can I help you build?"},
+		{"user", "write me a hello [my name here] in my favorite language please"},
+		{"assistant", "Sure! Could you please let me know your name and your favorite programming language?"},
+		{"user", "hum i did already tell you"},
+		{"assistant", "Ah, I see! Could you please share your name and your favorite language again?"},
+	}
+	for _, m := range convo {
+		if _, err := store.Remember(ctx, memory.KindTurn, m.role, m.content); err != nil {
+			t.Fatalf("remember %q: %v", m.content, err)
+		}
+	}
+
+	// The user re-asks; recall must retrieve the fact and never an assistant turn.
+	hits, err := store.Recall(ctx, "can you write me an hello word using my favorite languages ?", 8, 0.75)
+	if err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	var foundFact bool
+	for _, h := range hits {
+		if h.Role == "assistant" {
+			t.Errorf("assistant turn leaked into recall: %q", h.Content)
+		}
+		if strings.Contains(h.Content, "Go and Typescript") {
+			foundFact = true
+		}
+	}
+	if !foundFact {
+		t.Errorf("the user's stated languages were not recalled; got %d hits:\n%s",
+			len(hits), formatHits(hits))
+	}
+}
+
+func formatHits(hits []memory.Hit) string {
+	var b strings.Builder
+	for _, h := range hits {
+		b.WriteString("  - [")
+		b.WriteString(h.Role)
+		b.WriteString("] ")
+		b.WriteString(h.Content)
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+func TestForgetDeletesByID(t *testing.T) {
+	store, ctx := openWithCorpus(t)
+
+	mems, err := store.List(ctx, 1) // newest row.
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	id := mems[0].ID
+
+	ok, err := store.Forget(ctx, id)
+	if err != nil {
+		t.Fatalf("forget: %v", err)
+	}
+	if !ok {
+		t.Fatalf("forget reported no row removed for existing id %d", id)
+	}
+	if n, err := store.Count(ctx); err != nil || n != len(corpus)-1 {
+		t.Errorf("count after forget = %d, err = %v; want %d", n, err, len(corpus)-1)
+	}
+
+	// Forgetting a non-existent id is a no-op that reports ok=false.
+	ok, err = store.Forget(ctx, id)
+	if err != nil {
+		t.Fatalf("forget missing: %v", err)
+	}
+	if ok {
+		t.Errorf("forget reported a removal for an already-deleted id %d", id)
+	}
+}
+
 func TestRememberReturnsRow(t *testing.T) {
 	ctx := context.Background()
 	store, err := memory.Open(testConfig(t))

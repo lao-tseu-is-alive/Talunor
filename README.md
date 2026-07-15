@@ -6,7 +6,7 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.5.1** — **Iteration 1 complete** (+ polish): a
+> Current version: **v0.5.4** — **Iteration 1 complete** (+ polish): a
 > conversational agent with multi-tier memory and a Bubble Tea TUI. See
 > [CHANGELOG.md](CHANGELOG.md) for the version-by-version build log and lessons.
 
@@ -140,6 +140,7 @@ Both the TUI and the `--plain` REPL understand:
 | `/help` | list commands |
 | `/mem` | memory stats (count + database file) |
 | `/list [n]` | list the most recent `n` memories (default 10) |
+| `/forget <id>` | delete the memory with that `#id` (as shown by `/list`) |
 | `/clear` | clear the on-screen transcript (TUI only; does not erase memory) |
 | `/exit`, `/quit` | quit |
 

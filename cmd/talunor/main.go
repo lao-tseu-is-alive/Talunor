@@ -6,7 +6,8 @@
 // By default it launches the Bubble Tea TUI (markdown via Glamour). Pass --plain
 // for a minimal line-based REPL, or --list to dump stored memories and exit.
 //
-// Commands (TUI and REPL): /help, /mem, /list [n], /clear (TUI), /exit.
+// Commands (TUI and REPL): /help, /mem, /list [n], /forget <id>, /clear (TUI),
+// /exit.
 //
 // Environment: TALUNOR_MODEL, TALUNOR_OLLAMA_URL (see cmd/chat), TALUNOR_DB and
 // the extension/model path overrides (see internal/memory.DefaultConfig).
@@ -143,6 +144,17 @@ func command(ctx context.Context, line string, ag *agent.Agent) (done bool, err 
 			return false, err
 		}
 		fmt.Println(out)
+	case "/forget":
+		id, ok := agent.MemoryID(fields)
+		if !ok {
+			fmt.Println("usage: /forget <id>  (the #id shown by /list)")
+			return false, nil
+		}
+		msg, err := ag.ForgetMemory(ctx, id)
+		if err != nil {
+			return false, err
+		}
+		fmt.Println(msg)
 	default:
 		fmt.Printf("unknown command %q — try /help\n", fields[0])
 	}

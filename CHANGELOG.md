@@ -14,6 +14,64 @@ changed but the *lessons learned* while getting there.
 - **Iteration 2** — tools & actions: a tool registry and a ReAct-style
   act/observe loop, so the agent can *do* things, not just talk.
 
+## [0.5.4] - 2026-07-15 — Fix: recall loop (assistant turns pollute retrieval) + `/forget`
+
+### Fixed
+
+- **The agent could get stuck re-asking for something the user already told it.**
+  Symptom: a user states a fact ("my name is Carlos, I like Go and Typescript"),
+  and several turns later, when they ask to use it, the agent keeps asking for it
+  instead of recalling it.
+
+  Root cause was in retrieval, not storage — the fact *was* in the database.
+  Every conversation turn (user **and** assistant) is stored and embedded, and
+  the assistant's own clarifying questions (*"what is your favourite language?"*)
+  are the **strongest** semantic match to the user re-asking that same question.
+  So the top-`k` recall filled with the model's prior clarifications and evicted
+  the one memory holding the answer — a self-reinforcing loop (the more it asks,
+  the more its own asks dominate recall). Measured on the reported session, the
+  user's fact ranked **6th** for a `k=5` retrieval — just outside the window.
+
+  Fix (`Store.Recall`):
+  - **Exclude assistant turns from semantic recall.** Only user turns and
+    document chunks are retrieved; the assistant's replies no longer compete with
+    the facts the user actually stated. (Assistant turns are still stored and
+    still kept verbatim in short-term context — they're only removed from KNN.)
+  - **Over-fetch KNN candidates** (`k × 6`) before role-filtering, so dropping
+    assistant rows doesn't return fewer than `k` results.
+  - Raised the default `RecallK` from **5 → 8** (`agent.DefaultConfig`) as
+    defence-in-depth.
+
+  Regression test `TestRecallExcludesAssistantTurns` replays the exact reported
+  session and asserts the user's fact is recalled and no assistant turn leaks in;
+  it fails against the pre-fix code.
+
+### Added
+
+- **`/forget <id>`** (TUI and REPL) — delete a single memory by the `#id` shown
+  by `/list`, for pruning noise/mistakes by hand. `Store.Forget(ctx, id)` reports
+  whether a row existed (so the UI can say *"no memory #N"*); `Agent.ForgetMemory`
+  returns the display line; `agent.MemoryID` parses the argument (shared by both
+  front-ends). A plain `DELETE` suffices — `vector_full_scan` reads the embedding
+  column live, so there is no separate index to update.
+
+### Lessons learned
+
+1. **In RAG, what you *store* decides what you can *retrieve* — and storing the
+   agent's own words can poison recall.** Verbatim assistant turns are
+   near-duplicates of the questions users re-ask, so they dominate similarity
+   search and bury the user's actual answers. Retrieval quality is a *curation*
+   problem: choose what is eligible to be recalled, don't just embed everything.
+2. **A stuck loop can be self-reinforcing through the memory itself.** Each time
+   the model asked the same question, that question became a high-ranking
+   "memory," making the next recall even more likely to surface a question
+   instead of the answer. Feedback loops hide in data pipelines, not just code.
+3. **Top-`k` alone is fragile when the store contains near-duplicates.** The fact
+   was retrievable but ranked just outside `k`. Filtering *what competes* for the
+   `k` slots fixes this far more reliably than simply enlarging `k`.
+4. **Give the user a scalpel.** Automatic memory will always mis-store sometimes;
+   a one-line `/forget <id>` lets the user curate rather than wipe everything.
+
 ## [0.5.3] - 2026-07-14 — TUI text selection + AGENTS.md
 
 ### Changed
@@ -382,7 +440,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.0...v0.5.1
