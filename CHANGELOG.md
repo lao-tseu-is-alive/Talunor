@@ -11,8 +11,54 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Iteration 2** — tools & actions: a tool registry and a ReAct-style
-  act/observe loop, so the agent can *do* things, not just talk.
+- **Iteration 2, next** — tools & actions: a tool registry and a ReAct-style
+  act/observe loop, so the agent can *do* things, not just talk (→ v0.7.0).
+
+## [0.6.0] - 2026-07-15 — Iteration 2 begins: providers & config
+
+The first layer of Iteration 2. Talunor can now talk to **hosted frontier
+models via OpenRouter**, not just local Ollama, and all configuration is
+discoverable through a `.env` file. This unblocks running the upcoming
+tool/ReAct loop on a strong tool-calling model.
+
+### Added
+
+- **OpenRouter provider.** `llm.NewOpenRouter(model, key)` reuses the existing
+  OpenAI-compatible adapter (OpenRouter speaks the same API) with the right base
+  URL, bearer auth, and OpenRouter's optional attribution headers. One adapter
+  now serves Ollama **and** OpenRouter — only URL/key/headers differ.
+- **Provider selection from the environment.** `llm.FromEnv()` builds the chat
+  provider from `TALUNOR_PROVIDER` (`ollama` default, or `openrouter`), reading
+  `TALUNOR_MODEL`, `TALUNOR_OLLAMA_URL`, `OPENROUTER_API_KEY`,
+  `TALUNOR_OPENROUTER_URL`. Both `cmd/talunor` and `cmd/chat` use it (no more
+  duplicated wiring), and a missing OpenRouter key fails fast with a clear error.
+- **`.env` support.** A minimal, dependency-free loader (`internal/config`)
+  auto-loads `.env` from the working directory at startup; **real environment
+  variables always win** over the file. Ships with **`.env_sample`** documenting
+  every supported variable.
+- **`TALUNOR_REFLECT=0`** disables the reflection step — a second model call per
+  turn that, on a paid provider, doubles cost.
+
+### Changed
+
+- `cmd/talunor` / `cmd/chat` now select the provider via `llm.FromEnv()` and load
+  `.env` first; the inline Ollama-only setup and duplicated `envOr` helpers are
+  gone.
+
+### Lessons learned
+
+1. **A good adapter boundary pays forward.** Because Layer 3 modelled the
+   provider as "anything speaking the OpenAI streaming API", adding OpenRouter was
+   a constructor and a header map — no new transport, no new parsing. The cost of
+   the right abstraction is paid once.
+2. **Configuration should be discoverable and layered.** `.env_sample` turns a
+   pile of `TALUNOR_*` variables into self-documenting onboarding; letting the
+   real environment override the file keeps it safe for secrets and CI.
+3. **Make expensive behaviour a switch.** Reflection is great with a local model
+   and costs nothing; on a metered API it silently doubles spend. Surfacing
+   `TALUNOR_REFLECT` makes the trade-off the user's to make.
+
+## [0.5.7] - 2026-07-15 — Harden the image: distroless base + dependency bumps
 
 ## [0.5.7] - 2026-07-15 — Harden the image: distroless base + dependency bumps
 
@@ -616,7 +662,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.7...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.7...v0.6.0
 [0.5.7]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.4...v0.5.5

@@ -11,10 +11,17 @@ import (
 	"strings"
 )
 
-// Default Ollama endpoint (its OpenAI-compatible API) and model.
+// Default endpoints (their OpenAI-compatible APIs) and models.
 const (
 	DefaultOllamaURL   = "http://localhost:11434/v1"
 	DefaultOllamaModel = "qwen3:latest"
+
+	// OpenRouter routes to many providers (OpenAI, Anthropic, Google, …) behind
+	// the same OpenAI-compatible API. The default model is cheap on purpose so a
+	// misconfigured run doesn't ring up frontier-model costs; override it with
+	// TALUNOR_MODEL (e.g. "anthropic/claude-sonnet-4", "openai/gpt-5").
+	DefaultOpenRouterURL   = "https://openrouter.ai/api/v1"
+	DefaultOpenRouterModel = "openai/gpt-4o-mini"
 )
 
 // OpenAICompatible is an adapter for any backend speaking the OpenAI
@@ -24,6 +31,7 @@ type OpenAICompatible struct {
 	baseURL string
 	apiKey  string
 	model   string
+	headers map[string]string // extra request headers (e.g. OpenRouter attribution).
 	client  *http.Client
 }
 
@@ -47,6 +55,21 @@ func NewOllama(model string) *OpenAICompatible {
 		model = DefaultOllamaModel
 	}
 	return NewOpenAICompatible("ollama", DefaultOllamaURL, "", model)
+}
+
+// NewOpenRouter builds an adapter for OpenRouter. An empty model falls back to
+// DefaultOpenRouterModel; the API key is required by the service. It sets
+// OpenRouter's optional attribution headers (harmless to other backends).
+func NewOpenRouter(model, apiKey string) *OpenAICompatible {
+	if model == "" {
+		model = DefaultOpenRouterModel
+	}
+	p := NewOpenAICompatible("openrouter", DefaultOpenRouterURL, apiKey, model)
+	p.headers = map[string]string{
+		"X-Title":      "Talunor",
+		"HTTP-Referer": "https://github.com/lao-tseu-is-alive/Talunor",
+	}
+	return p
 }
 
 // Name implements Provider.
@@ -102,6 +125,9 @@ func (p *OpenAICompatible) Chat(ctx context.Context, msgs []Message, opts Option
 	req.Header.Set("Accept", "text/event-stream")
 	if p.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
+	for k, v := range p.headers {
+		req.Header.Set(k, v)
 	}
 
 	resp, err := p.client.Do(req)

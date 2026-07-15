@@ -8,10 +8,12 @@
 //	chat "your prompt here"      # prompt from arguments
 //	echo "your prompt" | chat    # prompt from stdin
 //
-// Environment:
+// Environment (see .env_sample for all variables):
 //
-//	TALUNOR_MODEL       Ollama model (default qwen3:latest)
+//	TALUNOR_PROVIDER    ollama (default) | openrouter
+//	TALUNOR_MODEL       model for the selected provider
 //	TALUNOR_OLLAMA_URL  Ollama OpenAI-compatible base URL
+//	OPENROUTER_API_KEY  required when TALUNOR_PROVIDER=openrouter
 package main
 
 import (
@@ -22,6 +24,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/lao-tseu-is-alive/Talunor/internal/config"
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/render"
 	"github.com/lao-tseu-is-alive/Talunor/internal/version"
@@ -37,6 +40,10 @@ func main() {
 func run() error {
 	ctx := context.Background()
 
+	if err := config.LoadDotEnv(".env"); err != nil {
+		return fmt.Errorf("load .env: %w", err)
+	}
+
 	prompt, err := readPrompt()
 	if err != nil {
 		return err
@@ -45,10 +52,9 @@ func run() error {
 		return fmt.Errorf("no prompt given (pass as arguments or via stdin)")
 	}
 
-	model := envOr("TALUNOR_MODEL", llm.DefaultOllamaModel)
-	provider := llm.NewOllama(model)
-	if url := os.Getenv("TALUNOR_OLLAMA_URL"); url != "" {
-		provider = llm.NewOpenAICompatible("ollama", url, "", model)
+	provider, model, err := llm.FromEnv()
+	if err != nil {
+		return err
 	}
 
 	fmt.Fprintf(os.Stderr, "%s\n%s → %s\n\n", version.String(), provider.Name(), model)
@@ -79,11 +85,4 @@ func readPrompt() (string, error) {
 		return "", err
 	}
 	return string(data), nil
-}
-
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }

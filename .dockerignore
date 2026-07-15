@@ -9,3 +9,4 @@ ext/
 *.db-shm
 *.db-wal
 dist/
+.env

@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/agent"
+	"github.com/lao-tseu-is-alive/Talunor/internal/config"
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
 	"github.com/lao-tseu-is-alive/Talunor/internal/render"
@@ -47,6 +48,11 @@ func run(plain bool, list int) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
+	// Load .env (if present) before reading any configuration; real env wins.
+	if err := config.LoadDotEnv(".env"); err != nil {
+		return fmt.Errorf("load .env: %w", err)
+	}
+
 	store, err := memory.Open(memory.DefaultConfig())
 	if err != nil {
 		return err
@@ -63,13 +69,18 @@ func run(plain bool, list int) error {
 		return nil
 	}
 
-	model := envOr("TALUNOR_MODEL", llm.DefaultOllamaModel)
-	var provider llm.Provider = llm.NewOllama(model)
-	if url := os.Getenv("TALUNOR_OLLAMA_URL"); url != "" {
-		provider = llm.NewOpenAICompatible("ollama", url, "", model)
+	provider, model, err := llm.FromEnv()
+	if err != nil {
+		return err
 	}
 
-	ag := agent.New(store, provider, agent.DefaultConfig())
+	cfg := agent.DefaultConfig()
+	// Reflection makes a second model call per turn; on a paid provider that
+	// doubles cost, so allow disabling it with TALUNOR_REFLECT=0.
+	if !envBool("TALUNOR_REFLECT", true) {
+		cfg.Extractor = agent.DisableReflection()
+	}
+	ag := agent.New(store, provider, cfg)
 	n, _ := store.Count(ctx)
 
 	if plain {
@@ -161,9 +172,16 @@ func command(ctx context.Context, line string, ag *agent.Agent) (done bool, err 
 	return false, nil
 }
 
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+// envBool reads a boolean-ish env var; "0", "false", "no", "off" (any case) are
+// false, anything else non-empty is true, and unset returns def.
+func envBool(key string, def bool) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	switch v {
+	case "":
+		return def
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
 	}
-	return def
 }

@@ -6,9 +6,10 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.5.7** — **Iteration 1 complete** (+ polish): a
-> conversational agent with multi-tier memory and a Bubble Tea TUI. See
-> [CHANGELOG.md](CHANGELOG.md) for the version-by-version build log and lessons.
+> Current version: **v0.6.0** — Iteration 1 complete; **Iteration 2 begun**: the
+> agent now talks to local **Ollama** or hosted **OpenRouter** frontier models,
+> configured via `.env`. See [CHANGELOG.md](CHANGELOG.md) for the
+> version-by-version build log and lessons.
 
 ## Run without building
 
@@ -200,6 +201,28 @@ Inspect stored memory without starting a session:
 go run ./cmd/talunor --list 20     # dump the 20 most recent memories and exit
 ```
 
+### Choosing a model provider
+
+Chat runs against **Ollama** (local, default) or **OpenRouter** (hosted frontier
+models); embeddings always run locally from the bundled model. Select with
+`TALUNOR_PROVIDER`:
+
+```bash
+# Local Ollama (default) — nothing to set.
+TALUNOR_MODEL=qwen2.5-coder:14b talunor
+
+# OpenRouter — a frontier model:
+TALUNOR_PROVIDER=openrouter \
+TALUNOR_MODEL=anthropic/claude-sonnet-4 \
+OPENROUTER_API_KEY=sk-or-... \
+  talunor
+```
+
+Configuration is easiest via a `.env` file: **`cp .env_sample .env`** and edit —
+Talunor auto-loads it at startup (real environment variables still win). Every
+supported variable is documented in [`.env_sample`](.env_sample). On a paid
+provider, set `TALUNOR_REFLECT=0` to skip the per-turn reflection call.
+
 ### Where memory lives
 
 Long-term memory is a single SQLite file. Its location is
@@ -212,10 +235,16 @@ active path.
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `TALUNOR_MODEL` | Ollama model | `qwen3:latest` |
+| `TALUNOR_PROVIDER` | chat backend: `ollama` or `openrouter` | `ollama` |
+| `TALUNOR_MODEL` | model for the selected provider | provider default |
+| `TALUNOR_REFLECT` | set `0` to disable per-turn fact reflection | `1` |
 | `TALUNOR_OLLAMA_URL` | Ollama OpenAI-compatible base URL | `http://localhost:11434/v1` |
+| `OPENROUTER_API_KEY` | required for `openrouter` | — |
+| `TALUNOR_OPENROUTER_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |
 | `TALUNOR_DB` | database file | per-user data dir (above) |
 | `TALUNOR_VECTOR_EXT` / `TALUNOR_AI_EXT` / `TALUNOR_EMBED_MODEL` | extension / model paths | under `ext/` |
+
+See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## Lessons learned so far
 

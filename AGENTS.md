@@ -43,7 +43,9 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    Remember/Recall (thresholded; recall excludes assistant
                    turns), Forget(id), short-term ring buffer. Kinds: turn
                    (episodic), fact (semantic), doc_chunk
-internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenAI/…)
+internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenRouter),
+                   FromEnv() provider selection, NewOpenRouter
+internal/config/   minimal dependency-free .env loader (real env wins)
 internal/agent/    the cognitive loop: Turn = perceive→recall→reason→store→
                    reflect. reflect.go = FactExtractor (LLM distils durable
                    facts into KindFact; DisableReflection() to opt out). Also
@@ -97,10 +99,17 @@ make nerdctl-build && make nerdctl-run   # self-contained image (or docker-*)
 
 ## Environment variables
 
+Selected via `llm.FromEnv()`; both commands load `.env` first (`internal/config`,
+real env wins). See `.env_sample` for the full list.
+
 | Var | Purpose | Default |
 |-----|---------|---------|
-| `TALUNOR_MODEL` | Ollama chat model | `qwen3:latest` |
+| `TALUNOR_PROVIDER` | chat backend: `ollama` or `openrouter` | `ollama` |
+| `TALUNOR_MODEL` | model for the selected provider | provider default |
+| `TALUNOR_REFLECT` | `0` disables per-turn reflection (cost on paid APIs) | `1` |
 | `TALUNOR_OLLAMA_URL` | Ollama OpenAI-compatible base URL | `http://localhost:11434/v1` |
+| `OPENROUTER_API_KEY` | required for `openrouter` | — |
+| `TALUNOR_OPENROUTER_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |
 | `TALUNOR_DB` | database file | `$XDG_DATA_HOME/talunor/talunor.db` → `~/.local/share/talunor/talunor.db` |
 | `TALUNOR_VECTOR_EXT` / `TALUNOR_AI_EXT` / `TALUNOR_EMBED_MODEL` | ext/model paths | under `ext/` |
 
@@ -170,6 +179,7 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
 - **Iteration 1 COMPLETE (v0.5.x):** conversational agent, multi-tier memory,
   streaming Ollama provider, agent loop, Bubble Tea TUI, config + commands. v0.5.5
   adds reflection (semantic-memory facts) — an early taste of Iteration 4.
-- **Next — Iteration 2:** tools & actions (tool registry, ReAct act/observe
-  loop), then guardrails/approval gates (the original goal, à la pi-go/Claude),
+- **Iteration 2 (in progress):** v0.6.0 = providers & config (OpenRouter +
+  `llm.FromEnv()` + `.env`). Next: tools & actions (tool registry, ReAct
+  act/observe loop) → v0.7.0, then guardrails/approval gates (à la pi-go/Claude),
   then learning/reflection. Expect ~v0.6.0–v0.8.0, same checkpoint rhythm.
