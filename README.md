@@ -112,7 +112,7 @@ agent. Iteration 2 gives it the ability to *act*.
 | 6 | **Providers & config** — OpenRouter provider, `llm.FromEnv()`, `.env` loader | ✅ done (v0.6.0) |
 | 7 | **Tools & ReAct loop** — tool registry, native tool-calling, act→observe loop | ✅ done (v0.7.0) |
 | 8 | **Approval gate** — human-in-the-loop y/n for side-effecting tools (guardrail) | ✅ done (v0.8.0) |
-| 9 | **Sandboxed `bash`** — pluggable sandbox (namespaces/nerdctl), behind the gate | 🚧 next |
+| 9 | **Sandboxed `bash`** — pluggable sandbox (namespaces/nerdctl), behind the gate | ✅ done (v0.9.0) |
 
 ### Later iterations
 
@@ -247,6 +247,38 @@ answer. Uses **native tool-calling**, so the chat model must support it (qwen3
 and most OpenRouter frontier models do); set `TALUNOR_TOOLS=0` for a model that
 doesn't.
 
+### The sandboxed `bash` tool (opt-in)
+
+Set `TALUNOR_BASH=1` to add a **`bash`** tool that runs shell commands in a
+throwaway sandbox with **no network** and **no host filesystem** — only `/tmp` is
+writable, and everything is discarded when the command ends. It is off by default
+and, because it implements the v0.8.0 approval interface, **every call pauses for
+your explicit y/N** before anything runs.
+
+Two pluggable backends (pick with `TALUNOR_SANDBOX`, or let it auto-detect):
+
+- **`nerdctl`** — delegates to a real OCI runtime (`nerdctl` or `docker`; Rancher
+  Desktop works). This is the **strong** option: seccomp, cgroups, and dropped
+  capabilities come for free. Runs `--network none --read-only` with `--pids-limit`,
+  `--memory`, and a size-capped `--tmpfs /tmp`. Preferred when a runtime is present.
+- **`namespaces`** — a from-scratch, **rootless** Linux sandbox built directly on
+  user + mount + pid + net namespaces: it re-executes Talunor's own binary as a
+  container init, `pivot_root`s into a cached busybox rootfs (read-only), mounts a
+  fresh `/proc` and a size-capped `/tmp`, sets `no_new_privs`, drops all
+  capabilities, and applies rlimits. An **empty net namespace** is why it has no
+  network. This backend is **defense-in-depth and a teaching artifact, not a
+  strong boundary** — there is *no seccomp filter*, so the whole syscall surface
+  is reachable, and process-count limiting is best-effort (rootless cgroup
+  delegation is usually unavailable; the memory cap + hard timeout contain a fork
+  bomb). Use the `nerdctl` backend for genuinely untrusted code.
+
+The `namespaces` backend is Linux-only and needs **unprivileged user namespaces**
+enabled. On Ubuntu 24.04+ they are AppArmor-restricted by default; Talunor detects
+this and tells you to run
+`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (or just use the
+`nerdctl` backend). If the sandbox can't be set up, the tool is skipped with a
+warning — the app still starts.
+
 ### Where memory lives
 
 Long-term memory is a single SQLite file. Its location is
@@ -263,6 +295,10 @@ active path.
 | `TALUNOR_MODEL` | model for the selected provider | provider default |
 | `TALUNOR_REFLECT` | set `0` to disable per-turn fact reflection | `1` |
 | `TALUNOR_TOOLS` | set `0` to disable tools (model without tool support) | `1` |
+| `TALUNOR_BASH` | set `1` to enable the sandboxed, approval-gated `bash` tool | `0` |
+| `TALUNOR_SANDBOX` | bash backend: `nerdctl` or `namespaces` (unset = auto-detect) | auto |
+| `TALUNOR_SANDBOX_IMAGE` | image for the `nerdctl` backend | `alpine:3.20` |
+| `TALUNOR_SANDBOX_ROOTFS` / `TALUNOR_SANDBOX_BUSYBOX` | rootfs dir / busybox for the `namespaces` backend | built from a static busybox |
 | `TALUNOR_OLLAMA_URL` | Ollama OpenAI-compatible base URL | `http://localhost:11434/v1` |
 | `OPENROUTER_API_KEY` | required for `openrouter` | — |
 | `TALUNOR_OPENROUTER_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |

@@ -29,6 +29,7 @@ import (
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
 	"github.com/lao-tseu-is-alive/Talunor/internal/render"
+	"github.com/lao-tseu-is-alive/Talunor/internal/sandbox"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tui"
 	"github.com/lao-tseu-is-alive/Talunor/internal/version"
@@ -84,11 +85,23 @@ func run(plain bool, list int) error {
 	// Tools: the agent can do arithmetic, tell the time, and search its own
 	// memory. Disable with TALUNOR_TOOLS=0 (e.g. for a model without tool support).
 	if envBool("TALUNOR_TOOLS", true) {
-		cfg.Tools = tools.NewRegistry(
+		reg := tools.NewRegistry(
 			tools.Calculator{},
 			tools.Clock{},
 			tools.NewRecallMemory(store),
 		)
+		// The sandboxed bash tool is opt-in (TALUNOR_BASH=1) and approval-gated.
+		// If the sandbox can't be set up on this host, warn and carry on without
+		// it rather than failing the whole app.
+		if envBool("TALUNOR_BASH", false) {
+			if sb, err := sandbox.FromEnv(); err != nil {
+				fmt.Fprintf(os.Stderr, "talunor: bash tool disabled: %v\n", err)
+			} else {
+				reg.Register(tools.NewBash(sb, sandbox.DefaultLimits()))
+				fmt.Fprintf(os.Stderr, "talunor: bash tool enabled (sandbox: %s, approval-gated)\n", sb.Name())
+			}
+		}
+		cfg.Tools = reg
 	}
 	ag := agent.New(store, provider, cfg)
 	n, _ := store.Count(ctx)

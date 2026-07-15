@@ -52,8 +52,14 @@ internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/obs
                    the final answer. reflect.go = FactExtractor (LLM distils facts
                    into KindFact; DisableReflection()). Slash-command helpers too.
 internal/tools/    action layer: Tool interface + Registry; builtins Calculator
-                   (AST-safe), Clock, RecallMemory (searches the store).
+                   (AST-safe), Clock, RecallMemory (searches the store), Bash
+                   (sandboxed shell; RequiresApproval=true, opt-in TALUNOR_BASH).
                    Approvable = optional interface: a tool that needs human OK
+internal/sandbox/  runs an untrusted script under limits; Sandbox iface + FromEnv.
+                   Two backends: ociRuntime (nerdctl/docker — strong) and
+                   namespaces (rootless userns re-exec — Linux-only, teaching, no
+                   seccomp). Non-zero exit = output, not error. Linux files carry
+                   //go:build linux; namespaces_other.go stubs elsewhere
 internal/render/   shared console stream renderer (reasoning dimmed, answer bright)
 internal/tui/      Bubble Tea + Glamour front-end
 internal/version/  build identity (Version const; Commit/Date via -ldflags)
@@ -115,6 +121,10 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_MODEL` | model for the selected provider | provider default |
 | `TALUNOR_REFLECT` | `0` disables per-turn reflection (cost on paid APIs) | `1` |
 | `TALUNOR_TOOLS` | `0` disables tools (model without tool-calling support) | `1` |
+| `TALUNOR_BASH` | `1` enables the sandboxed, approval-gated `bash` tool | `0` |
+| `TALUNOR_SANDBOX` | bash backend: `nerdctl`/`docker` or `namespaces` (unset = auto) | auto |
+| `TALUNOR_SANDBOX_IMAGE` | image for the runtime backend | `alpine:3.20` |
+| `TALUNOR_SANDBOX_ROOTFS` / `TALUNOR_SANDBOX_BUSYBOX` | rootfs dir / busybox for the namespaces backend | built from static busybox, cached |
 | `TALUNOR_OLLAMA_URL` | Ollama OpenAI-compatible base URL | `http://localhost:11434/v1` |
 | `OPENROUTER_API_KEY` | required for `openrouter` | — |
 | `TALUNOR_OPENROUTER_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |
@@ -163,6 +173,24 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
     re-issued each `Update`. Render raw while streaming, Glamour once on
     completion. The model is a `*Model` so streaming state isn't copied.
 
+### Sandbox (`internal/sandbox`)
+11. **The namespaces backend re-execs `/proc/self/exe`.** An `init()` in
+    `namespaces_linux.go` hijacks the process when `TALUNOR_SANDBOX_CHILD=1` and
+    becomes the container init *before* `main()` runs — the child shares Talunor's
+    binary. This also means the backend works from a test binary (it imports the
+    package, so the `init` is present).
+12. **Rootless breaks the obvious limits.** RLIMIT_NPROC is per-host-uid (would
+    throttle the user's own processes) and rootless cgroup delegation is usually
+    absent, so there is **no reliable pids cap**; the memory rlimit + hard timeout
+    (killing pid 1 of the pidns cascades) are what actually contain a fork bomb.
+13. **Ubuntu 24.04+ AppArmor blocks unprivileged userns.**
+    `kernel.apparmor_restrict_unprivileged_userns=1` makes `uid_map` writes fail
+    with `EPERM`; `userNSAvailable()` detects it and points at the `sysctl` fix or
+    the nerdctl backend. On such hosts the namespaces backend can't run — verify
+    it after `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`.
+14. **No seccomp in the namespaces backend** — it's defense-in-depth/teaching, not
+    a boundary for hostile code. Say so; use the OCI runtime for real isolation.
+
 ## Testing conventions
 
 - Tests needing the SQLite extensions/model resolve paths relative to the repo
@@ -191,6 +219,8 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   `llm.FromEnv()` + `.env`); v0.7.0 = tools & actions (`internal/tools` registry,
   native tool-calling, `agent.runLoop` act/observe); v0.8.0 = approval gate
   (`tools.Approvable`, human y/n in TUI/REPL — Iteration 3 guardrail brought
-  forward). Next — v0.9.0: sandboxed `bash` tool (see `todo.md`), then Iteration 3
-  planning/policy (à la pi-go/Claude),
-  then learning/reflection. Expect ~v0.6.0–v0.8.0, same checkpoint rhythm.
+  forward); v0.9.0 = sandboxed `bash` tool (`internal/sandbox`, nerdctl +
+  rootless-namespaces backends, behind the gate, network-off) — **completes
+  Iteration 2**. Next — Layer 10: a `web_fetch` tool (restricted network opt-in),
+  then Iteration 3 planning/policy (à la pi-go/Claude), then learning/reflection.
+  Same per-layer checkpoint rhythm.

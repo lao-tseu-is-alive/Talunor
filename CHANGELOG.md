@@ -11,11 +11,68 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Layer 9, next (→ v0.9.0)** — a sandboxed `bash` tool behind the approval
-  gate: a pluggable `Sandbox` (`TALUNOR_SANDBOX=namespaces|nerdctl`), off by
-  default (`TALUNOR_BASH=1`), network-off, size/pid/mem/time-limited. Then a
-  `web_fetch` tool on top. Plan tracked in `todo.md`.
-- **Iteration 3, later** — an explicit planner before multi-step actions.
+- **Layer 10, next** — a `web_fetch` tool that opts *into* a restricted network
+  (allowlist + timeout), reusing the sandbox / approval machinery.
+- **Iteration 3, later** — an explicit planner before multi-step actions; policy
+  checks for which tools/args are auto-allowed vs. need approval.
+
+## [0.9.0] - 2026-07-15 — Sandboxed `bash`: a tool that can run anything, safely
+
+The agent gets its most powerful tool — a real shell — and the machinery to run
+it without handing it the host. `bash` is **off by default** (`TALUNOR_BASH=1`),
+**approval-gated** (every call pauses for a human y/N, reusing the v0.8.0 gate),
+and runs inside a **network-less, throwaway sandbox**. This completes Iteration 2.
+
+### Added
+
+- **`internal/sandbox`** — a `Sandbox` interface (`Run(ctx, script, Limits)`)
+  with two pluggable backends selected by `TALUNOR_SANDBOX` (auto-detected when
+  unset). A non-zero exit is returned as *output*, not a Go error; only
+  infrastructure failures error. Output is capped at 16 KiB.
+  - **`nerdctl` backend (the strong one).** Shells out to `nerdctl`/`docker` with
+    `--network none --read-only --pids-limit --memory --tmpfs /tmp:size=… --cpus=1`
+    and a container-side `timeout`. Delegating to an OCI runtime buys seccomp,
+    cgroups, and dropped capabilities for free.
+  - **`namespaces` backend (the teaching one).** A from-scratch, **rootless**
+    sandbox: re-execs Talunor's own binary as a container init in fresh
+    user/mount/pid/uts/net/ipc namespaces, `pivot_root`s into a cached busybox
+    rootfs (bind-mounted read-only), mounts a private `/proc`, a size-capped
+    `/tmp`, and a minimal `/dev`, then sets `no_new_privs`, drops **all**
+    capabilities, and applies rlimits (`AS`, `CPU`, `FSIZE`, `NOFILE`). An empty
+    net namespace = no network. Linux-only; needs unprivileged user namespaces.
+- **`tools.Bash`** — the tool: schema `{command}`, `RequiresApproval() → true`,
+  runs the script through the sandbox and returns combined stdout+stderr. Wired
+  in `cmd/talunor` behind `TALUNOR_BASH`; if the sandbox can't initialise the
+  tool is skipped with a warning rather than crashing the app.
+- **Env**: `TALUNOR_BASH`, `TALUNOR_SANDBOX`, `TALUNOR_SANDBOX_IMAGE`,
+  `TALUNOR_SANDBOX_ROOTFS`, `TALUNOR_SANDBOX_BUSYBOX` — documented in
+  `.env_sample` and the README env table.
+
+### Lessons learned
+
+1. **Isolation is a spectrum, and honesty about where you sit on it is the
+   feature.** The `namespaces` backend *looks* like a container, but without a
+   seccomp filter the entire syscall surface is reachable — it is defense in
+   depth and a teaching artifact, not a boundary for hostile code. Building both
+   backends makes the trade-off concrete: reach for the OCI runtime when it
+   matters, keep the hand-rolled one to understand *what a runtime actually does*.
+2. **Rootless changes which knobs work.** RLIMIT_NPROC is per-host-uid, so using
+   it to cap processes would throttle the user's own shell; rootless cgroup
+   delegation is usually absent too. The honest answer for a fork bomb is the
+   memory cap plus the hard timeout (killing pid 1 of the pid namespace cascades
+   to everything), and saying so rather than pretending pids are capped.
+3. **The host fights you, and the error message is the UX.** Ubuntu 24.04+ gates
+   unprivileged user namespaces behind AppArmor
+   (`kernel.apparmor_restrict_unprivileged_userns=1`), so `uid_map` writes fail
+   with a bare `EPERM`. Detecting that and printing the exact `sysctl` to fix it
+   (or "use `nerdctl`") turns a baffling failure into a one-line decision.
+4. **No network is a *default*, not a fetch you forgot to write.** An empty net
+   namespace (or `--network none`) means the sandbox can't reach `localhost:11434`
+   Ollama or anything else — the safe posture is the absence of a capability, and
+   networking becomes a later, explicit opt-in (`web_fetch`).
+5. **Build the brake before the engine.** The v0.8.0 approval gate existed first,
+   so the first genuinely dangerous tool slotted behind it for free — the guard
+   was never retrofitted onto a running risk.
 
 ## [0.8.0] - 2026-07-15 — Approval gate: human-in-the-loop for tools
 
