@@ -21,36 +21,28 @@ the **chat** needs a local [Ollama](https://ollama.com) (default model
 **Container image** (Docker or, with Rancher Desktop, `nerdctl` — same commands):
 
 ```bash
-# The container reaches your host's Ollama via host.docker.internal (works with
-# Rancher Desktop, Docker Desktop, and — thanks to --add-host — native Docker on
-# Linux). -v keeps long-term memory across runs. `docker run …` is identical.
+# The container reaches your host's Ollama via host.docker.internal. -v keeps
+# long-term memory across runs. `docker run …` is identical. Port 11435 is the
+# secure bridge below (use 11434 for the quick option).
 nerdctl run --rm -it \
   --add-host=host.docker.internal:host-gateway \
-  -e TALUNOR_OLLAMA_URL=http://host.docker.internal:11434/v1 \
+  -e TALUNOR_OLLAMA_URL=http://host.docker.internal:11435/v1 \
   -v talunor-data:/data \
   ghcr.io/lao-tseu-is-alive/talunor:latest
-
-# Pin a version, or run the plain REPL / inspect memory (add --plain / --list 10):
-nerdctl run --rm -it --add-host=host.docker.internal:host-gateway \
-  -e TALUNOR_OLLAMA_URL=http://host.docker.internal:11434/v1 \
-  -v talunor-data:/data ghcr.io/lao-tseu-is-alive/talunor:v0.5.7 --plain
+# Add --plain for the REPL, --list 10 to inspect memory, or :v0.5.7 to pin a version.
 ```
 
-- **⚠️ Ollama must accept non-local connections.** By default it listens on
-  `127.0.0.1:11434`, which a container cannot reach. Bind it to all interfaces:
-  set `OLLAMA_HOST=0.0.0.0:11434` and restart. For the systemd service:
-  `sudo systemctl edit ollama` → add `Environment="OLLAMA_HOST=0.0.0.0:11434"` →
-  `sudo systemctl restart ollama` (confirm with `ss -tlnp | grep 11434`). This
-  exposes Ollama to your LAN — on an untrusted network, bind to the specific
-  bridge IP instead.
-- **`--network host` is *not* the shortcut here.** With **native Docker Engine on
-  Linux** it works (`localhost:11434`, no env needed) because the container shares
-  the real host network. Under **Rancher Desktop / Docker Desktop** the container
-  runs in a VM, so `--network host` is the VM's network and `localhost` finds
-  nothing — use `host.docker.internal` as above.
+- **Connecting to Ollama needs one-time host setup.** Ollama listens on
+  `127.0.0.1` only, and under Rancher/Docker Desktop the container is in a VM —
+  see **[Connecting the container to Ollama](docs/ollama-networking.md)**.
+  Recommended: keep Ollama on localhost and bridge only the VM through a
+  default-drop firewall (Option A = socat + systemd, Option B = pure nftables);
+  the quick alternative exposes Ollama to your LAN. Native Docker Engine on Linux
+  just needs `--network host`.
 - **TTY:** the TUI needs `-it`. Without it, use `--plain` for the line REPL.
 - Build the image locally: `make nerdctl-build && make nerdctl-run` (or the
-  `docker-*` equivalents).
+  `docker-*` equivalents); override the endpoint with
+  `make nerdctl-run OLLAMA_URL=http://host.docker.internal:11434/v1`.
 
 **Standalone bundle** (a `.tar.gz` on each GitHub Release):
 
@@ -290,6 +282,7 @@ internal/version/      build identity
 ext/                   fetched .so extensions + GGUF model (gitignored)
 Makefile               deps / doctor / chat / run / test / build / docker-*
 Dockerfile             self-contained image (binary + extensions + model)
+docs/ollama-networking.md  reaching a loopback Ollama from the container (secure)
 .github/workflows/     CI (build+test), Release (bundle), Docker-publish, CVE scan
 CHANGELOG.md           version-by-version build log + lessons
 AGENTS.md              orientation guide for AI/human contributors

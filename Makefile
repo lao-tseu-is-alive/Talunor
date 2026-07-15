@@ -74,9 +74,11 @@ docker-build:
 
 # Reach the host's Ollama from inside the container. host.docker.internal works
 # on Rancher Desktop / Docker Desktop and, via --add-host, native Docker on Linux.
-# NB: Ollama must listen on 0.0.0.0 (OLLAMA_HOST=0.0.0.0:11434), not just 127.0.0.1.
+# Default port 11435 = the secure bridge (see docs/ollama-networking.md); override
+# with e.g. OLLAMA_URL=http://host.docker.internal:11434/v1 for the quick option.
+OLLAMA_URL ?= http://host.docker.internal:11435/v1
 RUN_NET := --add-host=host.docker.internal:host-gateway \
-           -e TALUNOR_OLLAMA_URL=http://host.docker.internal:11434/v1
+           -e TALUNOR_OLLAMA_URL=$(OLLAMA_URL)
 
 ## docker-run: run the TUI from the image (needs a TTY + a local Ollama)
 docker-run:
