@@ -6,10 +6,10 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.6.0** — Iteration 1 complete; **Iteration 2 begun**: the
-> agent now talks to local **Ollama** or hosted **OpenRouter** frontier models,
-> configured via `.env`. See [CHANGELOG.md](CHANGELOG.md) for the
-> version-by-version build log and lessons.
+> Current version: **v0.7.0** — Iteration 1 complete; **Iteration 2**: the agent
+> talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and now
+> *acts* — a ReAct tool loop with a calculator, clock, and memory search. See
+> [CHANGELOG.md](CHANGELOG.md) for the version-by-version build log and lessons.
 
 ## Run without building
 
@@ -102,15 +102,21 @@ cmd/talunor       interactive agent REPL (persistent memory)               [✓]
 | 5 | **TUI** — Bubble Tea + Glamour (default front-end) | ✅ done (v0.5.0) |
 
 **Iteration 1 is complete** — Talunor is a working memory-augmented conversational
-agent. Iteration 2 (below) starts giving it the ability to *act*.
+agent. Iteration 2 gives it the ability to *act*.
+
+### Iteration 2 — tools & actions
+
+| Layer | What | Status |
+|-------|------|--------|
+| 6 | **Providers & config** — OpenRouter provider, `llm.FromEnv()`, `.env` loader | ✅ done (v0.6.0) |
+| 7 | **Tools & ReAct loop** — tool registry, native tool-calling, act→observe loop | ✅ done (v0.7.0) |
 
 ### Later iterations
 
 | Iter | Theme | Adds |
 |------|-------|------|
-| 2 | Tools & actions | tool registry, ReAct-style act/observe loop |
 | 3 | Planning & guardrails | explicit planner, approval gates, policy checks |
-| 4 | Learning | reflection, memory consolidation, salience/decay |
+| 4 | Learning | memory consolidation, salience/decay, async reflection |
 
 ## Requirements
 
@@ -223,6 +229,21 @@ Talunor auto-loads it at startup (real environment variables still win). Every
 supported variable is documented in [`.env_sample`](.env_sample). On a paid
 provider, set `TALUNOR_REFLECT=0` to skip the per-turn reflection call.
 
+### Tools (the ReAct loop)
+
+Each turn, Talunor offers the model a set of tools and runs an act→observe loop:
+the model asks to call a tool, Talunor runs it and feeds the result back, and
+this repeats until the model answers. Built-in tools:
+
+- **`calculator`** — safe arithmetic (parsed, never `eval`'d),
+- **`current_time`** — current time in an optional timezone,
+- **`recall_memory`** — searches Talunor's own long-term memory on demand.
+
+Tool activity streams as dimmed notes (`🔧 calculator(…)` / `↳ 84`) before the
+answer. Uses **native tool-calling**, so the chat model must support it (qwen3
+and most OpenRouter frontier models do); set `TALUNOR_TOOLS=0` for a model that
+doesn't.
+
 ### Where memory lives
 
 Long-term memory is a single SQLite file. Its location is
@@ -238,6 +259,7 @@ active path.
 | `TALUNOR_PROVIDER` | chat backend: `ollama` or `openrouter` | `ollama` |
 | `TALUNOR_MODEL` | model for the selected provider | provider default |
 | `TALUNOR_REFLECT` | set `0` to disable per-turn fact reflection | `1` |
+| `TALUNOR_TOOLS` | set `0` to disable tools (model without tool support) | `1` |
 | `TALUNOR_OLLAMA_URL` | Ollama OpenAI-compatible base URL | `http://localhost:11434/v1` |
 | `OPENROUTER_API_KEY` | required for `openrouter` | — |
 | `TALUNOR_OPENROUTER_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |

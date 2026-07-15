@@ -10,6 +10,7 @@ import (
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
+	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 )
 
 // fakeProvider records the messages it receives and replays a canned reply.
@@ -24,6 +25,29 @@ func (f *fakeProvider) Chat(_ context.Context, msgs []llm.Message, _ llm.Options
 	f.gotMsgs = msgs
 	ch := make(chan llm.Chunk, 1)
 	ch <- llm.Chunk{Content: f.reply}
+	close(ch)
+	return ch, nil
+}
+
+// scriptedProvider returns one canned response per Chat call (each a slice of
+// chunks), recording the messages of the most recent call. It lets a test drive
+// a multi-step tool loop deterministically.
+type scriptedProvider struct {
+	steps    [][]llm.Chunk
+	call     int
+	lastMsgs []llm.Message
+}
+
+func (p *scriptedProvider) Name() string { return "scripted" }
+
+func (p *scriptedProvider) Chat(_ context.Context, msgs []llm.Message, _ llm.Options) (<-chan llm.Chunk, error) {
+	p.lastMsgs = msgs
+	step := p.steps[p.call]
+	p.call++
+	ch := make(chan llm.Chunk, len(step))
+	for _, c := range step {
+		ch <- c
+	}
 	close(ch)
 	return ch, nil
 }
@@ -254,6 +278,60 @@ func factContents(t *testing.T, ctx context.Context, store *memory.Store) []stri
 		}
 	}
 	return out
+}
+
+// TestReActToolLoop drives a full act→observe loop: the model asks to call the
+// calculator, the agent executes it and feeds the observation back, and the
+// model produces a final answer using it. Uses a real tool + store (embeddings)
+// but a scripted provider so the two model turns are deterministic.
+func TestReActToolLoop(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		// Turn 1: the model requests a tool call (terminal tool-call chunk).
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "calculator", Args: `{"expression":"12*7"}`}}}},
+		// Turn 2: with the observation in context, it answers.
+		{{Content: "12 times 7 is 84."}},
+	}}
+
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(tools.Calculator{})
+	cfg.Extractor = DisableReflection() // keep the scripted call count exact.
+	ag := New(store, prov, cfg)
+
+	out, err := ag.Turn(ctx, "what is 12*7?")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	got, err := drain(out)
+	if err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	if !strings.Contains(got, "84") {
+		t.Errorf("final answer = %q; want it to contain 84", got)
+	}
+
+	// The model must have been called twice, and the second call's messages must
+	// include the tool's observation ("84") as a RoleTool message.
+	if prov.call != 2 {
+		t.Errorf("provider called %d times; want 2 (tool step + answer)", prov.call)
+	}
+	var sawObservation bool
+	for _, m := range prov.lastMsgs {
+		if m.Role == llm.RoleTool && strings.Contains(m.Content, "84") {
+			sawObservation = true
+		}
+	}
+	if !sawObservation {
+		t.Errorf("second call missing the tool observation; msgs=%+v", prov.lastMsgs)
+	}
+
+	// Only the user turn and the final answer are persisted (tool messages are
+	// ephemeral scratch), so count = 2.
+	if n, err := store.Count(ctx); err != nil || n != 2 {
+		t.Errorf("stored count = %d, err = %v; want 2", n, err)
+	}
 }
 
 func drain(ch <-chan llm.Chunk) (string, error) {

@@ -29,6 +29,7 @@ import (
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
 	"github.com/lao-tseu-is-alive/Talunor/internal/render"
+	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tui"
 	"github.com/lao-tseu-is-alive/Talunor/internal/version"
 )
@@ -79,6 +80,15 @@ func run(plain bool, list int) error {
 	// doubles cost, so allow disabling it with TALUNOR_REFLECT=0.
 	if !envBool("TALUNOR_REFLECT", true) {
 		cfg.Extractor = agent.DisableReflection()
+	}
+	// Tools: the agent can do arithmetic, tell the time, and search its own
+	// memory. Disable with TALUNOR_TOOLS=0 (e.g. for a model without tool support).
+	if envBool("TALUNOR_TOOLS", true) {
+		cfg.Tools = tools.NewRegistry(
+			tools.Calculator{},
+			tools.Clock{},
+			tools.NewRecallMemory(store),
+		)
 	}
 	ag := agent.New(store, provider, cfg)
 	n, _ := store.Count(ctx)

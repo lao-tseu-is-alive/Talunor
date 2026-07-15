@@ -11,8 +11,68 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Iteration 2, next** — tools & actions: a tool registry and a ReAct-style
-  act/observe loop, so the agent can *do* things, not just talk (→ v0.7.0).
+- **Iteration 3, next** — planning & guardrails: an explicit planner and
+  approval gates before actions.
+
+## [0.7.0] - 2026-07-15 — Tools & actions: the ReAct act/observe loop
+
+Talunor can now *do* things, not just talk. It runs a ReAct-style
+act→observe→reason loop using **native tool-calling**: the model asks to call a
+tool, the agent runs it and feeds the result back, and this repeats until the
+model answers. Completes the core of Iteration 2.
+
+### Added
+
+- **`internal/tools`** — the action layer: a `Tool` interface (name,
+  description, JSON-Schema args, `Execute`) and a concurrency-safe `Registry`
+  that offers tool definitions to the LLM and routes calls, turning a missing
+  tool or an execution error into an *observation* string so the loop recovers
+  instead of crashing. Starter tools:
+  - **`calculator`** — a dependency-free, safe evaluator: it parses the
+    expression to a Go AST and walks only numbers, parentheses, unary ±, and
+    `+ - * /`, rejecting anything else (no code is executed); whole results print
+    as integers.
+  - **`current_time`** — current time, optional IANA timezone.
+  - **`recall_memory`** — searches Talunor's own long-term memory, turning
+    retrieval into an on-demand action the model can invoke.
+- **Native tool-calling in the adapter** (`internal/llm`) — requests carry the
+  offered `tools`; the streaming parser accumulates fragmented `tool_calls`
+  (id/name once, arguments concatenated) and emits them as one terminal chunk.
+  `Message` gained `ToolCalls` / `ToolCallID`, `Chunk` gained `ToolCalls`,
+  `Options` gained `Tools`; `ToolCall` marshals to OpenAI's function shape for
+  the follow-up message.
+- **The agent act/observe loop** (`agent.runLoop`) — offers the registry's tools
+  each turn; while the model returns tool calls it executes them, appends the
+  observations, and calls again (capped by `MaxToolIters`, default 6); the final
+  answer streams live while tool activity is surfaced as dimmed notes
+  (`🔧 tool(args)` / `↳ result`). Only the final answer is persisted; tool
+  messages are ephemeral scratch. Enabled via `Config.Tools`; wired in
+  `cmd/talunor` and toggled with `TALUNOR_TOOLS=0`.
+
+### Changed
+
+- The conversational turn is now a special case of the loop (zero tool calls →
+  answer immediately), so `learnWhileStreaming` is replaced by `runLoop`.
+
+### Lessons learned
+
+1. **The act/observe loop is just "call, maybe run tools, repeat".** Wrapping the
+   existing single-shot turn in a loop that stops when the model *doesn't* ask
+   for a tool keeps plain chat unchanged and adds acting for free — the ReAct
+   pattern is a control-flow shape, not a new subsystem.
+2. **Streaming and tool-calling coexist cleanly because tool steps carry no
+   answer text.** Content streams to the user live; tool-call fragments are
+   accumulated silently and only acted on at end-of-step, so nothing half-formed
+   is ever shown.
+3. **Make tool failure an observation, not an exception.** Returning
+   `error: …` as the tool result lets the model see and recover from a bad call
+   (wrong args, unknown tool) instead of aborting the turn — robustness the agent
+   gets for free.
+4. **Evaluate untrusted input structurally, never by execution.** The calculator
+   parses to an AST and walks only arithmetic nodes; there is no `eval`, so a
+   crafted "expression" can compute but never *run* anything.
+
+## [0.6.0] - 2026-07-15 — Iteration 2 begins: providers & config
 
 ## [0.6.0] - 2026-07-15 — Iteration 2 begins: providers & config
 
@@ -662,7 +722,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.7...v0.6.0
 [0.5.7]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.5...v0.5.6

@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"math"
 	"strconv"
 	"time"
 )
@@ -55,7 +56,12 @@ func (Calculator) Execute(_ context.Context, args json.RawMessage) (string, erro
 	if err != nil {
 		return "", err
 	}
-	return strconv.FormatFloat(v, 'g', -1, 64), nil
+	// Format whole numbers as integers (no scientific notation); otherwise a
+	// plain decimal without an exponent.
+	if v == math.Trunc(v) && math.Abs(v) < 1e15 {
+		return strconv.FormatInt(int64(v), 10), nil
+	}
+	return strconv.FormatFloat(v, 'f', -1, 64), nil
 }
 
 // evalArith evaluates the arithmetic-only subset of a Go expression AST.

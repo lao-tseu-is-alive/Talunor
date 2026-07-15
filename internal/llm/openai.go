@@ -79,25 +79,62 @@ func (p *OpenAICompatible) Name() string { return p.name }
 func (p *OpenAICompatible) Model() string { return p.model }
 
 type chatRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Stream      bool      `json:"stream"`
-	Temperature float64   `json:"temperature,omitempty"`
-	MaxTokens   int       `json:"max_tokens,omitempty"`
+	Model       string     `json:"model"`
+	Messages    []Message  `json:"messages"`
+	Stream      bool       `json:"stream"`
+	Temperature float64    `json:"temperature,omitempty"`
+	MaxTokens   int        `json:"max_tokens,omitempty"`
+	Tools       []toolWire `json:"tools,omitempty"`
+}
+
+// toolWire is the OpenAI "function" tool shape sent in a request.
+type toolWire struct {
+	Type     string `json:"type"` // "function"
+	Function struct {
+		Name        string          `json:"name"`
+		Description string          `json:"description"`
+		Parameters  json.RawMessage `json:"parameters"`
+	} `json:"function"`
+}
+
+func toolWires(specs []ToolSpec) []toolWire {
+	if len(specs) == 0 {
+		return nil
+	}
+	ws := make([]toolWire, len(specs))
+	for i, s := range specs {
+		ws[i].Type = "function"
+		ws[i].Function.Name = s.Name
+		ws[i].Function.Description = s.Description
+		ws[i].Function.Parameters = s.Parameters
+	}
+	return ws
 }
 
 // streamResponse is one SSE `data:` payload from /chat/completions.
 type streamResponse struct {
 	Choices []struct {
 		Delta struct {
-			Content   string `json:"content"`
-			Reasoning string `json:"reasoning"` // thinking models (e.g. qwen3).
+			Content   string          `json:"content"`
+			Reasoning string          `json:"reasoning"` // thinking models (e.g. qwen3).
+			ToolCalls []deltaToolCall `json:"tool_calls"`
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+// deltaToolCall is a (possibly partial) tool call in a streaming delta. The id
+// and name arrive once; arguments accumulate across deltas, keyed by index.
+type deltaToolCall struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
 }
 
 // Chat implements Provider.
@@ -112,6 +149,7 @@ func (p *OpenAICompatible) Chat(ctx context.Context, msgs []Message, opts Option
 		Stream:      true,
 		Temperature: opts.Temperature,
 		MaxTokens:   opts.MaxTokens,
+		Tools:       toolWires(opts.Tools),
 	})
 	if err != nil {
 		return nil, err
@@ -155,6 +193,10 @@ func (p *OpenAICompatible) stream(ctx context.Context, body io.ReadCloser, out c
 	sc := bufio.NewScanner(body)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024) // tolerate long SSE lines.
 
+	// Tool calls arrive fragmented across deltas; accumulate them by index and
+	// emit the assembled set once the stream ends.
+	var calls []ToolCall
+
 	for sc.Scan() {
 		line := sc.Text()
 		if !strings.HasPrefix(line, "data:") {
@@ -165,6 +207,7 @@ func (p *OpenAICompatible) stream(ctx context.Context, body io.ReadCloser, out c
 		case "":
 			continue
 		case "[DONE]":
+			p.flushToolCalls(ctx, out, calls)
 			return
 		}
 
@@ -181,6 +224,9 @@ func (p *OpenAICompatible) stream(ctx context.Context, body io.ReadCloser, out c
 			continue
 		}
 		d := sr.Choices[0].Delta
+		for _, tc := range d.ToolCalls {
+			calls = accumulateToolCall(calls, tc)
+		}
 		if d.Content == "" && d.Reasoning == "" {
 			continue
 		}
@@ -190,6 +236,42 @@ func (p *OpenAICompatible) stream(ctx context.Context, body io.ReadCloser, out c
 	}
 	if err := sc.Err(); err != nil {
 		p.send(ctx, out, Chunk{Err: fmt.Errorf("%s: stream read: %w", p.name, err)})
+		return
+	}
+	p.flushToolCalls(ctx, out, calls) // stream ended without an explicit [DONE].
+}
+
+// accumulateToolCall merges one streamed tool-call fragment into calls (indexed
+// by its position): the id/name come once, the JSON arguments append.
+func accumulateToolCall(calls []ToolCall, d deltaToolCall) []ToolCall {
+	for len(calls) <= d.Index {
+		calls = append(calls, ToolCall{})
+	}
+	c := &calls[d.Index]
+	if d.ID != "" {
+		c.ID = d.ID
+	}
+	if d.Function.Name != "" {
+		c.Name = d.Function.Name
+	}
+	c.Args += d.Function.Arguments
+	return calls
+}
+
+// flushToolCalls emits the assembled tool calls as one terminal chunk, if any
+// were seen and each is complete.
+func (p *OpenAICompatible) flushToolCalls(ctx context.Context, out chan<- Chunk, calls []ToolCall) {
+	if len(calls) == 0 {
+		return
+	}
+	complete := calls[:0]
+	for _, c := range calls {
+		if c.Name != "" { // drop empty slots from sparse indices.
+			complete = append(complete, c)
+		}
+	}
+	if len(complete) > 0 {
+		p.send(ctx, out, Chunk{ToolCalls: complete})
 	}
 }
 

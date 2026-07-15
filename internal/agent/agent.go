@@ -14,12 +14,14 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
+	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 )
 
 // Config tunes an Agent.
@@ -46,6 +48,14 @@ type Config struct {
 	// existing fact lies within this cosine distance, so restating something does
 	// not pile up near-duplicate facts. Small = "only skip near-identical facts".
 	DedupMaxDistance float64
+
+	// Tools, when set, are offered to the model each turn; the agent runs an
+	// act→observe loop, executing any tool calls and feeding results back until
+	// the model answers. Nil = a plain conversational turn (no tools).
+	Tools *tools.Registry
+	// MaxToolIters caps the act/observe rounds per turn, so a confused model can't
+	// loop forever. Defaults to 6.
+	MaxToolIters int
 }
 
 // DefaultConfig returns sensible defaults for a conversational agent.
@@ -58,6 +68,7 @@ func DefaultConfig() Config {
 		RecallMaxDistance: 0.75,
 		ShortTermCap:      6,    // ~3 exchanges.
 		DedupMaxDistance:  0.20, // near-identical facts only.
+		MaxToolIters:      6,
 	}
 }
 
@@ -67,6 +78,7 @@ type Agent struct {
 	short     *memory.ShortTerm
 	provider  llm.Provider
 	extractor FactExtractor
+	tools     *tools.Registry
 	cfg       Config
 }
 
@@ -85,6 +97,9 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 	if cfg.DedupMaxDistance <= 0 {
 		cfg.DedupMaxDistance = def.DedupMaxDistance
 	}
+	if cfg.MaxToolIters <= 0 {
+		cfg.MaxToolIters = def.MaxToolIters
+	}
 	// Default reflection: the agent uses its own LLM provider to write its
 	// semantic memory. Callers disable it with DisableReflection().
 	if cfg.Extractor == nil {
@@ -95,6 +110,7 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 		short:     memory.NewShortTerm(cfg.ShortTermCap),
 		provider:  provider,
 		extractor: cfg.Extractor,
+		tools:     cfg.Tools,
 		cfg:       cfg,
 	}
 }
@@ -111,7 +127,7 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 		return nil, err
 	}
 
-	// Reason: build the prompt from prior context, then start streaming.
+	// Reason: build the prompt from prior context.
 	msgs := a.buildMessages(hits, input)
 
 	// Store the user turn now (it happened regardless of how the reply goes).
@@ -120,52 +136,98 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 		return nil, err
 	}
 
-	stream, err := a.provider.Chat(ctx, msgs, a.cfg.Options)
-	if err != nil {
-		return nil, err
-	}
-
-	// Tee the stream to the caller while accumulating the answer; store it on
-	// clean completion.
+	// Run the act→observe loop in the background, streaming to the caller.
 	out := make(chan llm.Chunk)
-	go a.learnWhileStreaming(ctx, input, stream, out)
+	go a.runLoop(ctx, msgs, input, out)
 	return out, nil
 }
 
-// learnWhileStreaming forwards chunks to out, accumulates the answer content,
-// and on successful completion records the assistant turn and reflects on the
-// user's message. Reflection runs *after* every chunk has been forwarded (the
-// caller has already seen the whole reply) but *before* the channel closes, so
-// that when a caller observes the stream end, learning is finished — keeping the
-// loop deterministic and testable.
-func (a *Agent) learnWhileStreaming(ctx context.Context, input string, in <-chan llm.Chunk, out chan<- llm.Chunk) {
+// runLoop is the cognitive loop's reasoning+acting core. It calls the model with
+// the offered tools; while the model asks for tools it executes them, feeds the
+// observations back, and calls again (up to MaxToolIters); once the model answers
+// without a tool call, that answer is the final reply. Answer content streams to
+// the caller live; tool activity is surfaced as dimmed notes. On clean
+// completion the final answer is stored and reflection runs — all before the
+// channel closes, so observing the stream end means learning is done.
+func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, out chan<- llm.Chunk) {
 	defer close(out)
-	var answer strings.Builder
-	for c := range in {
-		if c.Err != nil {
-			// Forward the error; do not store a failed/partial answer.
-			select {
-			case out <- c:
-			case <-ctx.Done():
+
+	opts := a.cfg.Options
+	if a.tools != nil {
+		opts.Tools = a.toolSpecs()
+	}
+
+	var answer string
+	for iter := 0; iter <= a.cfg.MaxToolIters; iter++ {
+		stream, err := a.provider.Chat(ctx, msgs, opts)
+		if err != nil {
+			a.send(ctx, out, llm.Chunk{Err: err})
+			return
+		}
+
+		var content strings.Builder
+		var calls []llm.ToolCall
+		for c := range stream {
+			if c.Err != nil {
+				a.send(ctx, out, c) // forward the error; store nothing.
+				return
 			}
-			return
+			if len(c.ToolCalls) > 0 {
+				calls = c.ToolCalls // terminal tool-call chunk; not user-facing.
+				continue
+			}
+			content.WriteString(c.Content)
+			if !a.send(ctx, out, c) {
+				return // context cancelled.
+			}
 		}
-		answer.WriteString(c.Content)
-		select {
-		case out <- c:
-		case <-ctx.Done():
-			return
+
+		if len(calls) == 0 {
+			answer = content.String() // the model answered; we're done.
+			break
+		}
+
+		// Act: echo the assistant's tool-call message, run each tool, and append
+		// its observation for the next round.
+		msgs = append(msgs, llm.Message{Role: llm.RoleAssistant, ToolCalls: calls})
+		for _, tc := range calls {
+			if !a.send(ctx, out, llm.Chunk{Reasoning: fmt.Sprintf("🔧 %s(%s)\n", tc.Name, oneLine(tc.Args, 80))}) {
+				return
+			}
+			obs := a.tools.Execute(ctx, tc.Name, json.RawMessage(tc.Args))
+			if !a.send(ctx, out, llm.Chunk{Reasoning: fmt.Sprintf("   ↳ %s\n", oneLine(obs, 120))}) {
+				return
+			}
+			msgs = append(msgs, llm.Message{Role: llm.RoleTool, ToolCallID: tc.ID, Content: obs})
 		}
 	}
-	// Learn: the stream finished cleanly.
-	if text := answer.String(); text != "" {
-		a.short.Add(llm.RoleAssistant, text)
-		// Best-effort: a storage failure must not corrupt the finished reply the
-		// caller already received.
-		_, _ = a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, text)
+
+	// Learn: record the assistant turn and reflect on the user's message.
+	if answer != "" {
+		a.short.Add(llm.RoleAssistant, answer)
+		_, _ = a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, answer)
 	}
-	// Reflect: distil durable facts from the user's message into semantic memory.
 	a.reflect(ctx, input)
+}
+
+// send delivers c unless the context is cancelled first; returns false if it was.
+func (a *Agent) send(ctx context.Context, out chan<- llm.Chunk, c llm.Chunk) bool {
+	select {
+	case out <- c:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// toolSpecs converts the registry's definitions into the provider's tool specs.
+func (a *Agent) toolSpecs() []llm.ToolSpec {
+	defs := a.tools.Defs()
+	specs := make([]llm.ToolSpec, len(defs))
+	for i, d := range defs {
+		specs[i] = llm.ToolSpec{Name: d.Name, Description: d.Description, Parameters: d.Parameters}
+	}
+	return specs
 }
 
 // reflect is the agent's learning step: it asks the extractor for durable facts
@@ -209,7 +271,13 @@ func (a *Agent) factKnown(ctx context.Context, fact string) bool {
 // buildMessages assembles the prompt: system prompt, an optional block of
 // recalled memories, the recent short-term turns, then the new user input.
 func (a *Agent) buildMessages(hits []memory.Hit, input string) []llm.Message {
-	msgs := []llm.Message{{Role: llm.RoleSystem, Content: a.cfg.SystemPrompt}}
+	system := a.cfg.SystemPrompt
+	if a.tools != nil && a.tools.Len() > 0 {
+		system += " You have tools available; call them when they help " +
+			"(e.g. for arithmetic, the current time, or looking up your memory) " +
+			"instead of guessing."
+	}
+	msgs := []llm.Message{{Role: llm.RoleSystem, Content: system}}
 
 	if len(hits) > 0 {
 		var b strings.Builder

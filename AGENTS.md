@@ -46,11 +46,13 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
 internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenRouter),
                    FromEnv() provider selection, NewOpenRouter
 internal/config/   minimal dependency-free .env loader (real env wins)
-internal/agent/    the cognitive loop: Turn = perceive→recall→reason→store→
-                   reflect. reflect.go = FactExtractor (LLM distils durable
-                   facts into KindFact; DisableReflection() to opt out). Also
-                   slash-command helpers (Help/MemoryStats/ListMemories/
-                   ForgetMemory, MemoryID)
+internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/observe
+                   loop)→store→reflect. runLoop offers Config.Tools, executes
+                   tool calls, feeds observations back (MaxToolIters cap), streams
+                   the final answer. reflect.go = FactExtractor (LLM distils facts
+                   into KindFact; DisableReflection()). Slash-command helpers too.
+internal/tools/    action layer: Tool interface + Registry; builtins Calculator
+                   (AST-safe), Clock, RecallMemory (searches the store)
 internal/render/   shared console stream renderer (reasoning dimmed, answer bright)
 internal/tui/      Bubble Tea + Glamour front-end
 internal/version/  build identity (Version const; Commit/Date via -ldflags)
@@ -58,10 +60,11 @@ ext/               fetched .so extensions + GGUF model (gitignored)
 ```
 
 Data flow of one turn: input → `Store.Recall` (KNN, thresholded) + `ShortTerm`
-recent turns → build prompt → `Provider.Chat` (stream) → render live →
-`Store.Remember` both turns on clean completion → **reflect**: extractor distils
-durable facts from the user message and stores new ones as `KindFact` (deduped).
-Reflection runs after the reply has streamed but before the stream closes.
+recent turns → build prompt → **act/observe loop**: `Provider.Chat` with tools;
+while it returns tool calls, run them and append observations, then call again
+(cap `MaxToolIters`); the final answer streams live, tool activity shows dimmed →
+`Store.Remember` user + final answer → **reflect** (extractor distils durable
+facts into `KindFact`, deduped). Learning runs before the stream closes.
 
 ## Build, test, run
 
@@ -107,6 +110,7 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_PROVIDER` | chat backend: `ollama` or `openrouter` | `ollama` |
 | `TALUNOR_MODEL` | model for the selected provider | provider default |
 | `TALUNOR_REFLECT` | `0` disables per-turn reflection (cost on paid APIs) | `1` |
+| `TALUNOR_TOOLS` | `0` disables tools (model without tool-calling support) | `1` |
 | `TALUNOR_OLLAMA_URL` | Ollama OpenAI-compatible base URL | `http://localhost:11434/v1` |
 | `OPENROUTER_API_KEY` | required for `openrouter` | — |
 | `TALUNOR_OPENROUTER_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |
@@ -179,7 +183,8 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
 - **Iteration 1 COMPLETE (v0.5.x):** conversational agent, multi-tier memory,
   streaming Ollama provider, agent loop, Bubble Tea TUI, config + commands. v0.5.5
   adds reflection (semantic-memory facts) — an early taste of Iteration 4.
-- **Iteration 2 (in progress):** v0.6.0 = providers & config (OpenRouter +
-  `llm.FromEnv()` + `.env`). Next: tools & actions (tool registry, ReAct
-  act/observe loop) → v0.7.0, then guardrails/approval gates (à la pi-go/Claude),
+- **Iteration 2 (done):** v0.6.0 = providers & config (OpenRouter +
+  `llm.FromEnv()` + `.env`); v0.7.0 = tools & actions (`internal/tools` registry,
+  native tool-calling, `agent.runLoop` act/observe). Next — Iteration 3:
+  planning & guardrails/approval gates (à la pi-go/Claude),
   then learning/reflection. Expect ~v0.6.0–v0.8.0, same checkpoint rhythm.
