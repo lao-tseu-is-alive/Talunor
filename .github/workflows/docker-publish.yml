@@ -56,7 +56,10 @@ jobs:
       - name: Install Trivy
         uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
         with:
-          trivy-version: '0.69.3' # Avoid v0.69.1 and the malicious 0.69.4.
+          # The input is 'version' (not 'trivy-version'); 0.71.2 post-dates the
+          # malicious 0.69.4 and the yanked 0.69.1. trivy-action defaults to this
+          # same version, so its internal install is a cache hit.
+          version: '0.71.2'
 
       # 3. Scan the built image and report to the Security tab.
       - name: Run Trivy vulnerability scanner
@@ -68,7 +71,6 @@ jobs:
           ignore-unfixed: true
           format: 'sarif'
           output: 'trivy-results.sarif'
-          trivy-version: '0.69.3'
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
@@ -87,7 +89,6 @@ jobs:
           format: 'table'
           exit-code: '1'
           skip-db-update: true
-          trivy-version: '0.69.3'
 
       # 5. Push — only reached when the scan gate passed.
       - name: Extract Docker metadata
