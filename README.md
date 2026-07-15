@@ -6,7 +6,7 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.5.6** — **Iteration 1 complete** (+ polish): a
+> Current version: **v0.5.7** — **Iteration 1 complete** (+ polish): a
 > conversational agent with multi-tier memory and a Bubble Tea TUI. See
 > [CHANGELOG.md](CHANGELOG.md) for the version-by-version build log and lessons.
 
@@ -27,7 +27,7 @@ docker run --rm -it --network host -v talunor-data:/data ghcr.io/lao-tseu-is-ali
 nerdctl run --rm -it --network host -v talunor-data:/data ghcr.io/lao-tseu-is-alive/talunor:latest
 
 # Pin a version, or run the plain REPL / inspect memory:
-docker run --rm -it --network host -v talunor-data:/data ghcr.io/lao-tseu-is-alive/talunor:v0.5.6 --plain
+docker run --rm -it --network host -v talunor-data:/data ghcr.io/lao-tseu-is-alive/talunor:v0.5.7 --plain
 ```
 
 - **TTY:** the TUI needs `-it`. Without it, use `--plain` for the line REPL.
@@ -40,8 +40,8 @@ docker run --rm -it --network host -v talunor-data:/data ghcr.io/lao-tseu-is-ali
 **Standalone bundle** (a `.tar.gz` on each GitHub Release):
 
 ```bash
-tar xzf talunor-v0.5.6-linux-amd64.tar.gz
-cd talunor-v0.5.6-linux-amd64
+tar xzf talunor-v0.5.7-linux-amd64.tar.gz
+cd talunor-v0.5.7-linux-amd64
 ./run.sh            # TUI  (./run.sh --plain for the REPL)
 ```
 

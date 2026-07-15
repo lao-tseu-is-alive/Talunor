@@ -14,6 +14,48 @@ changed but the *lessons learned* while getting there.
 - **Iteration 2** — tools & actions: a tool registry and a ReAct-style
   act/observe loop, so the agent can *do* things, not just talk.
 
+## [0.5.7] - 2026-07-15 — Harden the image: distroless base + dependency bumps
+
+A security follow-up to 0.5.6, prompted by reviewing the image's CVE scan. No
+application behaviour changed.
+
+### Changed
+
+- **Runtime base is now `gcr.io/distroless/cc-debian12`** (was
+  `debian:trixie-slim`). Distroless/cc contains only glibc, libstdc++, libgcc and
+  ca-certificates — exactly what the Go binary and `ai.so` need — with no shell,
+  apt, perl or util-linux. A full Trivy scan drops from **166 CVEs (3 CRITICAL,
+  18 HIGH)** to **17 (0 CRITICAL, 0 HIGH, 4 MEDIUM, 13 LOW)**; the fixable
+  HIGH/CRITICAL gate stays at 0. The builder moves to `golang:1.26-bookworm` to
+  match the runtime's glibc (2.36), which the extensions satisfy — they require at
+  most `GLIBC_2.34` / `GLIBCXX_3.4.29` (measured with `objdump -T`), so the
+  earlier trixie choice was over-cautious. Verified end to end that the distroless
+  image still loads both extensions and the GGUF model (`… --list 1` opens the
+  store cleanly).
+
+### Fixed
+
+- **Security:** bumped `golang.org/x/net` v0.55.0 → **v0.56.0** (`CVE-2026-46600`,
+  DNS message parse panic) and `golang.org/x/text` v0.37.0 → **v0.39.0**
+  (`CVE-2026-56852`, infinite loop on invalid input) — both flagged in the
+  `gobinary` after 0.5.6 as the Trivy DB updated. The binary now scans clean.
+
+### Lessons learned
+
+1. **A CVE *count* is not a CVE *risk*.** Most of the 166 were `affected` /
+   `fix_deferred` distro triage with no available patch — which is why the
+   `ignore-unfixed` gate was already green. The real lever is **shrinking the base
+   so those packages aren't present at all**: fewer packages ⇒ less surface *and*
+   less noise, even before considering fixability.
+2. **"Distroless" is a dependency contract, not magic.** It works only because the
+   image's actual runtime needs are known and small — here, the `NEEDED` libraries
+   of the binary and `ai.so`. Verify those (`ldd` / `objdump -T`) before choosing
+   the smallest base that still satisfies them.
+3. **Match the base's glibc to the *oldest* thing that must run on it.** The
+   prebuilt native extensions set the floor; measuring their required symbol
+   versions turned a guess ("use the newest base to be safe") into a decision
+   ("bookworm is provably enough, and more portable").
+
 ## [0.5.6] - 2026-07-15 — CI/CD, container image & release bundles
 
 Makes every tagged iteration installable **without a Go/C toolchain or
@@ -574,7 +616,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.6...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.7...HEAD
+[0.5.7]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.3...v0.5.4
