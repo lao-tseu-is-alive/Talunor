@@ -84,6 +84,13 @@ sudo systemctl enable --now talunor-ollama-bridge
 Run the container with `<PORT>=11435`. Ollama never leaves `127.0.0.1`; only the
 VM can reach the bridge.
 
+> **Quick dev path:** `scripts/run-container-with-ollama-bridge.sh` starts the
+> same socat bridge ad-hoc (not as a systemd unit) and then runs the container
+> with the correct `nerdctl` call. It refuses to bind `0.0.0.0` unless you pass
+> `--i-have-a-firewall` (confirming the rule above is in place) or set
+> `BRIDGE_BIND` to a specific VM-facing address. The systemd unit here is the
+> durable setup; the script is the one-shot convenience.
+
 ### Option B — pure nftables (no helper daemon)
 
 Redirect the VM's traffic straight to loopback Ollama with a DNAT — no socat.

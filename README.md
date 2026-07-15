@@ -6,11 +6,13 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.8.0** — Iteration 1 complete; **Iteration 2**: the agent
-> talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and
-> *acts* — a ReAct tool loop (calculator, clock, memory search) with a
-> human-in-the-loop **approval gate** for side-effecting tools. See
-> [CHANGELOG.md](CHANGELOG.md) for the version-by-version build log and lessons.
+> Current version: **v0.9.0** — Iterations 1 & 2 complete. The agent talks to
+> local **Ollama** or hosted **OpenRouter** models (via `.env`) and *acts* — a
+> ReAct tool loop (calculator, clock, memory search) with a human-in-the-loop
+> **approval gate**, plus an opt-in, sandboxed **`bash`** tool that runs shell
+> commands in a network-less throwaway container (nerdctl or a rootless
+> user-namespace backend). See [CHANGELOG.md](CHANGELOG.md) for the
+> version-by-version build log and lessons.
 
 ## Run without building
 
@@ -274,10 +276,15 @@ Two pluggable backends (pick with `TALUNOR_SANDBOX`, or let it auto-detect):
 
 The `namespaces` backend is Linux-only and needs **unprivileged user namespaces**
 enabled. On Ubuntu 24.04+ they are AppArmor-restricted by default; Talunor detects
-this and tells you to run
-`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (or just use the
-`nerdctl` backend). If the sandbox can't be set up, the tool is skipped with a
-warning — the app still starts.
+this and tells you to lift the restriction (or just use the `nerdctl` backend).
+The helper [`scripts/allow-unprivileged-userns.sh`](scripts/allow-unprivileged-userns.sh)
+toggles it for you (`--restore` puts it back, `--status` shows the current state).
+If the sandbox can't be set up, the tool is skipped with a warning — the app
+still starts.
+
+For the container image, [`scripts/run-container-with-ollama-bridge.sh`](scripts/run-container-with-ollama-bridge.sh)
+starts the loopback→VM Ollama bridge and runs the container with the right
+`nerdctl` flags in one step (see [docs/ollama-networking.md](docs/ollama-networking.md)).
 
 ### Where memory lives
 
