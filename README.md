@@ -6,9 +6,10 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.7.0** — Iteration 1 complete; **Iteration 2**: the agent
-> talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and now
-> *acts* — a ReAct tool loop with a calculator, clock, and memory search. See
+> Current version: **v0.8.0** — Iteration 1 complete; **Iteration 2**: the agent
+> talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and
+> *acts* — a ReAct tool loop (calculator, clock, memory search) with a
+> human-in-the-loop **approval gate** for side-effecting tools. See
 > [CHANGELOG.md](CHANGELOG.md) for the version-by-version build log and lessons.
 
 ## Run without building
@@ -110,12 +111,14 @@ agent. Iteration 2 gives it the ability to *act*.
 |-------|------|--------|
 | 6 | **Providers & config** — OpenRouter provider, `llm.FromEnv()`, `.env` loader | ✅ done (v0.6.0) |
 | 7 | **Tools & ReAct loop** — tool registry, native tool-calling, act→observe loop | ✅ done (v0.7.0) |
+| 8 | **Approval gate** — human-in-the-loop y/n for side-effecting tools (guardrail) | ✅ done (v0.8.0) |
+| 9 | **Sandboxed `bash`** — pluggable sandbox (namespaces/nerdctl), behind the gate | 🚧 next |
 
 ### Later iterations
 
 | Iter | Theme | Adds |
 |------|-------|------|
-| 3 | Planning & guardrails | explicit planner, approval gates, policy checks |
+| 3 | Planning & guardrails | explicit planner, policy checks (approval gate ✅ started) |
 | 4 | Learning | memory consolidation, salience/decay, async reflection |
 
 ## Requirements

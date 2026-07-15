@@ -11,14 +11,56 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Approval gate (landed on `main`, not yet released).** The ReAct loop can
-  pause on a tool marked "requires approval" (the optional `tools.Approvable`
-  interface) and wait for a human decision: it emits an `ApprovalRequest` on the
-  chunk stream and blocks; the TUI shows a y/n prompt, the REPL asks on stdin. A
-  denial (or a cancelled turn) becomes an observation the model can react to, so
-  it fails closed. Brings Iteration 3's guardrail forward — the prerequisite for a
-  safe `bash` tool. Ships (with the sandboxed bash tool) as **v0.8.0**.
+- **Layer 9, next (→ v0.9.0)** — a sandboxed `bash` tool behind the approval
+  gate: a pluggable `Sandbox` (`TALUNOR_SANDBOX=namespaces|nerdctl`), off by
+  default (`TALUNOR_BASH=1`), network-off, size/pid/mem/time-limited. Then a
+  `web_fetch` tool on top. Plan tracked in `todo.md`.
 - **Iteration 3, later** — an explicit planner before multi-step actions.
+
+## [0.8.0] - 2026-07-15 — Approval gate: human-in-the-loop for tools
+
+An early piece of Iteration 3's guardrails, brought forward: a tool can now
+require explicit human approval before each call. This is the safety
+prerequisite for giving the agent side-effecting tools (next: a sandboxed
+`bash`).
+
+### Added
+
+- **`tools.Approvable`** — an optional interface (`RequiresApproval() bool`) a
+  tool implements to be gated. Tools that don't implement it (calculator, clock,
+  memory search) keep running freely.
+- **Approval in the ReAct loop.** When about to run a gated tool, `agent.runLoop`
+  emits an `llm.ApprovalRequest` on the chunk stream and **blocks on
+  `Decision`**; the front-end prompts the user and calls `Respond`. Threading it
+  through the existing stream means both front-ends handle it uniformly:
+  - **TUI** — a yellow y/n prompt pauses the stream; any key that isn't `y`
+    denies; the stream resumes on the answer.
+  - **REPL** — `render.StreamWithApproval` + an `ApproveFunc` that asks on stdin.
+- **Fail closed.** A denial, an unanswered request on a cancelled turn, or a
+  missing approver all deny; a denial is fed back to the model as an
+  `error: the user denied…` observation so it can adapt rather than crash.
+
+### Changed
+
+- `render.Stream` now delegates to `StreamWithApproval(…, nil)` (deny-by-default),
+  so tool-less callers (`cmd/chat`) are unaffected.
+
+### Lessons learned
+
+1. **Autonomy needs a brake before it needs more tools.** The ReAct loop happily
+   auto-runs whatever the model asks; that's fine for a calculator and unsafe for
+   anything with side effects. Building the approval gate *before* the first
+   dangerous tool means the guardrail is never retrofitted onto a running risk.
+2. **Reuse the transport you already have.** Emitting the approval request as a
+   `Chunk` on the existing reply stream (with a reply channel inside it) let one
+   mechanism serve both the TUI event loop and the blocking REPL — no separate
+   callback plumbing, no new channel between agent and front-end.
+3. **Fail closed, and turn refusal into information.** Denying by default on every
+   ambiguous path (cancel, nil approver) is the safe bias; feeding the denial back
+   as an observation keeps the agent useful (it can explain or try another way)
+   instead of aborting the turn.
+
+## [0.7.0] - 2026-07-15 — Tools & actions: the ReAct act/observe loop
 
 ## [0.7.0] - 2026-07-15 — Tools & actions: the ReAct act/observe loop
 
@@ -728,7 +770,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.7...v0.6.0
 [0.5.7]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.6...v0.5.7

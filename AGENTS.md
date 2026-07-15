@@ -189,6 +189,8 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   adds reflection (semantic-memory facts) — an early taste of Iteration 4.
 - **Iteration 2 (done):** v0.6.0 = providers & config (OpenRouter +
   `llm.FromEnv()` + `.env`); v0.7.0 = tools & actions (`internal/tools` registry,
-  native tool-calling, `agent.runLoop` act/observe). Next — Iteration 3:
-  planning & guardrails/approval gates (à la pi-go/Claude),
+  native tool-calling, `agent.runLoop` act/observe); v0.8.0 = approval gate
+  (`tools.Approvable`, human y/n in TUI/REPL — Iteration 3 guardrail brought
+  forward). Next — v0.9.0: sandboxed `bash` tool (see `todo.md`), then Iteration 3
+  planning/policy (à la pi-go/Claude),
   then learning/reflection. Expect ~v0.6.0–v0.8.0, same checkpoint rhythm.
