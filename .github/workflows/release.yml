@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    # Publish semver tags as releases.
+    tags: [ 'v[0-9]+.[0-9]+.[0-9]+' ]
+
+permissions:
+  contents: write # create the GitHub Release and upload assets.
+
+jobs:
+  build:
+    name: Build & bundle (linux/amd64)
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "1" # Talunor is cgo.
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set release version
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> "$GITHUB_ENV"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go version
+
+      # Fetch the loadable extensions and the embedding model — they are bundled
+      # into the release archive so it runs without `make deps`.
+      - name: Fetch extensions + embedding model
+        run: make deps
+
+      - name: Build
+        run: |
+          LDFLAGS="-s -w \
+            -X github.com/lao-tseu-is-alive/Talunor/internal/version.Commit=$(git rev-parse --short HEAD) \
+            -X github.com/lao-tseu-is-alive/Talunor/internal/version.Date=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          go build -ldflags "${LDFLAGS}" -o talunor-linux-amd64 ./cmd/talunor
+
+      # Assemble a self-contained bundle: binary + extensions + model + a run.sh
+      # that wires the ext/model paths relative to the extracted folder.
+      - name: Assemble self-contained bundle
+        run: |
+          DIR="talunor-${RELEASE_VERSION}-linux-amd64"
+          mkdir -p "${DIR}/ext/models"
+          cp talunor-linux-amd64 "${DIR}/talunor"
+          cp ext/vector.so ext/ai.so "${DIR}/ext/"
+          cp ext/models/all-MiniLM-L6-v2.f16.gguf "${DIR}/ext/models/"
+          cp README.md CHANGELOG.md LICENSE "${DIR}/"
+          cat > "${DIR}/run.sh" <<'SH'
+          #!/usr/bin/env sh
+          # Launch Talunor from this bundle, pointing it at the bundled assets.
+          here="$(cd "$(dirname "$0")" && pwd)"
+          export TALUNOR_VECTOR_EXT="${here}/ext/vector"
+          export TALUNOR_AI_EXT="${here}/ext/ai"
+          export TALUNOR_EMBED_MODEL="${here}/ext/models/all-MiniLM-L6-v2.f16.gguf"
+          exec "${here}/talunor" "$@"
+          SH
+          chmod +x "${DIR}/run.sh" "${DIR}/talunor"
+          tar -czf "${DIR}.tar.gz" "${DIR}"
+
+      - name: Calculate SHA256
+        run: sha256sum talunor-*-linux-amd64.tar.gz > SHA256.txt
+
+      - name: Upload Release Asset
+        # softprops/action-gh-release v2.2.2 — pinned to commit SHA to prevent
+        # supply-chain attacks (matches go-cloud-k8s-poc-2026).
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
+        with:
+          body: |
+            **Talunor ${{ env.RELEASE_VERSION }}** — self-contained linux/amd64 bundle
+            (binary + SQLite extensions + embedding model).
+
+            ```
+            tar xzf talunor-${{ env.RELEASE_VERSION }}-linux-amd64.tar.gz
+            cd talunor-${{ env.RELEASE_VERSION }}-linux-amd64
+            ./run.sh            # TUI   (./run.sh --plain for the REPL)
+            ```
+
+            Requires a local [Ollama](https://ollama.com) for chat, plus
+            `libstdc++6` on the host (embeddings run offline from the bundled model).
+            For a zero-dependency option use the container image (see the README).
+          files: |
+            talunor-*-linux-amd64.tar.gz
+            SHA256.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

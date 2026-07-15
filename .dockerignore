@@ -1,0 +1,11 @@
+# Keep the build context small and reproducible.
+.git
+.github
+bin/
+# ext/ is fetched fresh inside the build (make deps); never copy a local copy.
+ext/
+# Local databases and scratch.
+*.db
+*.db-shm
+*.db-wal
+dist/

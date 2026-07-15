@@ -10,6 +10,44 @@ reads as a guided tour of how to build a full cognitive-loop agent
 > conversational agent with multi-tier memory and a Bubble Tea TUI. See
 > [CHANGELOG.md](CHANGELOG.md) for the version-by-version build log and lessons.
 
+## Run without building
+
+Each release (git tag `vX.Y.Z`) ships two prebuilt, self-contained artifacts so
+you can try any iteration without a Go/C toolchain or `make deps`. Both bundle
+the SQLite extensions **and** the embedding model, so memory works offline — only
+the **chat** needs a local [Ollama](https://ollama.com) (default model
+`qwen3:latest`). Linux **amd64** only (the sqliteai extensions are x86_64-only).
+
+**Container image** (Docker or, with Rancher Desktop, `nerdctl` — same commands):
+
+```bash
+# Pull and run the TUI. --network host lets the container reach the host's Ollama
+# on localhost:11434; -v keeps long-term memory across runs.
+docker run --rm -it --network host -v talunor-data:/data ghcr.io/lao-tseu-is-alive/talunor:latest
+nerdctl run --rm -it --network host -v talunor-data:/data ghcr.io/lao-tseu-is-alive/talunor:latest
+
+# Pin a version, or run the plain REPL / inspect memory:
+docker run --rm -it --network host -v talunor-data:/data ghcr.io/lao-tseu-is-alive/talunor:v0.5.5 --plain
+```
+
+- **TTY:** the TUI needs `-it`. Without it, use `--plain` for the line REPL.
+- **Reaching Ollama:** `--network host` works on Linux. On a bridge network
+  instead, add `--add-host=host.docker.internal:host-gateway` and
+  `-e TALUNOR_OLLAMA_URL=http://host.docker.internal:11434/v1`.
+- Build the image locally: `make nerdctl-build && make nerdctl-run` (or the
+  `docker-*` equivalents).
+
+**Standalone bundle** (a `.tar.gz` on each GitHub Release):
+
+```bash
+tar xzf talunor-v0.5.5-linux-amd64.tar.gz
+cd talunor-v0.5.5-linux-amd64
+./run.sh            # TUI  (./run.sh --plain for the REPL)
+```
+
+The bundle needs `libstdc++6` on the host (the `ai.so` embedding runtime links
+it); the container image needs nothing. Verify downloads against `SHA256.txt`.
+
 ## Why it's interesting
 
 - **Embeddings run *inside* SQLite.** A GGUF model (`all-MiniLM-L6-v2`, 384-dim)
@@ -235,7 +273,9 @@ internal/render/       shared streaming console renderer
 internal/tui/          Bubble Tea + Glamour front-end
 internal/version/      build identity
 ext/                   fetched .so extensions + GGUF model (gitignored)
-Makefile               deps / doctor / chat / run / test / build
+Makefile               deps / doctor / chat / run / test / build / docker-*
+Dockerfile             self-contained image (binary + extensions + model)
+.github/workflows/     CI (build+test), Release (bundle), Docker-publish, CVE scan
 CHANGELOG.md           version-by-version build log + lessons
 AGENTS.md              orientation guide for AI/human contributors
 ```

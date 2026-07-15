@@ -70,11 +70,26 @@ make test     # go test ./...   (memory/agent/tui tests SKIP if deps missing)
 make chat PROMPT="…"   # LLM streaming smoke (needs Ollama)
 make run      # the agent TUI (needs Ollama)
 make build    # -> bin/  (injects version via -ldflags)
+make nerdctl-build && make nerdctl-run   # self-contained image (or docker-*)
 ```
 
 - **`CGO_ENABLED=1` is mandatory** (the SQLite extensions are C). gcc required.
 - Extensions/model are **not vendored**; `make deps` fetches them into `ext/`
   (Linux x86_64 assets are pinned in the `Makefile`).
+
+## CI/CD & packaging (`.github/workflows/`, `Dockerfile`)
+
+- **`ci.yml`** (push/PR to main): `make deps` + `go vet` + `go test` (cgo; caches
+  `ext/`). **`cve-trivy-scan.yml`** (main + weekly): builds the image, Trivy scan,
+  fails on fixable HIGH/CRITICAL.
+- **Tag `vX.Y.Z`** fires two publishers: **`release.yml`** uploads a
+  self-contained linux/amd64 `.tar.gz` (binary + extensions + model + `run.sh`) to
+  the GitHub Release; **`docker-publish.yml`** builds, Trivy-scans/gates, and
+  pushes `ghcr.io/lao-tseu-is-alive/talunor` (`{{version}}` + `sha` tags).
+- **`Dockerfile`** is multi-stage (golang trixie builder runs `make deps` + cgo
+  build → debian trixie-slim runtime with `libstdc++6`), baking the extensions +
+  model in. **amd64-only** (sqliteai ships no arm64 assets). Third-party action
+  versions are pinned to commit SHAs (supply-chain), matching go-cloud-k8s-poc-2026.
 
 ## Environment variables
 

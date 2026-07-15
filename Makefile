@@ -22,7 +22,11 @@ GIT_COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_DATE  := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS     := -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(BUILD_DATE)
 
-.PHONY: deps doctor build tidy clean distclean
+# Container image (local builds). IMAGE overridable; nerdctl for Rancher Desktop.
+IMAGE ?= talunor:local
+
+.PHONY: deps doctor build tidy clean distclean \
+        docker-build docker-run nerdctl-build nerdctl-run
 
 ## deps: download the SQLite extensions and the embedding model into ext/
 deps: ext/vector.so ext/ai.so $(EMBED_MODEL)
@@ -63,6 +67,22 @@ chat:
 ## run: start the interactive agent REPL (persistent memory across sessions)
 run: deps
 	go run -ldflags "$(LDFLAGS)" ./cmd/talunor
+
+## docker-build: build the self-contained image (binary + extensions + model)
+docker-build:
+	docker build --build-arg COMMIT=$(GIT_COMMIT) --build-arg BUILD_DATE=$(BUILD_DATE) -t $(IMAGE) .
+
+## docker-run: run the TUI from the image (needs a TTY + a local Ollama)
+docker-run:
+	docker run --rm -it --network host -v talunor-data:/data $(IMAGE)
+
+## nerdctl-build: same as docker-build, via nerdctl (Rancher Desktop / containerd)
+nerdctl-build:
+	nerdctl build --build-arg COMMIT=$(GIT_COMMIT) --build-arg BUILD_DATE=$(BUILD_DATE) -t $(IMAGE) .
+
+## nerdctl-run: run the TUI from the image via nerdctl
+nerdctl-run:
+	nerdctl run --rm -it --network host -v talunor-data:/data $(IMAGE)
 
 ## tidy: sync go.mod/go.sum
 tidy:

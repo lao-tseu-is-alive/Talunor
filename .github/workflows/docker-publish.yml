@@ -1,0 +1,115 @@
+name: Docker-publish
+
+on:
+  push:
+    # Triggers only on semantic version tags.
+    tags: [ 'v[0-9]+.[0-9]+.[0-9]+' ]
+
+env:
+  REGISTRY: ghcr.io
+  # github.repository as <account>/<repo>; metadata-action lowercases it for ghcr.
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-scan-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write # required for uploading SARIF results.
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build metadata
+        run: echo "BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Setup Docker buildx
+        # docker/setup-buildx-action v3 — pinned to commit SHA (supply-chain).
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        # docker/login-action v3 — pinned to commit SHA (supply-chain).
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 1. Build the image locally first, so it can be scanned before any push.
+      #    The Dockerfile runs `make deps` + the cgo build; nothing to prebuild.
+      - name: Build local image
+        # docker/build-push-action v5 — pinned to commit SHA (supply-chain).
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: .
+          load: true # load into the local docker daemon instead of pushing.
+          tags: talunor:test
+          build-args: |
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 2. Install a known-good Trivy (see the 2026 supply-chain incident).
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          trivy-version: '0.69.3' # Avoid v0.69.1 and the malicious 0.69.4.
+
+      # 3. Scan the built image and report to the Security tab.
+      - name: Run Trivy vulnerability scanner
+        # aquasecurity/trivy-action — pinned to commit SHA (supply-chain).
+        uses: aquasecurity/trivy-action@cf5c088a69634cd13ccddc735d7926162c31f9a6
+        with:
+          image-ref: 'talunor:test'
+          severity: 'MEDIUM,CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          trivy-version: '0.69.3'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      # 4. Gate: fail (and block the push) on fixable HIGH/CRITICAL. Runs after
+      #    the SARIF upload so findings still reach the Security tab on failure;
+      #    reuses the DB cached above (skip-db-update) so it is fast.
+      - name: Fail on HIGH/CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@cf5c088a69634cd13ccddc735d7926162c31f9a6
+        with:
+          image-ref: 'talunor:test'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: 'table'
+          exit-code: '1'
+          skip-db-update: true
+          trivy-version: '0.69.3'
+
+      # 5. Push — only reached when the scan gate passed.
+      - name: Extract Docker metadata
+        id: meta
+        # docker/metadata-action v5 — pinned to commit SHA (supply-chain).
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha
+
+      - name: Build and push Docker image
+        # docker/build-push-action v5 — pinned to commit SHA (supply-chain).
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

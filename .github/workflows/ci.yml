@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build & test (cgo)
+    runs-on: ubuntu-latest
+    env:
+      # Talunor is cgo (mattn/go-sqlite3 + the loadable extensions).
+      CGO_ENABLED: "1"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          # Single source of truth: the version required in go.mod.
+          go-version-file: go.mod
+      - run: go version
+
+      # The two SQLite extensions and the GGUF model are fetched, not vendored.
+      # Cache them across runs, keyed on the versions pinned in the Makefile.
+      - name: Cache fetched extensions + model
+        uses: actions/cache@v4
+        with:
+          path: ext
+          key: talunor-ext-${{ hashFiles('Makefile') }}
+
+      - name: Fetch extensions + embedding model
+        run: make deps
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -v ./...
