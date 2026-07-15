@@ -21,19 +21,34 @@ the **chat** needs a local [Ollama](https://ollama.com) (default model
 **Container image** (Docker or, with Rancher Desktop, `nerdctl` — same commands):
 
 ```bash
-# Pull and run the TUI. --network host lets the container reach the host's Ollama
-# on localhost:11434; -v keeps long-term memory across runs.
-docker run --rm -it --network host -v talunor-data:/data ghcr.io/lao-tseu-is-alive/talunor:latest
-nerdctl run --rm -it --network host -v talunor-data:/data ghcr.io/lao-tseu-is-alive/talunor:latest
+# The container reaches your host's Ollama via host.docker.internal (works with
+# Rancher Desktop, Docker Desktop, and — thanks to --add-host — native Docker on
+# Linux). -v keeps long-term memory across runs. `docker run …` is identical.
+nerdctl run --rm -it \
+  --add-host=host.docker.internal:host-gateway \
+  -e TALUNOR_OLLAMA_URL=http://host.docker.internal:11434/v1 \
+  -v talunor-data:/data \
+  ghcr.io/lao-tseu-is-alive/talunor:latest
 
-# Pin a version, or run the plain REPL / inspect memory:
-docker run --rm -it --network host -v talunor-data:/data ghcr.io/lao-tseu-is-alive/talunor:v0.5.7 --plain
+# Pin a version, or run the plain REPL / inspect memory (add --plain / --list 10):
+nerdctl run --rm -it --add-host=host.docker.internal:host-gateway \
+  -e TALUNOR_OLLAMA_URL=http://host.docker.internal:11434/v1 \
+  -v talunor-data:/data ghcr.io/lao-tseu-is-alive/talunor:v0.5.7 --plain
 ```
 
+- **⚠️ Ollama must accept non-local connections.** By default it listens on
+  `127.0.0.1:11434`, which a container cannot reach. Bind it to all interfaces:
+  set `OLLAMA_HOST=0.0.0.0:11434` and restart. For the systemd service:
+  `sudo systemctl edit ollama` → add `Environment="OLLAMA_HOST=0.0.0.0:11434"` →
+  `sudo systemctl restart ollama` (confirm with `ss -tlnp | grep 11434`). This
+  exposes Ollama to your LAN — on an untrusted network, bind to the specific
+  bridge IP instead.
+- **`--network host` is *not* the shortcut here.** With **native Docker Engine on
+  Linux** it works (`localhost:11434`, no env needed) because the container shares
+  the real host network. Under **Rancher Desktop / Docker Desktop** the container
+  runs in a VM, so `--network host` is the VM's network and `localhost` finds
+  nothing — use `host.docker.internal` as above.
 - **TTY:** the TUI needs `-it`. Without it, use `--plain` for the line REPL.
-- **Reaching Ollama:** `--network host` works on Linux. On a bridge network
-  instead, add `--add-host=host.docker.internal:host-gateway` and
-  `-e TALUNOR_OLLAMA_URL=http://host.docker.internal:11434/v1`.
 - Build the image locally: `make nerdctl-build && make nerdctl-run` (or the
   `docker-*` equivalents).
 

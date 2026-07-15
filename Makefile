@@ -72,9 +72,15 @@ run: deps
 docker-build:
 	docker build --build-arg COMMIT=$(GIT_COMMIT) --build-arg BUILD_DATE=$(BUILD_DATE) -t $(IMAGE) .
 
+# Reach the host's Ollama from inside the container. host.docker.internal works
+# on Rancher Desktop / Docker Desktop and, via --add-host, native Docker on Linux.
+# NB: Ollama must listen on 0.0.0.0 (OLLAMA_HOST=0.0.0.0:11434), not just 127.0.0.1.
+RUN_NET := --add-host=host.docker.internal:host-gateway \
+           -e TALUNOR_OLLAMA_URL=http://host.docker.internal:11434/v1
+
 ## docker-run: run the TUI from the image (needs a TTY + a local Ollama)
 docker-run:
-	docker run --rm -it --network host -v talunor-data:/data $(IMAGE)
+	docker run --rm -it $(RUN_NET) -v talunor-data:/data $(IMAGE)
 
 ## nerdctl-build: same as docker-build, via nerdctl (Rancher Desktop / containerd)
 nerdctl-build:
@@ -82,7 +88,7 @@ nerdctl-build:
 
 ## nerdctl-run: run the TUI from the image via nerdctl
 nerdctl-run:
-	nerdctl run --rm -it --network host -v talunor-data:/data $(IMAGE)
+	nerdctl run --rm -it $(RUN_NET) -v talunor-data:/data $(IMAGE)
 
 ## tidy: sync go.mod/go.sum
 tidy:
