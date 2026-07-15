@@ -14,6 +14,69 @@ changed but the *lessons learned* while getting there.
 - **Iteration 2** — tools & actions: a tool registry and a ReAct-style
   act/observe loop, so the agent can *do* things, not just talk.
 
+## [0.5.6] - 2026-07-15 — CI/CD, container image & release bundles
+
+Makes every tagged iteration installable **without a Go/C toolchain or
+`make deps`**, so people can try Talunor by pulling an image or a bundle. No
+application code changed — this is packaging and supply-chain plumbing.
+
+### Added
+
+- **`Dockerfile`** — a self-contained, multi-stage image. Both stages use Debian
+  **trixie** (its newer glibc satisfies both the prebuilt sqliteai extensions and
+  the cgo Go binary); the builder runs `make deps` + the cgo build, the
+  trixie-slim runtime adds only `libstdc++6` (the single extra library `ai.so`
+  needs) and bakes the extensions **and** the embedding model in. Embeddings run
+  offline; only chat needs a reachable Ollama. **linux/amd64 only** — sqliteai
+  publishes no arm64 extension assets. `.dockerignore` excludes `ext/` so the
+  build fetches fresh assets rather than copying a local checkout.
+- **GitHub Actions** (`.github/workflows/`):
+  - `ci.yml` (push/PR to main) — `make deps` + `go vet` + `go test` under cgo,
+    caching `ext/`.
+  - `release.yml` (tag `vX.Y.Z`) — builds a linux/amd64 binary and a
+    **self-contained bundle** tarball (binary + extensions + model + `run.sh`)
+    with a `SHA256.txt`, attached to the GitHub Release.
+  - `docker-publish.yml` (tag `vX.Y.Z`) — builds the image, Trivy-scans it,
+    **gates on fixable HIGH/CRITICAL**, and pushes
+    `ghcr.io/lao-tseu-is-alive/talunor` (`{{version}}` + `sha` tags).
+  - `cve-trivy-scan.yml` (main + weekly cron) — builds the image and runs the
+    same scan+gate, so CVEs that land against already-shipped images turn the
+    build red.
+  Third-party actions are pinned to commit SHAs (supply-chain), mirroring
+  `go-cloud-k8s-poc-2026`.
+- **Makefile** `docker-build`/`docker-run` + `nerdctl-build`/`nerdctl-run` for
+  local image use (Rancher Desktop / containerd).
+- **README** "Run without building" (image + bundle, Ollama networking, TTY,
+  persistence); **AGENTS.md** CI/CD section.
+
+### Fixed
+
+- **Security:** the first CVE scan gated on **4 fixable HIGH** advisories in the
+  transitive dependency `golang.org/x/net` v0.38.0 (x/net/html XSS
+  CVE-2026-25681 / CVE-2026-27136, HTTP/2 DoS CVE-2026-33814, idna
+  CVE-2026-39821); the Debian base scanned clean. Bumped `golang.org/x/net` to
+  **v0.55.0** (pulling `x/sys`, `x/term`, `x/text` forward too).
+- **Workflow:** the Trivy version pin used the wrong input name (`trivy-version`,
+  silently ignored) and then the wrong form; the `setup-trivy` input is
+  `version: 'v0.71.2'` (tag form, with the `v`).
+
+### Lessons learned
+
+1. **cgo changes the whole packaging story.** A static Go service ships as a lone
+   binary; Talunor's binary dlopens two extensions and loads a model, so the
+   honest artifact is a **self-contained image** that bundles all three — and the
+   runtime base must carry `libstdc++6`. A "download the binary" release is only
+   useful if it ships its runtime dependencies alongside.
+2. **Match the runtime glibc to the prebuilt native assets.** The sqliteai `.so`s
+   were linked against an older glibc; a newer base (trixie) runs them via
+   backward compatibility, whereas an older base could be missing symbols.
+3. **A CVE gate proves itself immediately or never.** It caught an out-of-date
+   transitive dependency on the very first run — exactly the drift a scheduled
+   re-scan is meant to surface on shipped images.
+4. **Pin the *scanner* version too, with the exact input contract.** A pin that
+   silently no-ops (wrong input name / missing `v` prefix) gives false assurance;
+   verify the tool actually honoured it.
+
 ## [0.5.5] - 2026-07-15 — Semantic memory: reflection distils facts (Fix B)
 
 A follow-up to 0.5.4. Fix A stopped the agent's own questions from polluting
@@ -511,7 +574,8 @@ The persistence substrate for Talunor's memory, proven end to end
 - `CGO_ENABLED=1` and a C toolchain (gcc).
 - `make deps` before first build (downloads ~52 MB of extensions + model).
 
-[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.6...HEAD
+[0.5.6]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/lao-tseu-is-alive/Talunor/compare/v0.5.2...v0.5.3
