@@ -49,8 +49,11 @@ internal/config/   minimal dependency-free .env loader (real env wins)
 internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/observe
                    loop)→store→reflect. runLoop offers Config.Tools, executes
                    tool calls, feeds observations back (MaxToolIters cap), streams
-                   the final answer. reflect.go = FactExtractor (LLM distils facts
-                   into KindFact; DisableReflection()). Slash-command helpers too.
+                   the final answer (an unanswered tool-loop that hits MaxToolIters
+                   ends with an explicit error, never silently). reflect.go =
+                   FactExtractor (LLM distils facts into KindFact;
+                   DisableReflection()). Optional Config.Debug (slog) traces
+                   recall/tools/reflection. Slash-command helpers too.
 internal/tools/    action layer: Tool interface + Registry; builtins Calculator
                    (AST-safe), Clock, RecallMemory (searches the store), Bash
                    (sandboxed shell; RequiresApproval=true, opt-in TALUNOR_BASH).
@@ -61,7 +64,10 @@ internal/sandbox/  runs an untrusted script under limits; Sandbox iface + FromEn
                    seccomp). Non-zero exit = output, not error. Linux files carry
                    //go:build linux; namespaces_other.go stubs elsewhere
 internal/render/   shared console stream renderer (reasoning dimmed, answer bright)
-internal/tui/      Bubble Tea + Glamour front-end
+internal/tui/      Bubble Tea + Glamour front-end (↑/↓ = prompt-history recall;
+                   transcript scroll on PgUp/PgDn + Ctrl-U/D)
+internal/history/  persistent, deduplicated prompt history (JSON-per-line next to
+                   the DB; unique entries, temp-file+rename write, capped)
 internal/version/  build identity (Version const; Commit/Date via -ldflags)
 ext/               fetched .so extensions + GGUF model (gitignored)
 ```
@@ -121,6 +127,7 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_MODEL` | model for the selected provider | provider default |
 | `TALUNOR_REFLECT` | `0` disables per-turn reflection (cost on paid APIs) | `1` |
 | `TALUNOR_TOOLS` | `0` disables tools (model without tool-calling support) | `1` |
+| `TALUNOR_DEBUG` | trace recall/tools/reflection: `1` → log file next to DB, `stderr`, or a path | off |
 | `TALUNOR_BASH` | `1` enables the sandboxed, approval-gated `bash` tool | `0` |
 | `TALUNOR_SANDBOX` | bash backend: `nerdctl`/`docker` or `namespaces` (unset = auto) | auto |
 | `TALUNOR_SANDBOX_IMAGE` | image for the runtime backend | `alpine:3.20` |
@@ -221,6 +228,9 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   (`tools.Approvable`, human y/n in TUI/REPL — Iteration 3 guardrail brought
   forward); v0.9.0 = sandboxed `bash` tool (`internal/sandbox`, nerdctl +
   rootless-namespaces backends, behind the gate, network-off) — **completes
-  Iteration 2**. Next — Layer 10: a `web_fetch` tool (restricted network opt-in),
+  Iteration 2**. **v0.9.1 (patch)** = review quick-wins: bounded tool loop (no
+  silent turns), persistent prompt history (`internal/history`, ↑/↓), `TALUNOR_DEBUG`
+  trace, `make deps` checksums + `curl -f` hardening, non-root distroless image.
+  Next — Layer 10: a `web_fetch` tool (restricted network opt-in),
   then Iteration 3 planning/policy (à la pi-go/Claude), then learning/reflection.
   Same per-layer checkpoint rhythm.
