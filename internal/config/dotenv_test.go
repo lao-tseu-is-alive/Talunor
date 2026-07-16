@@ -37,9 +37,9 @@ ALREADY_SET=from_file
 	}
 
 	checks := map[string]string{
-		"TALUNOR_PROVIDER":         "openrouter",              // export stripped
+		"TALUNOR_PROVIDER":         "openrouter",                // export stripped
 		"TALUNOR_MODEL":            "anthropic/claude-sonnet-4", // quotes + spaces trimmed
-		"QUOTED_SINGLE":            "hello world",             // single quotes stripped
+		"QUOTED_SINGLE":            "hello world",               // single quotes stripped
 		"EMPTY_LINE_ABOVE_IGNORED": "yes",
 		"ALREADY_SET":              "from_env", // real env wins
 	}

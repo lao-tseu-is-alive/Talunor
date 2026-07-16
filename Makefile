@@ -54,7 +54,7 @@ LDFLAGS     := -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(B
 # Container image (local builds). IMAGE overridable; nerdctl for Rancher Desktop.
 IMAGE ?= talunor:local
 
-.PHONY: deps doctor build tidy clean distclean \
+.PHONY: deps doctor build test release-check tidy clean distclean \
         docker-build docker-run nerdctl-build nerdctl-run
 
 ## deps: download the SQLite extensions and the embedding model into ext/
@@ -90,6 +90,30 @@ build: deps
 ## test: run the test suite (skips memory tests if deps are missing)
 test:
 	go test ./...
+
+## release-check: pre-release gate (run before `git tag`). Bundles the AGENTS.md
+## ritual — gofmt, vet, tests — plus guards for the class of bug that only bites a
+## release: a dropped fetch target (v0.9.1 lost the model this way) and a drifted
+## asset checksum. Offline: it re-verifies the ext/ already on disk rather than
+## re-downloading. The heavier, networked proof is a clean-room `make nerdctl-build`.
+release-check: deps
+	@echo "==> gofmt (no diffs allowed)"
+	@bad="$$(gofmt -l .)"; [ -z "$$bad" ] || { echo "needs gofmt:"; echo "$$bad"; exit 1; }
+	@echo "==> go vet"
+	@go vet ./...
+	@echo "==> go test"
+	@go test ./... -count=1
+	@echo "==> fetch targets intact (no asset silently dropped from 'deps')"
+	@[ -n "$(EMBED_MODEL)" ] || { echo "EMBED_MODEL is empty — a fetch target was dropped"; exit 1; }
+	@for a in ext/vector.so ext/ai.so $(EMBED_MODEL); do \
+	  $(MAKE) --no-print-directory -Bn deps | grep -q "$$a" \
+	    || { echo "'deps' no longer builds $$a"; exit 1; }; \
+	done
+	@echo "==> re-verify checksums of the fetched artefacts"
+	$(call verify_sha256,$(VECTOR_SHA256),ext/vector.so)
+	$(call verify_sha256,$(AI_SHA256),ext/ai.so)
+	$(call verify_sha256,$(EMBED_SHA256),$(EMBED_MODEL))
+	@echo "release-check: OK"
 
 ## chat: stream one prompt to a local Ollama model (LLM provider smoke test)
 ##   usage: make chat PROMPT="explain vector search in one sentence"

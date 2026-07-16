@@ -53,10 +53,10 @@ func (p *scriptedProvider) Chat(_ context.Context, _ []llm.Message, _ llm.Option
 // dangerTool is a gated fake tool that records whether it ran.
 type dangerTool struct{ ran *bool }
 
-func (dangerTool) Name() string                    { return "danger" }
-func (dangerTool) Description() string              { return "side effects" }
-func (dangerTool) Schema() json.RawMessage          { return json.RawMessage(`{"type":"object"}`) }
-func (dangerTool) RequiresApproval() bool           { return true }
+func (dangerTool) Name() string            { return "danger" }
+func (dangerTool) Description() string     { return "side effects" }
+func (dangerTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (dangerTool) RequiresApproval() bool  { return true }
 func (d dangerTool) Execute(context.Context, json.RawMessage) (string, error) {
 	*d.ran = true
 	return "ok", nil

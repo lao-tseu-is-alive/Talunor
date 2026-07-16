@@ -24,9 +24,14 @@ Module: `github.com/lao-tseu-is-alive/Talunor` · Go 1.26 · **cgo required**.
   1. Bump `Version` in `internal/version/version.go`.
   2. Add a `CHANGELOG.md` section **including a "Lessons learned" subsection** —
      this is the whole point; capture what was non-obvious.
-  3. Sync `README.md` (status table, quickstart, env, layout).
-  4. `gofmt`, `go vet ./...`, `go test ./...` all clean.
+  3. Sync `README.md` (status table, quickstart, env, layout) **and this file**
+     (`AGENTS.md`: env table, package map, roadmap).
+  4. **`make release-check`** must pass: gofmt + vet + tests, *plus* guards that no
+     fetch target was silently dropped and the pinned checksums still match. For a
+     networked, clean-room proof also run `make nerdctl-build`.
   5. Commit, then `git tag -a vX.Y.Z`, then push branch **and** tag to `origin`.
+     The tag is the public release trigger, so run step 4 *before* tagging — green
+     CI is not enough (CI does not exercise the release bundle step).
 - **Linear history on `main`** — the user wants tags pushed directly to `main`,
   no PR branch. Commit messages: Conventional-Commits style, end with the
   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` trailer.
@@ -88,6 +93,7 @@ that implements `tools.Approvable` pauses the loop: the agent emits an
 make deps     # REQUIRED once: downloads ext/{vector,ai}.so + the GGUF model (~52MB)
 make doctor   # smoke-test the memory substrate
 make test     # go test ./...   (memory/agent/tui tests SKIP if deps missing)
+make release-check  # pre-release gate: gofmt + vet + test + dep/checksum guards
 make chat PROMPT="…"   # LLM streaming smoke (needs Ollama)
 make run      # the agent TUI (needs Ollama)
 make build    # -> bin/  (injects version via -ldflags)

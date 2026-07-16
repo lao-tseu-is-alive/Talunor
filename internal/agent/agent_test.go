@@ -61,10 +61,10 @@ type fakeTool struct {
 	ran      *bool
 }
 
-func (fakeTool) Name() string                 { return "danger" }
-func (fakeTool) Description() string           { return "a side-effecting tool" }
-func (fakeTool) Schema() json.RawMessage       { return json.RawMessage(`{"type":"object"}`) }
-func (f fakeTool) RequiresApproval() bool      { return f.approval }
+func (fakeTool) Name() string             { return "danger" }
+func (fakeTool) Description() string      { return "a side-effecting tool" }
+func (fakeTool) Schema() json.RawMessage  { return json.RawMessage(`{"type":"object"}`) }
+func (f fakeTool) RequiresApproval() bool { return f.approval }
 func (f fakeTool) Execute(context.Context, json.RawMessage) (string, error) {
 	*f.ran = true
 	return "did the thing", nil
