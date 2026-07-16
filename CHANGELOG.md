@@ -127,6 +127,13 @@ A hardening + quality-of-life patch on top of Iteration 2, working through the
    `slog` seam turns the loop's silent choices (why *this* memory recalled, why
    reflection stored nothing) into a readable trace — cheap to add, and it makes
    the "invisible" middle of the agent legible to a learner without a heavy stack.
+9. **Test the cold path, not the warm one.** The checksum edit accidentally
+   dropped the `EMBED_MODEL` Make variable, so `make deps` silently stopped
+   fetching the model — invisible locally because the file already existed and the
+   fast-path reported "nothing to do". Only the release runner's clean checkout
+   caught it. When a change touches a build's *fetch* step, exercise it from
+   empty. (Follow-up: the release workflow now caches `ext/`, so third-party
+   assets are fetched once and reused, not re-downloaded on every tag.)
 
 ## [0.9.0] - 2026-07-15 — Sandboxed `bash`: a tool that can run anything, safely
 

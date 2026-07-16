@@ -27,8 +27,18 @@ jobs:
           go-version-file: go.mod
       - run: go version
 
-      # Fetch the loadable extensions and the embedding model — they are bundled
-      # into the release archive so it runs without `make deps`.
+      # The loadable extensions + embedding model are bundled into the release
+      # archive, but they are third-party assets, not project source. Cache them
+      # across runs (keyed on the versions/checksums pinned in the Makefile) so a
+      # release only re-downloads when a version bumps — not every tag. This keeps
+      # releases fast and resilient to a flaky upstream mirror (e.g. HuggingFace).
+      - name: Cache fetched extensions + model
+        uses: actions/cache@v4
+        with:
+          path: ext
+          key: talunor-ext-${{ hashFiles('Makefile') }}
+
+      # A cache hit makes this a no-op (files present); a miss downloads + verifies.
       - name: Fetch extensions + embedding model
         run: make deps
 

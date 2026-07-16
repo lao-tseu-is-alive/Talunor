@@ -11,6 +11,7 @@ AI_URL       := https://github.com/sqliteai/sqlite-ai/releases/download/$(AI_VER
 VECTOR_URL   := https://github.com/sqliteai/sqlite-vector/releases/download/$(VECTOR_VERSION)/$(VECTOR_ASSET)
 
 # all-MiniLM-L6-v2, 384-dim sentence embeddings, F16 GGUF.
+EMBED_MODEL := ext/models/all-MiniLM-L6-v2.f16.gguf
 # NOTE: this URL tracks the *mutable* `main` ref — HuggingFace can re-upload the
 # file, which would trip EMBED_SHA256 by design (fail-closed). The GitHub release
 # assets above are immutable by tag; the model is not. If the pin ever fails on a
