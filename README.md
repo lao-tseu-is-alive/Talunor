@@ -418,11 +418,15 @@ internal/version/      build identity
 ext/                   fetched .so extensions + GGUF model (gitignored)
 Makefile               deps / doctor / chat / run / test / build / docker-*
 Dockerfile             self-contained image (binary + extensions + model)
+docs/atlas.md          full annotated map of every tracked file (see below)
 docs/ollama-networking.md  reaching a loopback Ollama from the container (secure)
 .github/workflows/     CI (build+test), Release (bundle), Docker-publish, CVE scan
 CHANGELOG.md           version-by-version build log + lessons
 AGENTS.md              orientation guide for AI/human contributors
 ```
+
+This sketch is abridged; for a **complete, annotated map of every directory and
+file** — each with a one-line purpose — see **[`docs/atlas.md`](docs/atlas.md)**.
 
 ## Supply chain & CI
 
