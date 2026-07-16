@@ -6,13 +6,14 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.9.0** — Iterations 1 & 2 complete. The agent talks to
-> local **Ollama** or hosted **OpenRouter** models (via `.env`) and *acts* — a
-> ReAct tool loop (calculator, clock, memory search) with a human-in-the-loop
-> **approval gate**, plus an opt-in, sandboxed **`bash`** tool that runs shell
-> commands in a network-less throwaway container (nerdctl or a rootless
-> user-namespace backend). See [CHANGELOG.md](CHANGELOG.md) for the
-> version-by-version build log and lessons.
+> Current version: **v0.10.1** — Iterations 1 & 2 complete, plus Layer 10. The
+> agent talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and
+> *acts* — a ReAct tool loop (calculator, clock, memory search) with a
+> human-in-the-loop **approval gate**, an opt-in sandboxed **`bash`** tool that
+> runs shell commands in a network-less throwaway container (nerdctl or a rootless
+> user-namespace backend), and an opt-in, SSRF-guarded **`web_fetch`** tool (the
+> network opt-in). See [CHANGELOG.md](CHANGELOG.md) for the version-by-version
+> build log and lessons.
 
 ## Run without building
 

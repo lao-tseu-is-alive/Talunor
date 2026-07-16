@@ -54,7 +54,7 @@ LDFLAGS     := -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(B
 # Container image (local builds). IMAGE overridable; nerdctl for Rancher Desktop.
 IMAGE ?= talunor:local
 
-.PHONY: deps doctor build test release-check atlas-check tidy clean distclean \
+.PHONY: deps doctor build test release-check atlas-check readme-check tidy clean distclean \
         docker-build docker-run nerdctl-build nerdctl-run
 
 ## deps: download the SQLite extensions and the embedding model into ext/
@@ -115,6 +115,8 @@ release-check: deps
 	$(call verify_sha256,$(EMBED_SHA256),$(EMBED_MODEL))
 	@echo "==> atlas coverage (docs/atlas.md references every tracked file)"
 	@$(MAKE) --no-print-directory atlas-check
+	@echo "==> README version banner matches internal/version"
+	@$(MAKE) --no-print-directory readme-check
 	@echo "release-check: OK"
 
 ## atlas-check: fail if docs/atlas.md doesn't reference every tracked file, so a
@@ -131,6 +133,16 @@ atlas-check:
 	done; \
 	[ "$$missing" = 0 ] || { echo "docs/atlas.md is stale — regenerate it (repo-atlas skill)"; exit 1; }
 	@echo "atlas-check: OK"
+
+## readme-check: fail if the README "Current version" banner drifts from the
+## Version constant in internal/version (the source of truth, bumped before this
+## gate runs — so it checks the constant, not a git tag that doesn't exist yet).
+## Update the banner line whenever you bump the version.
+readme-check:
+	@ver=$$(grep -oE 'Version = "[0-9]+\.[0-9]+\.[0-9]+"' internal/version/version.go | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'); \
+	  grep -q "Current version: \*\*v$$ver\*\*" README.md \
+	    || { echo "README 'Current version' banner != v$$ver (internal/version) — update it"; exit 1; }; \
+	  echo "readme-check: OK (v$$ver)"
 
 ## chat: stream one prompt to a local Ollama model (LLM provider smoke test)
 ##   usage: make chat PROMPT="explain vector search in one sentence"
