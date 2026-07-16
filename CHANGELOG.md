@@ -11,10 +11,68 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Layer 10, next** — a `web_fetch` tool that opts *into* a restricted network
-  (allowlist + timeout), reusing the sandbox / approval machinery.
-- **Iteration 3, later** — an explicit planner before multi-step actions; policy
-  checks for which tools/args are auto-allowed vs. need approval.
+- **Iteration 3, next** — an explicit planner before multi-step actions; policy
+  checks for which tools/args are auto-allowed vs. need approval (generalising the
+  per-call approval gate that Layer 10 introduced).
+
+## [0.10.0] - 2026-07-16 — Layer 10: `web_fetch`, the network opt-IN
+
+The agent gains the counterweight to the network-off bash sandbox: a tool that
+reaches the internet **under a tight leash**. Where bash needs a *kernel* boundary
+(it runs untrusted code), `web_fetch` needs an *application-layer* policy — the
+fetched bytes never execute, they are handed to the model as text, so the real
+risks are **SSRF** (tricking the agent into hitting an internal service) and
+**resource abuse** (huge/slow responses). This layer defends against both. It is
+**off by default** (`TALUNOR_WEBFETCH=1`) and **approval-gated**.
+
+### Added
+
+- **`internal/webfetch`** — a guarded HTTP fetcher.
+  - **SSRF guard.** Rather than resolve → check → connect (which leaves a
+    DNS-rebinding window), the guard runs inside the dialer's `Control` hook,
+    which fires with the *actual resolved address* right before connect — so the
+    IP vetted is the IP dialled, on the initial request **and every redirect**.
+    `blockedIP` (a pure, table-tested function) refuses loopback, private (RFC1918
+    + ULA), link-local (incl. the `169.254.169.254` cloud-metadata address), CGNAT
+    (RFC6598), unspecified, and multicast — failing closed on anything it can't
+    classify.
+  - **Limits** (`DefaultLimits`): 10s timeout, **512 KiB** body cap (`io.LimitReader`
+    + truncation flag), 5 redirects, http+https only (other schemes — `file`,
+    `gopher`, `data`, … — rejected). Non-text content-types are reported by
+    metadata only, so binaries never flood the model's context.
+- **`tools.WebFetch`** — the tool: `{url}` schema, formats the fetch into an
+  observation (final URL + status + content-type + capped body). Wired in
+  `cmd/talunor` behind `TALUNOR_WEBFETCH`; the address guard applies unconditionally.
+- **`tools.ApprovableFor`** — a finer-grained approval interface: a tool decides
+  **per call, from its arguments**, whether a human prompt is needed. `web_fetch`
+  uses it so hosts on `TALUNOR_WEBFETCH_ALLOW` skip the prompt (the SSRF guard
+  still applies — the allowlist bypasses the *prompt*, never the *guard*). The
+  agent consults `ApprovableFor` before the coarse `Approvable`; `bash` keeps the
+  simple one. This is the first taste of the Iteration-3 arg-level policy.
+- **Env**: `TALUNOR_WEBFETCH`, `TALUNOR_WEBFETCH_ALLOW` (comma-separated hosts;
+  exact or leading-dot sub-domain match), `TALUNOR_WEBFETCH_MAX_BYTES`,
+  `TALUNOR_WEBFETCH_TIMEOUT` — documented in `.env_sample`, README, AGENTS.md.
+
+### Lessons learned
+
+1. **Different threats, different boundaries.** bash and web_fetch look like
+   siblings ("dangerous tools behind the gate") but need opposite defences: a
+   kernel sandbox for *executing* untrusted code, an application-layer IP policy
+   for *reaching* untrusted networks. Naming the threat first is what tells you
+   which tool to reach for.
+2. **Check the IP you dial, not the IP you resolved.** The naive SSRF guard
+   resolves a host, checks the IP, then connects — and a hostile DNS can change
+   the answer in between (rebinding). Enforcing inside the dialer's `Control` hook
+   closes the gap, and it covers redirects for free (each hop dials afresh).
+3. **The allowlist bypasses the prompt, not the guard.** Keeping those two
+   concerns separate is the whole safety story: a "trusted" host that resolves to
+   `169.254.169.254` is still refused. Conflating them would turn a convenience
+   into a hole.
+4. **`internal` packages make loopback tests awkward — lean into it.** `httptest`
+   serves on 127.0.0.1, which the real guard blocks, so the guard is a pure
+   function table-tested in isolation and the `Client` takes an injectable policy
+   (permissive for happy-path tests; loopback-only-relaxed to prove a redirect to
+   an internal address is still refused). The separation makes both halves clearer.
 
 ## [0.9.1] - 2026-07-16 — Patch: bounded tool loop, prompt history, observability & hardening
 

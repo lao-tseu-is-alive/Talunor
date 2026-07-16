@@ -256,7 +256,7 @@ func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, o
 // can react to). It returns the observation and done=true if the context was
 // cancelled while waiting for approval (the caller should stop).
 func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCall) (obs string, done bool) {
-	if a.needsApproval(tc.Name) {
+	if a.needsApproval(tc.Name, tc.Args) {
 		req := llm.NewApprovalRequest(tc.Name, tc.Args)
 		if !a.send(ctx, out, llm.Chunk{Approval: req}) {
 			return "", true
@@ -271,11 +271,18 @@ func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCa
 	return a.tools.Execute(ctx, tc.Name, json.RawMessage(tc.Args)), false
 }
 
-// needsApproval reports whether the named tool requires human approval.
-func (a *Agent) needsApproval(name string) bool {
+// needsApproval reports whether calling the named tool with these arguments
+// requires human approval. A tool implementing tools.ApprovableFor decides per
+// call from its arguments (e.g. web_fetch waving through an allowlisted host);
+// otherwise the coarse tools.Approvable applies; tools implementing neither run
+// freely.
+func (a *Agent) needsApproval(name, args string) bool {
 	t, ok := a.tools.Get(name)
 	if !ok {
 		return false
+	}
+	if af, ok := t.(tools.ApprovableFor); ok {
+		return af.RequiresApprovalForArgs(json.RawMessage(args))
 	}
 	ap, ok := t.(tools.Approvable)
 	return ok && ap.RequiresApproval()

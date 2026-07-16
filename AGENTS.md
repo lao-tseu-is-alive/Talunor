@@ -61,13 +61,18 @@ internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/obs
                    recall/tools/reflection. Slash-command helpers too.
 internal/tools/    action layer: Tool interface + Registry; builtins Calculator
                    (AST-safe), Clock, RecallMemory (searches the store), Bash
-                   (sandboxed shell; RequiresApproval=true, opt-in TALUNOR_BASH).
-                   Approvable = optional interface: a tool that needs human OK
+                   (sandboxed shell; opt-in TALUNOR_BASH), WebFetch (SSRF-guarded
+                   HTTP; opt-in TALUNOR_WEBFETCH). Approvable = coarse human-OK
+                   interface; ApprovableFor = per-call gate from args (web_fetch's
+                   allowlist bypass) — the agent prefers it when a tool implements it
 internal/sandbox/  runs an untrusted script under limits; Sandbox iface + FromEnv.
                    Two backends: ociRuntime (nerdctl/docker — strong) and
                    namespaces (rootless userns re-exec — Linux-only, teaching, no
                    seccomp). Non-zero exit = output, not error. Linux files carry
                    //go:build linux; namespaces_other.go stubs elsewhere
+internal/webfetch/ guarded HTTP fetcher for web_fetch: SSRF guard in the dialer
+                   Control hook (blockedIP, DNS-rebinding-safe, re-checked per
+                   redirect), timeout/MaxBytes/redirect limits, text-only bodies
 internal/render/   shared console stream renderer (reasoning dimmed, answer bright)
 internal/tui/      Bubble Tea + Glamour front-end (↑/↓ = prompt-history recall;
                    transcript scroll on PgUp/PgDn + Ctrl-U/D)
@@ -138,6 +143,9 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_SANDBOX` | bash backend: `nerdctl`/`docker` or `namespaces` (unset = auto) | auto |
 | `TALUNOR_SANDBOX_IMAGE` | image for the runtime backend | `alpine:3.20` |
 | `TALUNOR_SANDBOX_ROOTFS` / `TALUNOR_SANDBOX_BUSYBOX` | rootfs dir / busybox for the namespaces backend | built from static busybox, cached |
+| `TALUNOR_WEBFETCH` | `1` enables the SSRF-guarded, approval-gated `web_fetch` tool | `0` |
+| `TALUNOR_WEBFETCH_ALLOW` | hosts skipping the fetch prompt (comma-sep; `.host`=sub-domains) | — |
+| `TALUNOR_WEBFETCH_MAX_BYTES` / `TALUNOR_WEBFETCH_TIMEOUT` | fetch body cap / timeout | `524288` (512 KiB) / `10s` |
 | `TALUNOR_OLLAMA_URL` | Ollama OpenAI-compatible base URL | `http://localhost:11434/v1` |
 | `OPENROUTER_API_KEY` | required for `openrouter` | — |
 | `TALUNOR_OPENROUTER_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |
@@ -237,6 +245,13 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   Iteration 2**. **v0.9.1 (patch)** = review quick-wins: bounded tool loop (no
   silent turns), persistent prompt history (`internal/history`, ↑/↓), `TALUNOR_DEBUG`
   trace, `make deps` checksums + `curl -f` hardening, non-root distroless image.
-  Next — Layer 10: a `web_fetch` tool (restricted network opt-in),
-  then Iteration 3 planning/policy (à la pi-go/Claude), then learning/reflection.
-  Same per-layer checkpoint rhythm.
+- **Layer 10 (done): v0.10.0** = `web_fetch`, the network opt-IN. `internal/webfetch`
+  (SSRF guard in the dialer Control hook — DNS-rebinding-safe, per-redirect; timeout
+  / MaxBytes 512 KiB / redirect caps; text-only) + `tools.WebFetch` behind
+  `TALUNOR_WEBFETCH`. Introduces `tools.ApprovableFor` (per-call approval from args)
+  for the `TALUNOR_WEBFETCH_ALLOW` allowlist — the allowlist skips the *prompt*, not
+  the SSRF guard.
+- **Next — Iteration 3**: an explicit planner before multi-step actions; policy
+  checks for which tools/args are auto-allowed vs. need approval (generalising
+  `ApprovableFor` into a policy the agent consults). Then Iteration 4 (learning/
+  consolidation). Same per-layer checkpoint rhythm.

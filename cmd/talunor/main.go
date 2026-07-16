@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/agent"
 	"github.com/lao-tseu-is-alive/Talunor/internal/config"
@@ -37,6 +38,7 @@ import (
 	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tui"
 	"github.com/lao-tseu-is-alive/Talunor/internal/version"
+	"github.com/lao-tseu-is-alive/Talunor/internal/webfetch"
 )
 
 func main() {
@@ -118,6 +120,19 @@ func run(plain bool, list int) error {
 				reg.Register(tools.NewBash(sb, sandbox.DefaultLimits()))
 				fmt.Fprintf(os.Stderr, "talunor: bash tool enabled (sandbox: %s, approval-gated)\n", sb.Name())
 			}
+		}
+		// The web_fetch tool is opt-in (TALUNOR_WEBFETCH=1). It is SSRF-guarded and
+		// approval-gated, except for hosts on TALUNOR_WEBFETCH_ALLOW which skip the
+		// prompt (the guard still applies).
+		if envBool("TALUNOR_WEBFETCH", false) {
+			lim := webFetchLimits()
+			allow := splitList(os.Getenv("TALUNOR_WEBFETCH_ALLOW"))
+			reg.Register(tools.NewWebFetch(webfetch.New(lim, nil), allow))
+			msg := "talunor: web_fetch tool enabled (SSRF-guarded, approval-gated"
+			if len(allow) > 0 {
+				msg += fmt.Sprintf(", allowlist: %s", strings.Join(allow, ","))
+			}
+			fmt.Fprintln(os.Stderr, msg+")")
 		}
 		cfg.Tools = reg
 	}
@@ -278,6 +293,35 @@ func debugLogger(dbPath string) (*slog.Logger, io.Closer, string, error) {
 // newTextLogger returns a slog text logger at debug level over w.
 func newTextLogger(w io.Writer) *slog.Logger {
 	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
+// webFetchLimits builds the web_fetch limits from DefaultLimits, overriding
+// MaxBytes (TALUNOR_WEBFETCH_MAX_BYTES, bytes) and Timeout
+// (TALUNOR_WEBFETCH_TIMEOUT, a Go duration like "10s") when set.
+func webFetchLimits() webfetch.Limits {
+	lim := webfetch.DefaultLimits()
+	if v := strings.TrimSpace(os.Getenv("TALUNOR_WEBFETCH_MAX_BYTES")); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			lim.MaxBytes = n
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("TALUNOR_WEBFETCH_TIMEOUT")); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			lim.Timeout = d
+		}
+	}
+	return lim
+}
+
+// splitList parses a comma-separated env value into trimmed, non-empty items.
+func splitList(v string) []string {
+	var out []string
+	for p := range strings.SplitSeq(v, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // envBool reads a boolean-ish env var; "0", "false", "no", "off" (any case) are

@@ -445,6 +445,60 @@ func TestDebugTraceEmitsEvents(t *testing.T) {
 	}
 }
 
+// argGatedTool implements tools.ApprovableFor: it needs approval unless its args
+// mention "trusted" — a stand-in for web_fetch's per-URL allowlist.
+type argGatedTool struct{ ran *bool }
+
+func (argGatedTool) Name() string            { return "arg_gated" }
+func (argGatedTool) Description() string     { return "an arg-gated tool" }
+func (argGatedTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (argGatedTool) RequiresApprovalForArgs(args json.RawMessage) bool {
+	return !strings.Contains(string(args), "trusted")
+}
+func (t argGatedTool) Execute(context.Context, json.RawMessage) (string, error) {
+	*t.ran = true
+	return "did it", nil
+}
+
+// driveArgGated runs a turn whose model asks for arg_gated(args), then answers.
+// It reports whether an approval was requested and whether the tool ran.
+func driveArgGated(t *testing.T, args string) (sawApproval, ran bool) {
+	t.Helper()
+	store := testStore(t)
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "arg_gated", Args: args}}}},
+		{{Content: "done"}},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(argGatedTool{ran: &ran})
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	out, err := ag.Turn(context.Background(), "go")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	for c := range out {
+		if c.Approval != nil {
+			sawApproval = true
+			c.Approval.Respond(true)
+		}
+	}
+	return sawApproval, ran
+}
+
+// TestApprovableForGating: the agent consults ApprovableFor per call — allowlisted
+// ("trusted") args skip the prompt, others still require it. The tool runs either
+// way (approval is granted in the test).
+func TestApprovableForGating(t *testing.T) {
+	if sawApproval, ran := driveArgGated(t, `{"host":"trusted"}`); sawApproval || !ran {
+		t.Errorf("trusted args: sawApproval=%v ran=%v; want false/true (bypass, still runs)", sawApproval, ran)
+	}
+	if sawApproval, ran := driveArgGated(t, `{"host":"other"}`); !sawApproval || !ran {
+		t.Errorf("untrusted args: sawApproval=%v ran=%v; want true/true (prompt, then runs)", sawApproval, ran)
+	}
+}
+
 // alwaysToolProvider never answers: every call asks for a tool again. It drives
 // the act/observe loop straight to its cap.
 type alwaysToolProvider struct{ calls int }

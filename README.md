@@ -117,12 +117,13 @@ agent. Iteration 2 gives it the ability to *act*.
 | 7 | **Tools & ReAct loop** — tool registry, native tool-calling, act→observe loop | ✅ done (v0.7.0) |
 | 8 | **Approval gate** — human-in-the-loop y/n for side-effecting tools (guardrail) | ✅ done (v0.8.0) |
 | 9 | **Sandboxed `bash`** — pluggable sandbox (namespaces/nerdctl), behind the gate | ✅ done (v0.9.0) |
+| 10 | **`web_fetch`** — the network opt-IN: SSRF-guarded HTTP fetch, per-URL approval | ✅ done (v0.10.0) |
 
 ### Later iterations
 
 | Iter | Theme | Adds |
 |------|-------|------|
-| 3 | Planning & guardrails | explicit planner, policy checks (approval gate ✅ started) |
+| 3 | Planning & guardrails | explicit planner, policy checks (per-call approval ✅ started at Layer 10) |
 | 4 | Learning | memory consolidation, salience/decay, async reflection |
 
 ## Requirements
@@ -295,6 +296,29 @@ For the container image, [`scripts/run-container-with-ollama-bridge.sh`](scripts
 starts the loopback→VM Ollama bridge and runs the container with the right
 `nerdctl` flags in one step (see [docs/ollama-networking.md](docs/ollama-networking.md)).
 
+### The `web_fetch` tool (opt-in)
+
+Set `TALUNOR_WEBFETCH=1` to add a **`web_fetch`** tool that reads an http(s) URL
+and returns it as text (a web page, docs, or a JSON API). It is the **network
+opt-IN** — the mirror image of `bash`, which is network-off. It is off by default
+and **approval-gated**: each call pauses for your y/N showing the URL.
+
+Where `bash` needs a *kernel* sandbox (it runs code), `web_fetch` needs an
+*application-layer* policy (the bytes are just text handed to the model), so the
+real risk is **SSRF**. The tool refuses to connect to **private, loopback,
+link-local, cloud-metadata (`169.254.169.254`), or CGNAT** addresses — and it
+checks the *resolved IP right before connecting*, on the initial request and on
+every redirect, so a hostile DNS answer or a public→internal redirect can't slip
+through. Responses are **size-capped** (512 KiB) with a hard timeout, only
+`http`/`https` are allowed, and non-text content is reported by metadata only
+(no binary blobs in the model's context).
+
+`TALUNOR_WEBFETCH_ALLOW=example.com,.trusted.org` lists hosts that **skip the
+approval prompt** (exact host, or leading-dot for sub-domains). The allowlist only
+skips the *prompt* — the SSRF guard still applies, so an "allowed" host that
+resolves to an internal address is refused anyway. Tune with
+`TALUNOR_WEBFETCH_MAX_BYTES` and `TALUNOR_WEBFETCH_TIMEOUT` (e.g. `15s`).
+
 ### Where memory lives
 
 Long-term memory is a single SQLite file. Its location is
@@ -317,6 +341,9 @@ lives in the same directory.
 | `TALUNOR_SANDBOX` | bash backend: `nerdctl` or `namespaces` (unset = auto-detect) | auto |
 | `TALUNOR_SANDBOX_IMAGE` | image for the `nerdctl` backend | `alpine:3.20` |
 | `TALUNOR_SANDBOX_ROOTFS` / `TALUNOR_SANDBOX_BUSYBOX` | rootfs dir / busybox for the `namespaces` backend | built from a static busybox |
+| `TALUNOR_WEBFETCH` | set `1` to enable the SSRF-guarded, approval-gated `web_fetch` tool | `0` |
+| `TALUNOR_WEBFETCH_ALLOW` | hosts that skip the fetch approval prompt (comma-separated; `.host` = sub-domains) | — |
+| `TALUNOR_WEBFETCH_MAX_BYTES` / `TALUNOR_WEBFETCH_TIMEOUT` | fetch body cap / request timeout (e.g. `15s`) | `524288` / `10s` |
 | `TALUNOR_OLLAMA_URL` | Ollama OpenAI-compatible base URL | `http://localhost:11434/v1` |
 | `OPENROUTER_API_KEY` | required for `openrouter` | — |
 | `TALUNOR_OPENROUTER_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |

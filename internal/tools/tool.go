@@ -38,6 +38,16 @@ type Approvable interface {
 	RequiresApproval() bool
 }
 
+// ApprovableFor is a finer-grained variant of [Approvable]: the tool decides
+// per-call, from the arguments, whether approval is needed. When a tool
+// implements it the agent consults it instead of Approvable — so, e.g.,
+// web_fetch can wave through hosts on a user-configured allowlist while still
+// prompting for everything else. It is the first step toward argument-level
+// policy (which tool+args are auto-allowed vs. need a human).
+type ApprovableFor interface {
+	RequiresApprovalForArgs(args json.RawMessage) bool
+}
+
 // Def is a tool's public definition, handed to the LLM. It is transport-neutral;
 // the provider adapter maps it onto the wire format (OpenAI "function" tools).
 type Def struct {
