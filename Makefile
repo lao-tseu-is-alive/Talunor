@@ -11,8 +11,36 @@ AI_URL       := https://github.com/sqliteai/sqlite-ai/releases/download/$(AI_VER
 VECTOR_URL   := https://github.com/sqliteai/sqlite-vector/releases/download/$(VECTOR_VERSION)/$(VECTOR_ASSET)
 
 # all-MiniLM-L6-v2, 384-dim sentence embeddings, F16 GGUF.
-EMBED_MODEL := ext/models/all-MiniLM-L6-v2.f16.gguf
+# NOTE: this URL tracks the *mutable* `main` ref — HuggingFace can re-upload the
+# file, which would trip EMBED_SHA256 by design (fail-closed). The GitHub release
+# assets above are immutable by tag; the model is not. If the pin ever fails on a
+# legitimate upstream change, re-pin from a trusted copy — better, switch `main`
+# to an immutable `resolve/<commit-sha>/…` revision so downloads are reproducible.
 EMBED_URL   := https://huggingface.co/second-state/All-MiniLM-L6-v2-Embedding-GGUF/resolve/main/all-MiniLM-L6-v2-ggml-model-f16.gguf
+
+# SHA256 of the artefacts we actually load into the process (the extracted .so
+# files and the .gguf model), pinned to known-good downloads. `make deps` refuses
+# to use a file whose hash does not match — turning "whatever the URL serves
+# today" into "exactly the bytes we reviewed", which matters because these .so
+# files run as native code inside Talunor with no sandbox. When bumping a
+# *_VERSION above, regenerate with: sha256sum ext/ai.so ext/vector.so $(EMBED_MODEL)
+AI_SHA256     := c7654ffb6bf3ae50b86b9bb67ebeece4e5ad0ae416236b09991e4f4bf2708608
+VECTOR_SHA256 := 2e4d4781fb439ddafff59977fd88178afdf628f71dec84d51d3d2ce41e8ce345
+EMBED_SHA256  := 797b70c4edf85907fe0a49eb85811256f65fa0f7bf52166b147fd16be2be4662
+
+# verify_sha256(expected_hash, file): fail the build and delete the file if its
+# hash does not match, so a tampered or truncated download is never used.
+define verify_sha256
+@echo "$(1)  $(2)" | sha256sum -c - >/dev/null 2>&1 \
+	|| { echo "talunor: checksum mismatch for $(2) — refusing a tampered/corrupt artefact"; rm -f "$(2)"; exit 1; }
+@echo "talunor: verified $(2)"
+endef
+
+# curl for asset downloads. -f makes an HTTP error (4xx/5xx) fail the command
+# instead of silently saving the error page as if it were the artefact — without
+# it, a transient 504 lands a tiny HTML file that only trips the checksum later,
+# with a misleading "mismatch" message. Retries ride out flaky mirrors/CDNs.
+CURL := curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors
 
 export CGO_ENABLED := 1
 
@@ -33,19 +61,22 @@ deps: ext/vector.so ext/ai.so $(EMBED_MODEL)
 
 ext/ai.so:
 	@mkdir -p ext
-	curl -sL -o ext/ai.tar.gz "$(AI_URL)"
+	$(CURL) -o ext/ai.tar.gz "$(AI_URL)"
 	tar xzf ext/ai.tar.gz -C ext ./ai.so
 	rm -f ext/ai.tar.gz
+	$(call verify_sha256,$(AI_SHA256),ext/ai.so)
 
 ext/vector.so:
 	@mkdir -p ext
-	curl -sL -o ext/vector.tar.gz "$(VECTOR_URL)"
+	$(CURL) -o ext/vector.tar.gz "$(VECTOR_URL)"
 	tar xzf ext/vector.tar.gz -C ext ./vector.so
 	rm -f ext/vector.tar.gz
+	$(call verify_sha256,$(VECTOR_SHA256),ext/vector.so)
 
 $(EMBED_MODEL):
 	@mkdir -p ext/models
-	curl -sL -o $(EMBED_MODEL) "$(EMBED_URL)"
+	$(CURL) -o $(EMBED_MODEL) "$(EMBED_URL)"
+	$(call verify_sha256,$(EMBED_SHA256),$(EMBED_MODEL))
 
 ## doctor: smoke-test the memory substrate (extensions + embedding + KNN)
 doctor: deps

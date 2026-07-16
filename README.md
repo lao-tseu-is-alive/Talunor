@@ -33,7 +33,8 @@ nerdctl run --rm -it \
   -e TALUNOR_OLLAMA_URL=http://host.docker.internal:11435/v1 \
   -v talunor-data:/data \
   ghcr.io/lao-tseu-is-alive/talunor:latest
-# Add --plain for the REPL, --list 10 to inspect memory, or :v0.5.7 to pin a version.
+# Add --plain for the REPL, --list 10 to inspect memory. Swap :latest for a
+# release tag (e.g. :vX.Y.Z, see the Releases page) to pin a specific version.
 ```
 
 - **Connecting to Ollama needs one-time host setup.** Ollama listens on
@@ -48,11 +49,12 @@ nerdctl run --rm -it \
   `docker-*` equivalents); override the endpoint with
   `make nerdctl-run OLLAMA_URL=http://host.docker.internal:11434/v1`.
 
-**Standalone bundle** (a `.tar.gz` on each GitHub Release):
+**Standalone bundle** (a `.tar.gz` on each GitHub Release). Replace `vX.Y.Z`
+with the tag you downloaded from the [Releases](../../releases) page:
 
 ```bash
-tar xzf talunor-v0.5.7-linux-amd64.tar.gz
-cd talunor-v0.5.7-linux-amd64
+tar xzf talunor-vX.Y.Z-linux-amd64.tar.gz
+cd talunor-vX.Y.Z-linux-amd64
 ./run.sh            # TUI  (./run.sh --plain for the REPL)
 ```
 
@@ -144,7 +146,7 @@ make test      # run the test suite
 Expected `make doctor` output (abridged):
 
 ```
-Talunor v0.2.0 (commit …, built …)
+Talunor vX.Y.Z (commit …, built …)
 ✓ store open — embedding dimension = 384
 • recall: "Which technology keeps a whole database in one file?"  (threshold d≤0.75)
    1. [d=0.2405] SQLite stores an entire relational database in a single file.
@@ -189,9 +191,16 @@ talunor> Your name is Cedric, and you love the Go programming language.
 The second answer comes from memory: the agent recalls the earlier turn (short-
 term buffer + long-term KNN) and injects it into the prompt. In the TUI, a
 thinking model's reasoning streams dimmed, then the answer renders as formatted
-markdown; scroll with ↑/↓ or PgUp/PgDn, quit with Ctrl-C. The mouse is left free
-so you can click-drag to select and copy text (e.g. to share a transcript); the
-`--plain` REPL is also fully selectable and pipeable.
+markdown; **↑/↓ recall earlier prompts** (shell-style history), scroll the
+transcript with PgUp/PgDn (or Ctrl-U/Ctrl-D), quit with Ctrl-C. The mouse is left
+free so you can click-drag to select and copy text (e.g. to share a transcript);
+the `--plain` REPL is also fully selectable and pipeable.
+
+Prompt history is **persistent and deduplicated**: earlier prompts (and slash
+commands) are recalled with ↑/↓ across sessions, kept unique (re-submitting a
+prompt promotes it to newest rather than duplicating), and stored in a
+`history.jsonl` file next to the database. The `--plain` REPL records to the same
+file but, being scanner-based, cannot do ↑/↓ line editing itself.
 
 ### Commands
 
@@ -292,7 +301,8 @@ Long-term memory is a single SQLite file. Its location is
 `$TALUNOR_DB`, else `$XDG_DATA_HOME/talunor/talunor.db`, else
 `~/.local/share/talunor/talunor.db` (created automatically) — so it persists
 across sessions no matter where you launch from. The startup line prints the
-active path.
+active path. The persistent prompt history (`history.jsonl`, recalled with ↑/↓)
+lives in the same directory.
 
 ### Environment
 
@@ -303,6 +313,7 @@ active path.
 | `TALUNOR_REFLECT` | set `0` to disable per-turn fact reflection | `1` |
 | `TALUNOR_TOOLS` | set `0` to disable tools (model without tool support) | `1` |
 | `TALUNOR_BASH` | set `1` to enable the sandboxed, approval-gated `bash` tool | `0` |
+| `TALUNOR_DEBUG` | trace recall/tools/reflection: `1` → log file next to DB, `stderr`, or a path | off |
 | `TALUNOR_SANDBOX` | bash backend: `nerdctl` or `namespaces` (unset = auto-detect) | auto |
 | `TALUNOR_SANDBOX_IMAGE` | image for the `nerdctl` backend | `alpine:3.20` |
 | `TALUNOR_SANDBOX_ROOTFS` / `TALUNOR_SANDBOX_BUSYBOX` | rootfs dir / busybox for the `namespaces` backend | built from a static busybox |
@@ -375,6 +386,7 @@ internal/llm/          provider interface + OpenAI-compatible adapter
 internal/agent/        the cognitive loop
 internal/render/       shared streaming console renderer
 internal/tui/          Bubble Tea + Glamour front-end
+internal/history/      persistent, deduplicated prompt history (↑/↓ recall)
 internal/version/      build identity
 ext/                   fetched .so extensions + GGUF model (gitignored)
 Makefile               deps / doctor / chat / run / test / build / docker-*
@@ -384,6 +396,25 @@ docs/ollama-networking.md  reaching a loopback Ollama from the container (secure
 CHANGELOG.md           version-by-version build log + lessons
 AGENTS.md              orientation guide for AI/human contributors
 ```
+
+## Supply chain & CI
+
+Two deliberate, uneven levels of trust:
+
+- **Fetched binaries are checksum-pinned.** `make deps` verifies the SHA256 of
+  each SQLite extension and the embedding model *before* they are loaded — these
+  `.so` files run as native code in-process with no sandbox, so a tampered or
+  truncated download is refused rather than executed (see the `Makefile`).
+- **GitHub Actions are pinned by commit SHA — for third-party actions.** Anything
+  from an untrusted publisher (`aquasecurity/*`, `softprops/*`, `docker/*`, …) is
+  pinned to an immutable commit, because a mutable tag like `@v4` can be
+  repointed at malicious code by whoever controls the action's repo (cf. the
+  `tj-actions/changed-files` incident, March 2025). The **first-party
+  `actions/*` and `github/codeql-action`** are intentionally left on moving major
+  tags (`@v4`, `@v5`): they are maintained by GitHub itself, and SHA-pinning them
+  without a bot like Dependabot trades a small residual risk for real update
+  toil. This is a conscious exception, not an oversight — revisit it if the repo
+  ever adds automated action-bumping.
 
 ## License
 

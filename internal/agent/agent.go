@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -31,7 +32,10 @@ type Config struct {
 	// RecallK is the maximum number of long-term memories to retrieve per turn.
 	RecallK int
 	// RecallMaxDistance drops memories whose cosine distance exceeds it, so only
-	// relevant ones are injected (0 keeps all k).
+	// relevant ones are injected. 0 is a meaningful value — it keeps all k
+	// matches (no thresholding) — so, unlike the other numeric fields, New does
+	// *not* substitute DefaultConfig's value for a zero here. Set it explicitly
+	// (DefaultConfig uses 0.75) to enable thresholding.
 	RecallMaxDistance float64
 	// ShortTermCap is the number of recent turns kept verbatim as immediate
 	// context.
@@ -56,6 +60,13 @@ type Config struct {
 	// MaxToolIters caps the act/observe rounds per turn, so a confused model can't
 	// loop forever. Defaults to 6.
 	MaxToolIters int
+
+	// Debug, when non-nil, receives a structured trace of the loop's otherwise
+	// invisible decisions: which memories were recalled (id + distance), which
+	// tools ran, and what reflection stored or skipped. It is a teaching/debug
+	// aid, off by default; cmd/talunor wires it from TALUNOR_DEBUG. The trace may
+	// include snippets of recalled memory content, so it is opt-in and local.
+	Debug *slog.Logger
 }
 
 // DefaultConfig returns sensible defaults for a conversational agent.
@@ -82,7 +93,10 @@ type Agent struct {
 	cfg       Config
 }
 
-// New builds an Agent. Zero-valued config fields fall back to DefaultConfig.
+// New builds an Agent. Zero-valued config fields fall back to DefaultConfig,
+// with one deliberate exception: RecallMaxDistance is left as-is because 0 is a
+// meaningful value there (keep all k matches — see its field doc). Callers that
+// want thresholding must set it (DefaultConfig uses 0.75); cmd/talunor does.
 func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 	def := DefaultConfig()
 	if cfg.SystemPrompt == "" {
@@ -126,6 +140,7 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 	if err != nil {
 		return nil, err
 	}
+	a.traceRecall(input, hits)
 
 	// Reason: build the prompt from prior context.
 	msgs := a.buildMessages(hits, input)
@@ -158,6 +173,7 @@ func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, o
 	}
 
 	var answer string
+	answered := false
 	for iter := 0; iter <= a.cfg.MaxToolIters; iter++ {
 		stream, err := a.provider.Chat(ctx, msgs, opts)
 		if err != nil {
@@ -184,6 +200,14 @@ func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, o
 
 		if len(calls) == 0 {
 			answer = content.String() // the model answered; we're done.
+			answered = true
+			break
+		}
+
+		// Budget exhausted: the model still wants tools but we won't call it
+		// again, so running these tools would waste work whose observations are
+		// never seen. Stop and report below instead of ending the turn silently.
+		if iter == a.cfg.MaxToolIters {
 			break
 		}
 
@@ -194,15 +218,29 @@ func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, o
 			if !a.send(ctx, out, llm.Chunk{Reasoning: fmt.Sprintf("🔧 %s(%s)\n", tc.Name, oneLine(tc.Args, 80))}) {
 				return
 			}
+			a.trace("tool.call", "iter", iter, "name", tc.Name, "args", oneLine(tc.Args, 80))
 			obs, done := a.runTool(ctx, out, tc)
 			if done {
 				return // context cancelled mid-tool.
 			}
+			a.trace("tool.result", "name", tc.Name, "result", oneLine(obs, 120))
 			if !a.send(ctx, out, llm.Chunk{Reasoning: fmt.Sprintf("   ↳ %s\n", oneLine(obs, 120))}) {
 				return
 			}
 			msgs = append(msgs, llm.Message{Role: llm.RoleTool, ToolCallID: tc.ID, Content: obs})
 		}
+	}
+
+	// If the model never produced a final answer (it kept asking for tools until
+	// the cap), don't end the turn silently: surface a clear error so the user
+	// and the transcript both know the turn did not converge. Nothing is stored
+	// as an assistant turn, and reflection is skipped (the turn failed).
+	if !answered {
+		a.trace("tool.loop.exhausted", "maxIters", a.cfg.MaxToolIters)
+		a.send(ctx, out, llm.Chunk{Err: fmt.Errorf(
+			"the model kept requesting tools without answering after %d tool rounds; giving up on this turn",
+			a.cfg.MaxToolIters)})
+		return
 	}
 
 	// Learn: record the assistant turn and reflect on the user's message.
@@ -274,13 +312,50 @@ func (a *Agent) reflect(ctx context.Context, input string) {
 	}
 	facts, err := a.extractor.Extract(ctx, input)
 	if err != nil {
+		// Reflection is best-effort (see runLoop), but a debug trace explains a
+		// later "why didn't it remember that?" without changing behaviour.
+		a.trace("reflect.error", "err", err)
 		return
 	}
+	stored, skipped := 0, 0
 	for _, f := range facts {
 		if a.factKnown(ctx, f) {
+			skipped++
 			continue
 		}
-		_, _ = a.store.Remember(ctx, memory.KindFact, "", f)
+		if _, err := a.store.Remember(ctx, memory.KindFact, "", f); err == nil {
+			stored++
+		}
+	}
+	a.trace("reflect", "extracted", len(facts), "stored", stored, "skipped", skipped)
+}
+
+// trace emits a structured debug event when Config.Debug is set; it is a no-op
+// otherwise, so instrumentation call sites stay unconditional and cheap.
+func (a *Agent) trace(msg string, args ...any) {
+	if a.cfg.Debug != nil {
+		a.cfg.Debug.Debug(msg, args...)
+	}
+}
+
+// traceRecall logs the recall decision — how many memories matched and, per hit,
+// its id, cosine distance, and kind (plus a short content snippet to make the
+// trace readable). Nothing is logged when debug is off.
+func (a *Agent) traceRecall(input string, hits []memory.Hit) {
+	if a.cfg.Debug == nil {
+		return
+	}
+	a.trace("recall",
+		"query", oneLine(input, 60),
+		"k", a.cfg.RecallK,
+		"maxDistance", a.cfg.RecallMaxDistance,
+		"hits", len(hits))
+	for _, h := range hits {
+		a.trace("recall.hit",
+			"id", h.ID,
+			"distance", h.Distance,
+			"kind", string(h.Kind),
+			"snippet", oneLine(h.Content, 60))
 	}
 }
 

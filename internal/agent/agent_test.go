@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -413,6 +415,88 @@ func TestReActToolLoop(t *testing.T) {
 	// ephemeral scratch), so count = 2.
 	if n, err := store.Count(ctx); err != nil || n != 2 {
 		t.Errorf("stored count = %d, err = %v; want 2", n, err)
+	}
+}
+
+// TestDebugTraceEmitsEvents: with a Debug logger set, a turn traces its recall
+// and reflection decisions; with it unset (default), nothing is emitted.
+func TestDebugTraceEmitsEvents(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+
+	var buf bytes.Buffer
+	cfg := DefaultConfig()
+	cfg.Debug = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	ag := New(store, &fakeProvider{reply: "Nice to meet you, Ada."}, cfg)
+
+	out, err := ag.Turn(ctx, "My name is Ada and I love Go.")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	if _, err := drain(out); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+
+	trace := buf.String()
+	for _, want := range []string{"msg=recall", "msg=reflect"} {
+		if !strings.Contains(trace, want) {
+			t.Errorf("debug trace missing %q; got:\n%s", want, trace)
+		}
+	}
+}
+
+// alwaysToolProvider never answers: every call asks for a tool again. It drives
+// the act/observe loop straight to its cap.
+type alwaysToolProvider struct{ calls int }
+
+func (p *alwaysToolProvider) Name() string { return "always-tool" }
+
+func (p *alwaysToolProvider) Chat(context.Context, []llm.Message, llm.Options) (<-chan llm.Chunk, error) {
+	p.calls++
+	ch := make(chan llm.Chunk, 1)
+	ch <- llm.Chunk{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "calculator", Args: `{"expression":"1+1"}`}}}
+	close(ch)
+	return ch, nil
+}
+
+// TestToolLoopExhaustion: when the model keeps requesting tools past MaxToolIters
+// the turn ends with an explicit terminal error (not silently), stores no
+// assistant answer, and stops calling the model once the budget is spent.
+func TestToolLoopExhaustion(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+
+	prov := &alwaysToolProvider{}
+	cfg := DefaultConfig()
+	cfg.MaxToolIters = 2
+	cfg.Tools = tools.NewRegistry(tools.Calculator{})
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	out, err := ag.Turn(ctx, "loop forever please")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	answer, streamErr := drain(out)
+	if streamErr == nil {
+		t.Fatal("expected a terminal error when the tool loop hits its cap; got none")
+	}
+	if !strings.Contains(streamErr.Error(), "without answering") {
+		t.Errorf("error = %q; want it to explain the non-convergence", streamErr)
+	}
+	if answer != "" {
+		t.Errorf("answer = %q; want empty on a non-converging turn", answer)
+	}
+
+	// The model is called MaxToolIters+1 times: the extra call is the one that
+	// still returns tools and trips the cap (its tools are not executed).
+	if prov.calls != cfg.MaxToolIters+1 {
+		t.Errorf("provider called %d times; want %d", prov.calls, cfg.MaxToolIters+1)
+	}
+
+	// Only the user turn is persisted; no assistant answer is stored.
+	if n, err := store.Count(ctx); err != nil || n != 1 {
+		t.Errorf("stored count = %d, err = %v; want 1 (user turn only)", n, err)
 	}
 }
 

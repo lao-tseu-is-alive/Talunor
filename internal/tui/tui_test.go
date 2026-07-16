@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/agent"
+	"github.com/lao-tseu-is-alive/Talunor/internal/history"
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
@@ -98,7 +99,7 @@ func TestModelDriveTurn(t *testing.T) {
 	store := testStore(t)
 	ag := newAgent(store, "**teal** is your colour")
 
-	var m tea.Model = tui.New(context.Background(), ag, "fake", "test-model", 0)
+	var m tea.Model = tui.New(context.Background(), ag, nil, "fake", "test-model", 0)
 
 	// Terminal size arrives first; without it the model is not ready.
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -128,12 +129,47 @@ func TestModelDriveTurn(t *testing.T) {
 	}
 }
 
+// TestHistoryRecallKeys drives ↑/↓ through the Update loop and checks the input
+// line shows the recalled prompt: ↑ walks back to older entries, ↓ walks forward
+// and restores the empty draft past the newest one.
+func TestHistoryRecallKeys(t *testing.T) {
+	store := testStore(t)
+	ag := newAgent(store, "unused")
+
+	hist := history.New(filepath.Join(t.TempDir(), "history.jsonl"))
+	hist.Add("alpha")
+	hist.Add("beta") // newest.
+
+	var m tea.Model = tui.New(context.Background(), ag, hist, "fake", "test-model", 0)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	// The transcript is empty here, so a recalled prompt can only appear in the
+	// input line (rendered as "you> <value>").
+	press := func(k tea.KeyType) string {
+		m, _ = m.Update(tea.KeyMsg{Type: k})
+		return m.View()
+	}
+
+	if v := press(tea.KeyUp); !strings.Contains(v, "you> beta") {
+		t.Errorf("first ↑ should recall newest 'beta'; input line missing it:\n%s", v)
+	}
+	if v := press(tea.KeyUp); !strings.Contains(v, "you> alpha") {
+		t.Errorf("second ↑ should recall older 'alpha':\n%s", v)
+	}
+	if v := press(tea.KeyDown); !strings.Contains(v, "you> beta") {
+		t.Errorf("↓ should walk forward to 'beta':\n%s", v)
+	}
+	if v := press(tea.KeyDown); strings.Contains(v, "you> beta") || strings.Contains(v, "you> alpha") {
+		t.Errorf("↓ past newest should restore the empty draft, not a history entry:\n%s", v)
+	}
+}
+
 // TestSlashCommandDoesNotHitProvider ensures /help runs locally: it shows output
 // and never starts a turn (so nothing is stored and no stream command runs).
 func TestSlashCommandDoesNotHitProvider(t *testing.T) {
 	store := testStore(t)
 	ag := newAgent(store, "should not be called")
-	var m tea.Model = tui.New(context.Background(), ag, "fake", "test-model", 0)
+	var m tea.Model = tui.New(context.Background(), ag, nil, "fake", "test-model", 0)
 
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/help")})
@@ -165,7 +201,7 @@ func TestTUIApprovalFlow(t *testing.T) {
 	cfg.Extractor = agent.DisableReflection()
 	ag := agent.New(store, prov, cfg)
 
-	var m tea.Model = tui.New(context.Background(), ag, "fake", "test-model", 0)
+	var m tea.Model = tui.New(context.Background(), ag, nil, "fake", "test-model", 0)
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("do it")})
 	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -203,7 +239,7 @@ func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
 func TestEnterIgnoredWhileStreaming(t *testing.T) {
 	store := testStore(t)
 	ag := newAgent(store, "ok")
-	var m tea.Model = tui.New(context.Background(), ag, "fake", "test-model", 0)
+	var m tea.Model = tui.New(context.Background(), ag, nil, "fake", "test-model", 0)
 
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("first")})

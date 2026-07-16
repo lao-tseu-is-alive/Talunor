@@ -22,6 +22,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/agent"
+	"github.com/lao-tseu-is-alive/Talunor/internal/history"
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 )
 
@@ -68,6 +69,7 @@ type turn struct {
 type Model struct {
 	ctx          context.Context
 	ag           *agent.Agent
+	hist         *history.History
 	providerName string
 	modelName    string
 	memCount     int
@@ -90,8 +92,8 @@ type Model struct {
 }
 
 // New builds the model. Sub-view sizes and the Glamour renderer are set on the
-// first WindowSizeMsg.
-func New(ctx context.Context, ag *agent.Agent, providerName, modelName string, memCount int) *Model {
+// first WindowSizeMsg. hist may be nil (history recall is then disabled).
+func New(ctx context.Context, ag *agent.Agent, hist *history.History, providerName, modelName string, memCount int) *Model {
 	ti := textinput.New()
 	ti.Placeholder = "Ask Talunor…  (/help for commands)"
 	ti.Prompt = "you> "
@@ -101,6 +103,7 @@ func New(ctx context.Context, ag *agent.Agent, providerName, modelName string, m
 	return &Model{
 		ctx:          ctx,
 		ag:           ag,
+		hist:         hist,
 		providerName: providerName,
 		modelName:    modelName,
 		memCount:     memCount,
@@ -110,9 +113,9 @@ func New(ctx context.Context, ag *agent.Agent, providerName, modelName string, m
 	}
 }
 
-// Run starts the program.
-func Run(ctx context.Context, ag *agent.Agent, providerName, modelName string, memCount int) error {
-	m := New(ctx, ag, providerName, modelName, memCount)
+// Run starts the program. hist may be nil (history recall is then disabled).
+func Run(ctx context.Context, ag *agent.Agent, hist *history.History, providerName, modelName string, memCount int) error {
+	m := New(ctx, ag, hist, providerName, modelName, memCount)
 	// Detect the terminal background NOW, before Bubble Tea takes over the
 	// terminal. Doing it here means the OSC 11 query/response is handled
 	// synchronously; querying later (e.g. via glamour.WithAutoStyle inside the
@@ -154,13 +157,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.submit()
 			}
 			return m, nil
-		case tea.KeyPgUp, tea.KeyPgDown, tea.KeyCtrlU, tea.KeyCtrlD, tea.KeyUp, tea.KeyDown:
+		case tea.KeyUp:
+			// Shell-style history recall: ↑ walks back through earlier prompts.
+			m.recallPrev()
+			return m, nil
+		case tea.KeyDown:
+			m.recallNext() // ↓ walks forward, back to the in-progress draft.
+			return m, nil
+		case tea.KeyPgUp, tea.KeyPgDown, tea.KeyCtrlU, tea.KeyCtrlD:
 			var cmd tea.Cmd
 			m.vp, cmd = m.vp.Update(msg) // scroll the transcript.
 			return m, cmd
 		}
 		var cmd tea.Cmd
 		m.ti, cmd = m.ti.Update(msg)
+		// Editing the input (not navigating) drops any active history position, so
+		// the next ↑ starts again from the freshly typed line.
+		if m.hist != nil {
+			m.hist.Reset()
+		}
 		return m, cmd
 
 	case streamMsg:
@@ -217,6 +232,12 @@ func (m *Model) submit() tea.Cmd {
 	m.ti.Reset()
 	m.errText = ""
 
+	// Record every submitted line (prompts and slash commands alike) so ↑/↓ can
+	// recall it later, in this session and the next.
+	if m.hist != nil {
+		m.hist.Add(text)
+	}
+
 	if strings.HasPrefix(text, "/") {
 		return m.runCommand(text)
 	}
@@ -235,6 +256,34 @@ func (m *Model) submit() tea.Cmd {
 	m.curReasoning = ""
 	m.refresh()
 	return waitForChunk(ch)
+}
+
+// recallPrev replaces the input with the previous (older) prompt from history,
+// stashing the current draft on the first ↑ so ↓ can restore it.
+func (m *Model) recallPrev() {
+	if m.hist == nil {
+		return
+	}
+	if entry, ok := m.hist.Prev(m.ti.Value()); ok {
+		m.setInput(entry)
+	}
+}
+
+// recallNext replaces the input with the next (newer) prompt, restoring the
+// stashed draft once past the newest entry.
+func (m *Model) recallNext() {
+	if m.hist == nil {
+		return
+	}
+	if entry, ok := m.hist.Next(); ok {
+		m.setInput(entry)
+	}
+}
+
+// setInput replaces the input value and parks the cursor at the end.
+func (m *Model) setInput(s string) {
+	m.ti.SetValue(s)
+	m.ti.CursorEnd()
 }
 
 // answerApproval resolves a pending tool-approval request from a keypress: only
@@ -388,7 +437,7 @@ func (m *Model) status() string {
 	if m.pending != nil {
 		state = "awaiting approval — press y to allow, any other key to deny"
 	}
-	return statusBar.Render(fmt.Sprintf("%s · %s · %d memories · %s · enter send · ↑↓/PgUp/PgDn scroll · ctrl+c quit",
+	return statusBar.Render(fmt.Sprintf("%s · %s · %d memories · %s · enter send · ↑↓ history · PgUp/PgDn scroll · ctrl+c quit",
 		m.providerName, m.modelName, m.memCount, state))
 }
 

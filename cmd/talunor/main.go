@@ -19,13 +19,17 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/agent"
 	"github.com/lao-tseu-is-alive/Talunor/internal/config"
+	"github.com/lao-tseu-is-alive/Talunor/internal/history"
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
 	"github.com/lao-tseu-is-alive/Talunor/internal/render"
@@ -82,6 +86,20 @@ func run(plain bool, list int) error {
 	if !envBool("TALUNOR_REFLECT", true) {
 		cfg.Extractor = agent.DisableReflection()
 	}
+	// TALUNOR_DEBUG turns on a structured trace of recall/tools/reflection (see
+	// debugLogger). It logs to a file by default so the TUI's screen stays clean;
+	// the closer is deferred until the program exits.
+	dbg, dbgClose, dbgDest, err := debugLogger(store.Path())
+	if err != nil {
+		return err
+	}
+	if dbgClose != nil {
+		defer dbgClose.Close()
+	}
+	if dbg != nil {
+		cfg.Debug = dbg
+		fmt.Fprintf(os.Stderr, "talunor: debug trace → %s\n", dbgDest)
+	}
 	// Tools: the agent can do arithmetic, tell the time, and search its own
 	// memory. Disable with TALUNOR_TOOLS=0 (e.g. for a model without tool support).
 	if envBool("TALUNOR_TOOLS", true) {
@@ -106,15 +124,22 @@ func run(plain bool, list int) error {
 	ag := agent.New(store, provider, cfg)
 	n, _ := store.Count(ctx)
 
+	// Persistent, deduplicated prompt history (recalled with ↑/↓ in the TUI),
+	// stored next to the memory database so it survives across sessions.
+	hist := history.New(history.DefaultPath(store.Path()))
+
 	if plain {
 		fmt.Printf("%s\n%s → %s | %d memories | db: %s\ntype /help for commands\n\n",
 			version.String(), provider.Name(), model, n, store.Path())
-		return repl(ctx, ag)
+		return repl(ctx, ag, hist)
 	}
-	return tui.Run(ctx, ag, provider.Name(), model, n)
+	return tui.Run(ctx, ag, hist, provider.Name(), model, n)
 }
 
-func repl(ctx context.Context, ag *agent.Agent) error {
+// repl is the plain line-based front-end. It shares hist with the TUI so
+// prompts recorded here are recallable there; the scanner-based input cannot do
+// ↑/↓ line editing itself, so recall in this mode is write-only.
+func repl(ctx context.Context, ag *agent.Agent, hist *history.History) error {
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
@@ -128,6 +153,7 @@ func repl(ctx context.Context, ag *agent.Agent) error {
 		if line == "" {
 			continue
 		}
+		hist.Add(line) // record for cross-session recall (used by the TUI).
 		if strings.HasPrefix(line, "/") {
 			done, err := command(ctx, line, ag)
 			if done || err != nil {
@@ -212,6 +238,46 @@ func command(ctx context.Context, line string, ag *agent.Agent) (done bool, err 
 		fmt.Printf("unknown command %q — try /help\n", fields[0])
 	}
 	return false, nil
+}
+
+// debugLogger builds the agent's trace logger from TALUNOR_DEBUG:
+//
+//	unset / 0 / false / no / off → disabled (nil logger).
+//	stderr                       → the terminal's stderr (handy with --plain).
+//	1 / true / yes / on          → a file "talunor-debug.log" next to the DB.
+//	<path>                       → that file (created/appended).
+//
+// It returns the logger, an optional Closer (nil for stderr/disabled), and a
+// human-readable destination for the startup notice. Logging to a file by
+// default matters: the TUI owns the alt-screen, so trace lines on stdout/stderr
+// would corrupt it — a file you can `tail -f` keeps the two streams apart.
+func debugLogger(dbPath string) (*slog.Logger, io.Closer, string, error) {
+	v := strings.TrimSpace(os.Getenv("TALUNOR_DEBUG"))
+	switch strings.ToLower(v) {
+	case "", "0", "false", "no", "off":
+		return nil, nil, "", nil
+	case "stderr":
+		return newTextLogger(os.Stderr), nil, "stderr", nil
+	}
+
+	dest := v
+	if lv := strings.ToLower(v); lv == "1" || lv == "true" || lv == "yes" || lv == "on" {
+		dir := filepath.Dir(dbPath)
+		if dir == "" {
+			dir = "."
+		}
+		dest = filepath.Join(dir, "talunor-debug.log")
+	}
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("open debug log %q: %w", dest, err)
+	}
+	return newTextLogger(f), f, dest, nil
+}
+
+// newTextLogger returns a slog text logger at debug level over w.
+func newTextLogger(w io.Writer) *slog.Logger {
+	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelDebug}))
 }
 
 // envBool reads a boolean-ish env var; "0", "false", "no", "off" (any case) are

@@ -16,6 +16,118 @@ changed but the *lessons learned* while getting there.
 - **Iteration 3, later** — an explicit planner before multi-step actions; policy
   checks for which tools/args are auto-allowed vs. need approval.
 
+## [0.9.1] - 2026-07-16 — Patch: bounded tool loop, prompt history, observability & hardening
+
+A hardening + quality-of-life patch on top of Iteration 2, working through the
+"quick wins" of a technical review of the repo.
+
+### Fixed
+
+- **Tool loop no longer ends a turn silently.** When the model kept requesting
+  tools past `MaxToolIters`, the loop exited with no final answer, stored nothing,
+  and showed the user nothing. It now stops as soon as the tool budget is spent
+  (without wasting a final, unread round of tool calls) and emits an explicit
+  terminal error so the failure is visible. Covered by `TestToolLoopExhaustion`
+  (`internal/agent`).
+- **Honest `agent.New` contract for `RecallMaxDistance`.** `New`'s doc claimed
+  *all* zero-valued config fields fall back to `DefaultConfig`, but this one is a
+  deliberate exception: `0` is a meaningful value (keep all `k` matches, no
+  thresholding), so it is intentionally *not* defaulted. Clarified both the field
+  doc and `New`'s doc rather than silently changing recall behaviour for anyone
+  relying on the documented `0`. (`cmd/talunor` sets `0.75` via `DefaultConfig`.)
+
+### Security
+
+- **`make deps` now verifies checksums.** The SQLite extensions and embedding
+  model are downloaded over the network and the `.so` files run as **native code
+  inside the process with no sandbox**. Each artefact's SHA256 is now pinned and
+  checked after download (via a small `verify_sha256` make macro); a mismatch
+  deletes the file and fails the build. This turns "whatever the URL serves today"
+  into "exactly the bytes we reviewed". Regenerate the pins when bumping a
+  `*_VERSION` (command in the `Makefile`).
+  - Adding the checks immediately caught a real one: a flaky HuggingFace 504 made
+    `curl -sL` save a tiny HTML error page *as* the model, which then failed the
+    hash. Downloads now use `curl -f … --retry` so an HTTP error fails loudly and
+    is retried, instead of silently poisoning `ext/`. (The `.so` release assets are
+    immutable by tag; the model tracks a mutable `main` ref — noted in the Makefile.)
+- **The container no longer runs as root.** The runtime image moves to the
+  distroless `:nonroot` tag (uid 65532); `/data` is seeded with that ownership so
+  a named volume stays writable without privilege. A bug in a loaded extension or
+  a tampered model can no longer act as root on a bind-mounted host path. A host
+  bind-mount must itself be writable by uid 65532 (named volumes just work).
+
+### Documentation
+
+- **Version examples no longer pin a stale release.** The container tag, the
+  standalone-bundle commands, and the `make doctor` sample output used a hard
+  `v0.5.7` / `v0.2.0`, which read as "the current version" to newcomers. They now
+  use a `vX.Y.Z` placeholder with a pointer to the Releases page. (The iteration
+  table keeps its real per-layer completion versions — those are history, not a
+  "run this" example.)
+- **Documented the GitHub Actions pinning policy.** A new "Supply chain & CI"
+  README section explains the deliberate split: third-party actions are pinned by
+  commit SHA (a mutable `@v4` tag can be repointed at malicious code), while
+  first-party `actions/*` are intentionally left on moving tags — a conscious
+  exception, not an oversight. Closes the review's "inconsistent pinning" item by
+  making the reasoning explicit rather than churning the workflows.
+
+### Added
+
+- **`TALUNOR_DEBUG` — a debug/trace mode for the loop's invisible decisions.**
+  With it set, the agent emits a structured (`log/slog`) trace of *recall* (each
+  hit's id + cosine distance + kind), *tool* calls and results, and *reflection*
+  (facts extracted / stored / skipped, and previously-silent extraction errors).
+  It logs to a `talunor-debug.log` next to the DB by default (so the TUI's screen
+  stays clean — `tail -f` it), or to `stderr`, or to a path. Off by default; the
+  seam is a nil-able `agent.Config.Debug` so instrumentation call sites stay cheap.
+- **`internal/history`** — a persistent, deduplicated prompt history. The TUI
+  recalls earlier prompts with **↑/↓** like a shell; entries are kept **unique**
+  (re-submitting a prompt promotes it to newest rather than duplicating) and
+  persist across sessions in `history.jsonl`, stored next to the memory database.
+  - Storage is **JSON-per-line** so multi-line prompts and special characters
+    round-trip safely; writes go through a temp-file + rename so a crash can't
+    corrupt existing history; the file is capped (oldest entries dropped first).
+  - **↑/↓ now navigate history** in the TUI; transcript scrolling moves to
+    **PgUp/PgDn** and **Ctrl-U/Ctrl-D** (the status bar hint was updated). Typing
+    (not navigating) drops the history position, so the next ↑ starts fresh from
+    the just-typed line, and the in-progress draft is restored when you ↓ past the
+    newest entry. The plain REPL records prompts to the same file but cannot do
+    ↑/↓ line editing (scanner-based input), so recall there is write-only.
+
+### Lessons learned
+
+1. **"Bounded autonomy" needs a visible edge.** A cap that silently swallows the
+   turn teaches nothing and looks like a hang; the fix is not just the limit but
+   surfacing *why* the turn stopped. Don't run work whose result no one will read
+   — trip the cap *before* the final tool round, not after.
+2. **Pick a storage format for the ugly input, not the pretty one.** A newline
+   history file breaks the moment a prompt contains a newline; encoding each entry
+   as JSON makes multi-line and special-character prompts a non-issue.
+3. **Repurposing a key means re-teaching it.** Moving ↑/↓ from scroll to history
+   is free to implement but silent to the user — the status-bar hint is part of
+   the change, not an afterthought.
+4. **Pin what you execute, not what you download.** The tarballs are deleted after
+   extraction; the thing that actually runs in the process is the extracted `.so`.
+   So the checksum guards the `.so`/`.gguf` directly — hashing the tarball would
+   verify a file we throw away and never load.
+5. **A zero value is an API decision, not a default.** Four numeric config fields
+   treat `0` as "unset, use the default"; one treats `0` as a real setting ("no
+   threshold"). The bug was never the behaviour — it was a doc comment that
+   flattened the distinction. Fixing the words beats forcing a fifth field into a
+   consistency it doesn't want.
+6. **Documented bugs are part of the curriculum.** This release keeps the silent
+   tool-loop bug *visible* — a failing-then-passing test and a written account of
+   how it was caught — because in a teaching repo, *how a defect was found and
+   fixed* is as instructive as the code that ships.
+7. **`curl` without `-f` is a foot-gun.** By default `curl` exits 0 and writes the
+   server's error page to your output file, so a transient 504 becomes a corrupt
+   "artefact". The checksum caught it here — but the real fix is `curl -f` so the
+   download fails where the failure happens, not three steps later.
+8. **Observability is a teaching surface, not just an ops one.** A nil-able
+   `slog` seam turns the loop's silent choices (why *this* memory recalled, why
+   reflection stored nothing) into a readable trace — cheap to add, and it makes
+   the "invisible" middle of the agent legible to a learner without a heavy stack.
+
 ## [0.9.0] - 2026-07-15 — Sandboxed `bash`: a tool that can run anything, safely
 
 The agent gets its most powerful tool — a real shell — and the machinery to run

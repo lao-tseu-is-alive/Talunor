@@ -42,6 +42,10 @@ COPY . .
 # so this always pulls fresh assets rather than copying a local checkout).
 RUN make deps
 
+# Stage an empty /data so the runtime stage can COPY it in with nonroot
+# ownership — distroless has no shell/mkdir to create it there.
+RUN mkdir -p /stage-data
+
 ARG COMMIT=docker
 ARG BUILD_DATE=unknown
 ENV CGO_ENABLED=1
@@ -53,12 +57,20 @@ RUN go build \
 
 # ---- runtime ---------------------------------------------------------------
 # distroless/cc = glibc + libstdc++ + libgcc + ca-certificates (+ /tmp), nothing
-# else. Runs as root (default tag) so the /data volume is writable.
-FROM gcr.io/distroless/cc-debian12
+# else. The :nonroot tag runs as the unprivileged user 65532 by default (no
+# shell, no root) — a tampered model or a bug in a loaded extension cannot touch
+# the host filesystem as root. /data is seeded with that ownership so long-term
+# memory stays writable without privilege.
+FROM gcr.io/distroless/cc-debian12:nonroot
 
 WORKDIR /app
 COPY --from=builder /out/talunor /usr/local/bin/talunor
 COPY --from=builder /src/ext /app/ext
+
+# Writable state dir owned by the nonroot user (65532). A fresh named volume
+# mounted at /data inherits this ownership from the image, so `-v talunor-data:/data`
+# just works. A host bind-mount must itself be writable by uid 65532.
+COPY --from=builder --chown=65532:65532 /stage-data /data
 
 # Point the agent at the baked-in extensions/model and a persistent DB location.
 # TALUNOR_OLLAMA_URL is intentionally unset: the code defaults to
