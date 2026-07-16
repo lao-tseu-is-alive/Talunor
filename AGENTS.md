@@ -25,10 +25,13 @@ Module: `github.com/lao-tseu-is-alive/Talunor` · Go 1.26 · **cgo required**.
   2. Add a `CHANGELOG.md` section **including a "Lessons learned" subsection** —
      this is the whole point; capture what was non-obvious.
   3. Sync `README.md` (status table, quickstart, env, layout) **and this file**
-     (`AGENTS.md`: env table, package map, roadmap).
+     (`AGENTS.md`: env table, package map, roadmap). If files were added or removed,
+     regenerate **`docs/atlas.md`** (the `repo-atlas` skill).
   4. **`make release-check`** must pass: gofmt + vet + tests, *plus* guards that no
-     fetch target was silently dropped and the pinned checksums still match. For a
-     networked, clean-room proof also run `make nerdctl-build`.
+     fetch target was silently dropped, the pinned checksums still match, and
+     `docs/atlas.md` still references every tracked file (`atlas-check` — a
+     structural-drift alarm; it can't judge comment accuracy). For a networked,
+     clean-room proof also run `make nerdctl-build`.
   5. Commit, then `git tag -a vX.Y.Z`, then push branch **and** tag to `origin`.
      The tag is the public release trigger, so run step 4 *before* tagging — green
      CI is not enough (CI does not exercise the release bundle step).

@@ -54,7 +54,7 @@ LDFLAGS     := -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(B
 # Container image (local builds). IMAGE overridable; nerdctl for Rancher Desktop.
 IMAGE ?= talunor:local
 
-.PHONY: deps doctor build test release-check tidy clean distclean \
+.PHONY: deps doctor build test release-check atlas-check tidy clean distclean \
         docker-build docker-run nerdctl-build nerdctl-run
 
 ## deps: download the SQLite extensions and the embedding model into ext/
@@ -113,7 +113,24 @@ release-check: deps
 	$(call verify_sha256,$(VECTOR_SHA256),ext/vector.so)
 	$(call verify_sha256,$(AI_SHA256),ext/ai.so)
 	$(call verify_sha256,$(EMBED_SHA256),$(EMBED_MODEL))
+	@echo "==> atlas coverage (docs/atlas.md references every tracked file)"
+	@$(MAKE) --no-print-directory atlas-check
 	@echo "release-check: OK"
+
+## atlas-check: fail if docs/atlas.md doesn't reference every tracked file, so a
+## file added/removed without refreshing the map blocks a release (structural
+## drift). It cannot tell whether a *comment* is still accurate — that stays a
+## human/model judgement — only that nothing is missing. Regenerate the map with
+## the `repo-atlas` skill when this fails.
+atlas-check:
+	@test -f docs/atlas.md || { echo "docs/atlas.md is missing"; exit 1; }
+	@missing=0; \
+	for f in $$(git ls-files | grep -v '^docs/atlas\.md$$'); do \
+	  grep -q "$$(basename "$$f")" docs/atlas.md \
+	    || { echo "atlas: not referenced: $$f"; missing=1; }; \
+	done; \
+	[ "$$missing" = 0 ] || { echo "docs/atlas.md is stale — regenerate it (repo-atlas skill)"; exit 1; }
+	@echo "atlas-check: OK"
 
 ## chat: stream one prompt to a local Ollama model (LLM provider smoke test)
 ##   usage: make chat PROMPT="explain vector search in one sentence"
