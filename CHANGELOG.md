@@ -15,6 +15,37 @@ changed but the *lessons learned* while getting there.
   checks for which tools/args are auto-allowed vs. need approval (generalising the
   per-call approval gate that Layer 10 introduced).
 
+## [0.10.4] - 2026-07-17 — Learning course: the contribution & quality lessons (06–08)
+
+The course's first **🛠️ current-contribution** lessons — where the learner stops
+reading history and changes the *live* project on a branch off `main`.
+
+### Added
+
+- **`docs/lessons/06-build-your-first-tool/`** — implement the `tools.Tool`
+  interface from scratch (a `unit_convert` tool), register it, and table-test it —
+  learning that a new capability is an *extension*, never a change to the agent core.
+- **`docs/lessons/07-test-without-a-real-llm/`** — deterministic agent testing with
+  a `scriptedProvider`: drive a tool call → observation → final answer with no
+  network, and test the very tool built in Lesson 06.
+- **`docs/lessons/08-observability-and-errors/`** — a real live case: the
+  best-effort `_, _ = a.store.Remember(...)` for the assistant turn. Turn the silent
+  failure into an observable one via `a.trace` / `TALUNOR_DEBUG`, and learn
+  "non-blocking ≠ invisible" (plus what must never be logged).
+
+Course status: lessons 00–08 ready (9/11); 09–10 (advanced: SSRF, sandbox) planned.
+
+### Lessons learned
+
+1. **The `main`-based lessons are the drift-prone ones — reference by pattern, not
+   line.** Unlike the historical lessons (pinned to immutable tags), 06–08 track the
+   current code, so they point at things by *searchable pattern*
+   (`grep "_, _ = a.store.Remember"`) and tell the reader that if the code has since
+   moved, the principle still holds — studying the diff *is* the lesson.
+2. **A great exercise threads through several lessons.** The `unit_convert` tool
+   built in 06 becomes the thing tested in 07 — the learner exercises the tool
+   interface *and* the testing pattern on the same concrete artefact.
+
 ## [0.10.3] - 2026-07-17 — Learning course: the substrate lessons (02–04)
 
 Extends the course (started in v0.10.2) with the three lessons that come *before*

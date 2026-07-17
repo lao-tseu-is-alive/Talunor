@@ -170,5 +170,5 @@ git switch main
       sentence, what `runLoop` added.
 - [ ] I returned to `main`.
 
-**Next (planned):** Lesson 06 — *Build your first tool* (your first 🛠️ contribution
-on `main`).
+**Next:** [Lesson 06 — Build your first tool](../06-build-your-first-tool/) (your
+first 🛠️ contribution on `main`).

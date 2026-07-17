@@ -266,6 +266,9 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   reference docs on `main`". Guarded by `make lessons-check`.
 - **v0.10.3 (docs)** = course substrate lessons 02 (persistent memory, `v0.2.0`),
   03 (semantic recall/embeddings, `v0.2.0`), 04 (LLM provider/streaming, `v0.3.0`).
+- **v0.10.4 (docs)** = course contribution/quality lessons 06 (build a tool), 07
+  (deterministic tests), 08 (observability/errors) — the first 🛠️ lessons, on `main`.
+  Course now 00–08 (9/11); 09–10 (advanced) remain.
 - **Next — Iteration 3**: an explicit planner before multi-step actions; policy
   checks for which tools/args are auto-allowed vs. need approval (generalising
   `ApprovableFor` into a policy the agent consults). Then Iteration 4 (learning/

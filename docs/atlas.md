@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.10.3` (learning course — substrate lessons)
+- **Version:** `v0.10.4` (learning course — contribution/quality lessons)
 - **Generated:** 2026-07-17
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -128,7 +128,10 @@ Talunor/
 │       ├── 02-persistent-memory/README.md       # The SQLite store lifecycle at v0.2.0; short vs long term.
 │       ├── 03-semantic-recall/README.md         # Embeddings, cosine distance, the recall threshold (v0.2.0).
 │       ├── 04-llm-provider-and-streaming/README.md # The Provider interface + channel streaming (v0.3.0).
-│       └── 05-follow-the-agent-loop/README.md   # The minimal cognitive loop at v0.4.0, then its growth.
+│       ├── 05-follow-the-agent-loop/README.md   # The minimal cognitive loop at v0.4.0, then its growth.
+│       ├── 06-build-your-first-tool/README.md   # 🛠️ Add a unit_convert tool on main (extend, don't modify).
+│       ├── 07-test-without-a-real-llm/README.md # 🛠️ Deterministic agent tests with a scripted provider.
+│       └── 08-observability-and-errors/README.md # 🛠️ Make a silent store error observable via the trace.
 │
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.

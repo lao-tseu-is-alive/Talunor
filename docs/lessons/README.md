@@ -51,9 +51,9 @@ make doctor   # your first win — the memory substrate, running offline
 | [03](03-semantic-recall/) | Semantic recall & embeddings | 2 · **advanced** | 60 min | `v0.2.0` | ✅ ready |
 | [04](04-llm-provider-and-streaming/) | LLM provider & streaming | 2 | 60 min | `v0.3.0` | ✅ ready |
 | [05](05-follow-the-agent-loop/) | Follow the agent loop | 2 | 60 min | `v0.4.0` → `v0.7.0` | ✅ ready |
-| 06 | Build your first tool | 2 · contribution | 90 min | `main` | 🚧 planned |
-| 07 | Test without a real LLM | 2–3 | 75 min | `main` | 🚧 planned |
-| 08 | Observability & error handling | 2 | 45 min | `main` | 🚧 planned |
+| [06](06-build-your-first-tool/) | Build your first tool | 2 · 🛠️ contribution | 90 min | `main` | ✅ ready |
+| [07](07-test-without-a-real-llm/) | Test without a real LLM | 2–3 · 🛠️ | 75 min | `main` | ✅ ready |
+| [08](08-observability-and-errors/) | Observability & error handling | 2 · 🛠️ | 45 min | `main` | ✅ ready |
 | 09 | Secure web fetching (SSRF) | 3 · **advanced** | 75 min | `v0.10.0` | 🚧 planned |
 | 10 | Understand the sandbox | 4 · **advanced** | 90 min | `v0.9.0` | 🚧 planned |
 
