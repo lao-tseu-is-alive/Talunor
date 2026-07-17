@@ -1,5 +1,7 @@
 # Lesson 07 — Test without a real LLM
 
+**Language:** 🇬🇧 English · [🇫🇷 Français](README.fr.md)
+
 **🛠️ Current contribution** · Level 2–3 · ~75 min
 
 > A **contribution** lesson: work on `main`, on your own branch.

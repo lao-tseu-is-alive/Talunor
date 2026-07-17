@@ -275,6 +275,8 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   Cross-links stay directory-based during rollout; a top-of-page switcher flips language.
 - **v0.10.7 (docs)** = French translation batch 2: substrate lessons 02–04. FR coverage
   now 00–04; 05–10 remain.
+- **v0.10.8 (docs)** = French translation batch 3: loop + contribution lessons 05–08.
+  FR coverage now 00–08; only advanced 09–10 remain.
 - **Next — Iteration 3**: an explicit planner before multi-step actions; policy
   checks for which tools/args are auto-allowed vs. need approval (generalising
   `ApprovableFor` into a policy the agent consults). Then Iteration 4 (learning/

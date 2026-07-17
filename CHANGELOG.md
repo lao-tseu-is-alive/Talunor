@@ -15,6 +15,21 @@ changed but the *lessons learned* while getting there.
   checks for which tools/args are auto-allowed vs. need approval (generalising the
   per-call approval gate that Layer 10 introduced).
 
+## [0.10.8] - 2026-07-17 — Course: French translation, batch 3 (loop & contribution lessons 05–08)
+
+The largest translation batch: the agent loop plus the three 🛠️ contribution lessons.
+A French-speaking learner can now go index → Lesson 08 entirely in French — every
+lesson up to (but not including) the two advanced security ones.
+
+### Added
+
+- **French translations** (`README.fr.md`) for Lessons 05 (agent loop), 06 (build a
+  tool), 07 (deterministic tests), 08 (observability & errors). Go snippets, `git`
+  commands, and identifiers stay verbatim; prose is translated. Each EN lesson gained
+  the 🇬🇧↔🇫🇷 switcher.
+- French course coverage is now **00–08** (10 of 12 files); only the advanced lessons
+  09–10 remain.
+
 ## [0.10.7] - 2026-07-17 — Course: French translation, batch 2 (substrate lessons 02–04)
 
 Continues the French translation with the substrate arc — memory, semantic recall,

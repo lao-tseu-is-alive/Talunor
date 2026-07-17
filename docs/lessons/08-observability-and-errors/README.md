@@ -1,5 +1,7 @@
 # Lesson 08 — Observability & error handling
 
+**Language:** 🇬🇧 English · [🇫🇷 Français](README.fr.md)
+
 **🛠️ Current contribution** · Level 2 · ~45 min
 
 > A **contribution** lesson: work on `main`, on your own branch.

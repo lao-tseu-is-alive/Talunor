@@ -1,5 +1,7 @@
 # Lesson 06 — Build your first tool
 
+**Language:** 🇬🇧 English · [🇫🇷 Français](README.fr.md)
+
 **🛠️ Current contribution** · Level 2 · ~90 min
 
 > This is a **contribution** lesson: you change the *current* project. Work on
