@@ -1,5 +1,7 @@
 # Lesson 10 — Understand the sandbox
 
+**Language:** 🇬🇧 English · [🇫🇷 Français](README.fr.md)
+
 **🔍 Historical exploration** · Level 4 · **Advanced** · ~90 min
 
 > **The capstone.** The most advanced lesson — it touches Linux internals. The goal

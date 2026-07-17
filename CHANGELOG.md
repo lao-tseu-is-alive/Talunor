@@ -15,6 +15,29 @@ changed but the *lessons learned* while getting there.
   checks for which tools/args are auto-allowed vs. need approval (generalising the
   per-call approval gate that Layer 10 introduced).
 
+## [0.10.9] - 2026-07-17 — Course fully bilingual: French translation complete (09–10)
+
+The last two (advanced) translations land, and with them the course is **completely
+bilingual** — all 11 lessons plus the index exist in both 🇬🇧 English and 🇫🇷 French.
+
+### Added
+
+- **French translations** (`README.fr.md`) for Lessons 09 (SSRF / secure web fetching)
+  and 10 (the sandbox capstone, including the course-completion recap). The 🇬🇧↔🇫🇷
+  switcher is now on every EN lesson.
+- The FR index status flips from "in progress" to complete.
+
+### Lessons learned
+
+1. **A translation is a second review in disguise.** Doing the French pass end to end
+   forced a fresh read of every lesson and caught real issues the English pass had left
+   (e.g. Lesson 01's stale "Next" link, fixed in v0.10.6). Two languages, two chances to
+   notice.
+2. **Keep the translation drift-guarded like the code.** Because `lessons-check` scans
+   the `.fr.md` files too — pinned tags, cross-links, and `git diff` paths — the French
+   lessons are held to the same "references must resolve" bar as the English ones, for
+   free.
+
 ## [0.10.8] - 2026-07-17 — Course: French translation, batch 3 (loop & contribution lessons 05–08)
 
 The largest translation batch: the agent loop plus the three 🛠️ contribution lessons.

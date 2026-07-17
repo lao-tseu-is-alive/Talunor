@@ -1,5 +1,7 @@
 # Lesson 09 — Secure web fetching (SSRF)
 
+**Language:** 🇬🇧 English · [🇫🇷 Français](README.fr.md)
+
 **🔍 Historical exploration** · Level 3 · **Advanced** · ~75 min
 
 > **Advanced security lesson.** It rewards Lessons 04–05. Take your time.

@@ -11,9 +11,8 @@ Ce répertoire transforme cette idée en un parcours guidé. Chaque leçon a un 
 clair, une courte liste de lecture, une expérience pratique et une checklist pour
 savoir quand tu as terminé.
 
-> **Statut : complet.** Les onze leçons (00–10) sont prêtes. *(Traduction française
-> en cours, leçon par leçon ; certaines leçons ne sont pour l'instant complètes
-> qu'en anglais — utilise le sélecteur de langue en haut de chaque page.)*
+> **Statut : complet.** Les onze leçons (00–10) sont prêtes, **entièrement en
+> anglais et en français** (utilise le sélecteur de langue en haut de chaque page).
 
 ## Pour qui
 
