@@ -8,7 +8,7 @@ import "fmt"
 // Version is Talunor's semantic version. Scheme: 0.MINOR.PATCH, where each
 // completed layer of the MVP bumps MINOR. Iteration 1 (conversational agent +
 // memory) completes at 0.5.0.
-const Version = "0.10.5"
+const Version = "0.10.6"
 
 // Name is the application name.
 const Name = "Talunor"

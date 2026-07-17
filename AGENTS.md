@@ -270,6 +270,9 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   (deterministic tests), 08 (observability/errors) — the first 🛠️ lessons, on `main`.
 - **v0.10.5 (docs)** = advanced security lessons 09 (SSRF, `v0.10.0`) + 10 (sandbox,
   `v0.9.0`, capstone). **Course complete: all 11 lessons (00–10).**
+- **v0.10.6 (docs)** = French translation begins — bilingual `README.fr.md` next to
+  each `README.md` (EN canonical). On-ramp done: index, 00, 01; more per batch.
+  Cross-links stay directory-based during rollout; a top-of-page switcher flips language.
 - **Next — Iteration 3**: an explicit planner before multi-step actions; policy
   checks for which tools/args are auto-allowed vs. need approval (generalising
   `ApprovableFor` into a policy the agent consults). Then Iteration 4 (learning/

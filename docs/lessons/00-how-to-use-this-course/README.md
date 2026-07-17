@@ -1,5 +1,7 @@
 # Lesson 00 — How to use this course
 
+**Language:** 🇬🇧 English · [🇫🇷 Français](README.fr.md)
+
 **🔍 Historical exploration** · Level 0 (orientation) · ~15 min
 
 ## Why this lesson exists

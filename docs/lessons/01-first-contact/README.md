@@ -1,5 +1,7 @@
 # Lesson 01 — First contact & first win
 
+**Language:** 🇬🇧 English · [🇫🇷 Français](README.fr.md)
+
 **🔍 Historical exploration** (with an optional 🛠️ run on `main`) · Level 1
 (beginner) · ~30 min
 
@@ -147,6 +149,4 @@ Keep this picture; the next lessons zoom into each box.
 - [ ] I can say what `v0.1.0` did and what `v0.4.0` added.
 - [ ] I can draw the four-box mental model from memory.
 
-**Next:** [Lesson 05 — Follow the agent loop](../05-follow-the-agent-loop/) *(the
-pilot skips ahead to the heart of the system; Lessons 02–04 fill in memory,
-embeddings, and the LLM provider).*
+**Next:** [Lesson 02 — Persistent memory with SQLite](../02-persistent-memory/).

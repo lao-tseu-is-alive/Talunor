@@ -15,6 +15,37 @@ changed but the *lessons learned* while getting there.
   checks for which tools/args are auto-allowed vs. need approval (generalising the
   per-call approval gate that Layer 10 introduced).
 
+## [0.10.6] - 2026-07-17 — Course: French translation begins (on-ramp: index, 00, 01)
+
+The course is beginner-facing and the author's audience is French-speaking, so it
+now ships **bilingual**. English stays canonical; each lesson gains a `README.fr.md`
+alongside its `README.md`, added lesson by lesson.
+
+### Added
+
+- **French translations** of the course on-ramp: the index, **Lesson 00** (course
+  navigation), and **Lesson 01** (first contact). Each file carries a language
+  switcher at the top (🇬🇧 ↔ 🇫🇷); cross-links point to the sibling directory (so
+  GitHub serves the English `README.md` by default and the switcher flips language),
+  which keeps every link valid while the translation rolls out.
+
+### Fixed
+
+- **Lesson 01's "Next" link** pointed at Lesson 05 — a leftover from when the course
+  was a 3-lesson pilot and 02–04 didn't exist yet. It now points to Lesson 02. (A
+  small drift the translation pass surfaced — exactly the kind of stale cross-link a
+  second read catches.)
+
+### Lessons learned
+
+1. **Translate the on-ramp first.** A beginner who can't read the *index* and the
+   *first two lessons* in their language never reaches lesson three. Ship the entry
+   path, then the rest — the same incremental discipline as the code.
+2. **Keep links language-neutral during a rolling translation.** Cross-links point to
+   the *directory*, not to `README.fr.md`, so nothing breaks while only some lessons
+   are translated; the top-of-page switcher handles language. `lessons-check` already
+   validates those links in the French files too.
+
 ## [0.10.5] - 2026-07-17 — Learning course complete: the advanced security lessons (09–10)
 
 The final two lessons — both **advanced** — and with them the course is **complete:

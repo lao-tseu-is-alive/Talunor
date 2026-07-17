@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.10.5` (learning course — complete, 11 lessons)
+- **Version:** `v0.10.6` (learning course — complete; French translation started)
 - **Generated:** 2026-07-17
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -122,6 +122,7 @@ Talunor/
 │   ├── atlas.md           #   THIS FILE — the repository map.
 │   ├── ollama-networking.md # Reaching a loopback Ollama from inside the container, securely.
 │   └── lessons/           #   Hands-on course: a guided path through the tag-by-tag history.
+│       │                  #     Each lesson is bilingual: README.md (EN, canonical) + README.fr.md (FR, in progress).
 │       ├── README.md      #     Course index + prerequisites + the two-badge convention.
 │       ├── 00-how-to-use-this-course/README.md  # Navigation: tags, detached HEAD, the reference docs.
 │       ├── 01-first-contact/README.md           # First offline win (make doctor) + the v0.1.0 seed.

@@ -1,5 +1,7 @@
 # Talunor — a hands-on course in Go, AI agents, and safe-by-design code
 
+**Language:** 🇬🇧 English · [🇫🇷 Français](README.fr.md)
+
 Talunor is built **one layer at a time, each layer a git tag** (`v0.1.0`,
 `v0.2.0`, …). That history is not just a changelog — it's a **course**. You can
 check out an early tag to see the project when it was small and simple, understand
