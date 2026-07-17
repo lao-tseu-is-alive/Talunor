@@ -1,5 +1,7 @@
 # Lesson 02 — Persistent memory with SQLite
 
+**Language:** 🇬🇧 English · [🇫🇷 Français](README.fr.md)
+
 **🔍 Historical exploration** · Level 1 (beginner) · ~45 min
 
 ## Why this lesson exists

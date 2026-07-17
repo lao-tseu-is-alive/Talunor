@@ -15,6 +15,21 @@ changed but the *lessons learned* while getting there.
   checks for which tools/args are auto-allowed vs. need approval (generalising the
   per-call approval gate that Layer 10 introduced).
 
+## [0.10.7] - 2026-07-17 — Course: French translation, batch 2 (substrate lessons 02–04)
+
+Continues the French translation with the substrate arc — memory, semantic recall,
+the LLM provider — so a French-speaking beginner can now go from the index through
+Lesson 04 entirely in French.
+
+### Added
+
+- **French translations** (`README.fr.md`) for Lessons 02 (persistent memory), 03
+  (semantic recall & embeddings), and 04 (LLM provider & streaming). Code snippets,
+  commands, and `make doctor` output are kept verbatim (language-neutral); prose is
+  translated. Each EN lesson gained the 🇬🇧↔🇫🇷 switcher.
+- French course coverage is now **00–04** (6 of 12 files, index included); 05–10
+  remain.
+
 ## [0.10.6] - 2026-07-17 — Course: French translation begins (on-ramp: index, 00, 01)
 
 The course is beginner-facing and the author's audience is French-speaking, so it

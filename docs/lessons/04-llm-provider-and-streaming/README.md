@@ -1,5 +1,7 @@
 # Lesson 04 — LLM provider & streaming
 
+**Language:** 🇬🇧 English · [🇫🇷 Français](README.fr.md)
+
 **🔍 Historical exploration** · Level 2 · ~60 min
 
 ## Why this lesson exists

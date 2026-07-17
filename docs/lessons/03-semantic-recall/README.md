@@ -1,5 +1,7 @@
 # Lesson 03 — Semantic recall & embeddings
 
+**Language:** 🇬🇧 English · [🇫🇷 Français](README.fr.md)
+
 **🔍 Historical exploration** · Level 2 · **Advanced** · ~60 min
 
 > **Advanced lesson.** It touches vectors and a little C-interop (cgo). If that's
