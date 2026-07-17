@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.10.2` (learning course)
+- **Version:** `v0.10.3` (learning course — substrate lessons)
 - **Generated:** 2026-07-17
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -125,6 +125,9 @@ Talunor/
 │       ├── README.md      #     Course index + prerequisites + the two-badge convention.
 │       ├── 00-how-to-use-this-course/README.md  # Navigation: tags, detached HEAD, the reference docs.
 │       ├── 01-first-contact/README.md           # First offline win (make doctor) + the v0.1.0 seed.
+│       ├── 02-persistent-memory/README.md       # The SQLite store lifecycle at v0.2.0; short vs long term.
+│       ├── 03-semantic-recall/README.md         # Embeddings, cosine distance, the recall threshold (v0.2.0).
+│       ├── 04-llm-provider-and-streaming/README.md # The Provider interface + channel streaming (v0.3.0).
 │       └── 05-follow-the-agent-loop/README.md   # The minimal cognitive loop at v0.4.0, then its growth.
 │
 └── scripts/               # Helper shell scripts.

@@ -15,6 +15,38 @@ changed but the *lessons learned* while getting there.
   checks for which tools/args are auto-allowed vs. need approval (generalising the
   per-call approval gate that Layer 10 introduced).
 
+## [0.10.3] - 2026-07-17 — Learning course: the substrate lessons (02–04)
+
+Extends the course (started in v0.10.2) with the three lessons that come *before*
+the agent loop, so a beginner meets each substrate on its own before seeing them
+combine: **memory**, then **semantic recall**, then **the LLM**.
+
+### Added
+
+- **`docs/lessons/02-persistent-memory/`** *(🔍 `v0.2.0`, beginner)* — the SQLite
+  store as an infrastructure boundary: `Open`/`Close` lifecycle, the schema, and
+  the short-term ring buffer vs the long-term store (what survives a restart).
+- **`docs/lessons/03-semantic-recall/`** *(🔍 `v0.2.0`, advanced)* — embeddings,
+  cosine distance, KNN, and the `maxDistance` threshold, read straight from the
+  `make doctor` output (why *"French landmark"* recalls *Eiffel Tower*).
+- **`docs/lessons/04-llm-provider-and-streaming/`** *(🔍 `v0.3.0`)* — the small
+  `llm.Provider` interface, streaming a reply over a channel, and a **compiling**
+  fake provider (the trick behind deterministic agent tests). The signature is
+  verified against `v0.3.0`, so — unlike a plausible-looking draft — it actually
+  builds.
+- The new `make lessons-check` guard (added just before these) validated every
+  pinned tag and cross-link while they were written.
+
+### Lessons learned
+
+1. **Teach the substrate before the system.** Splitting "memory", "meaning", and
+   "the model" into their own lessons — each on the tag where it first appears —
+   lets a beginner build one idea at a time, so Lesson 05 (the loop) lands as
+   *"oh, these three click together"* rather than a wall.
+2. **A drift guard pays off immediately when *authoring*, not just at release.**
+   `lessons-check` caught tag/link mistakes as the lessons were written — the same
+   verify-against-reality discipline, now automated for the course.
+
 ## [0.10.2] - 2026-07-17 — A hands-on learning course (`docs/lessons/`)
 
 The project's whole point is teaching, so it now has an actual **guided course**

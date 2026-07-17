@@ -47,9 +47,9 @@ make doctor   # your first win — the memory substrate, running offline
 |--------|---------|-------|-------|---------|--------|
 | [00](00-how-to-use-this-course/) | How to use this course | 0 · orientation | 15 min | — | ✅ ready |
 | [01](01-first-contact/) | First contact & first win | 1 · beginner | 30 min | `v0.1.0` → `main` | ✅ ready |
-| 02 | Persistent memory with SQLite | 1 · beginner | 45 min | `v0.1.0` | 🚧 planned |
-| 03 | Semantic recall & embeddings | 2 · **advanced** | 60 min | `v0.2.0`/`v0.3.0` | 🚧 planned |
-| 04 | LLM provider & streaming | 2 | 60 min | `v0.3.0` | 🚧 planned |
+| [02](02-persistent-memory/) | Persistent memory with SQLite | 1 · beginner | 45 min | `v0.2.0` | ✅ ready |
+| [03](03-semantic-recall/) | Semantic recall & embeddings | 2 · **advanced** | 60 min | `v0.2.0` | ✅ ready |
+| [04](04-llm-provider-and-streaming/) | LLM provider & streaming | 2 | 60 min | `v0.3.0` | ✅ ready |
 | [05](05-follow-the-agent-loop/) | Follow the agent loop | 2 | 60 min | `v0.4.0` → `v0.7.0` | ✅ ready |
 | 06 | Build your first tool | 2 · contribution | 90 min | `main` | 🚧 planned |
 | 07 | Test without a real LLM | 2–3 | 75 min | `main` | 🚧 planned |

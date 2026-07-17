@@ -263,7 +263,9 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
 - **v0.10.2 (docs)** = `docs/lessons/` — a hands-on course that turns the tag-by-tag
   history into a guided path for Go beginners (pilot: lessons 00, 01, 05). Historical
   lessons pin to immutable tags (drift-resistant); "read the code at the tag, the
-  reference docs on `main`".
+  reference docs on `main`". Guarded by `make lessons-check`.
+- **v0.10.3 (docs)** = course substrate lessons 02 (persistent memory, `v0.2.0`),
+  03 (semantic recall/embeddings, `v0.2.0`), 04 (LLM provider/streaming, `v0.3.0`).
 - **Next — Iteration 3**: an explicit planner before multi-step actions; policy
   checks for which tools/args are auto-allowed vs. need approval (generalising
   `ApprovableFor` into a policy the agent consults). Then Iteration 4 (learning/
