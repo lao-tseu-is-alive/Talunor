@@ -1,4 +1,5 @@
 # Talunor
+<img  align="left" src="images/Talunor.jpg" alt="Talunor — terminal AI agent with long-term memory" hspace="14" vspace="4" width="180" />
 
 **Talunor** is a terminal-based, autonomous decision-making AI agent built in Go,
 with a multi-tier memory backed by SQLite. It is developed **step by step as a
