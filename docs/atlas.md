@@ -3,8 +3,8 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.10.0` (Layer 10 — `web_fetch`)
-- **Generated:** 2026-07-16
+- **Version:** `v0.10.2` (learning course)
+- **Generated:** 2026-07-17
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
   (`.env`), personal notes (`todo.md`), and review output (`/reports`). Rebuild
@@ -120,7 +120,12 @@ Talunor/
 │
 ├── docs/                  # Documentation.
 │   ├── atlas.md           #   THIS FILE — the repository map.
-│   └── ollama-networking.md # Reaching a loopback Ollama from inside the container, securely.
+│   ├── ollama-networking.md # Reaching a loopback Ollama from inside the container, securely.
+│   └── lessons/           #   Hands-on course: a guided path through the tag-by-tag history.
+│       ├── README.md      #     Course index + prerequisites + the two-badge convention.
+│       ├── 00-how-to-use-this-course/README.md  # Navigation: tags, detached HEAD, the reference docs.
+│       ├── 01-first-contact/README.md           # First offline win (make doctor) + the v0.1.0 seed.
+│       └── 05-follow-the-agent-loop/README.md   # The minimal cognitive loop at v0.4.0, then its growth.
 │
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.

@@ -15,6 +15,46 @@ changed but the *lessons learned* while getting there.
   checks for which tools/args are auto-allowed vs. need approval (generalising the
   per-call approval gate that Layer 10 introduced).
 
+## [0.10.2] - 2026-07-17 — A hands-on learning course (`docs/lessons/`)
+
+The project's whole point is teaching, so it now has an actual **guided course**
+that turns the tag-by-tag history into a path a Go **beginner** can walk: check out
+an early tag to read a layer when it was small, understand one idea, then come back
+to `main`. This release ships the **pilot** — three lessons validating the format
+before scaling.
+
+### Added
+
+- **`docs/lessons/`** — a course index plus three pilot lessons:
+  - **00 — How to use this course**: git navigation, "detached HEAD = read, don't
+    commit", and the two lesson kinds (🔍 *historical exploration* vs 🛠️ *current
+    contribution*).
+  - **01 — First contact & first win**: an offline win first (`make doctor`, no
+    Ollama), then the `v0.1.0` seed (memory only), then the interactive agent.
+  - **05 — Follow the agent loop**: the *minimal* loop at `v0.4.0`, then its growth
+    shown by a `git diff v0.4.0 v0.7.0` the learner runs themselves.
+  - Every lesson has learning objectives, a files-at-this-tag map, an experiment,
+    and a completion checklist. Historical lessons pin to **immutable tags**, so
+    the "read this code" parts can't drift; only the reference docs (read on `main`)
+    and the few `main`-based contribution lessons need upkeep.
+- Referenced from the README (banner + Layout) and `docs/atlas.md`.
+
+### Lessons learned
+
+1. **A tag-per-layer history is a curriculum waiting to happen.** The discipline of
+   "one layer = one immutable tag" (kept since `v0.1.0`) means a lesson can send a
+   learner to *exactly* the code as it was, forever. That immutability is the
+   drift-resistance the docs on `main` don't have — lean into it.
+2. **Verify teaching material against the code, like everything else.** Drafting the
+   lessons surfaced real errors in the outline: a command that used `cmd/talunor` at
+   `v0.1.0` (it doesn't exist before `v0.4.0`), and an example `Provider` with a
+   signature that wouldn't compile. For a beginner, code that doesn't run is worse
+   than no code — every snippet and tag was checked against the actual repo.
+3. **Docs grow with the code, and beginners must be told so.** `AGENTS.md` only
+   exists from `v0.6.0`, `docs/atlas.md` only on the latest tags — so lessons read
+   the *reference docs on `main`* and the *code at the tag*, and each historical
+   lesson carries its own small map of that tag.
+
 ## [0.10.1] - 2026-07-16 — Patch: two fixes surfaced by a cross-model review
 
 Five different LLMs were asked to review the repo; cross-checking their findings

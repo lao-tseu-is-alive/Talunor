@@ -256,6 +256,13 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   `TALUNOR_WEBFETCH`. Introduces `tools.ApprovableFor` (per-call approval from args)
   for the `TALUNOR_WEBFETCH_ALLOW` allowlist — the allowlist skips the *prompt*, not
   the SSRF guard.
+- **v0.10.1 (patch)** = two fixes from a cross-model review: recalled memories now
+  fenced + framed as untrusted DATA in `buildMessages` (persistent-prompt-injection
+  mitigation); assistant text emitted before a tool-call is carried into the history.
+- **v0.10.2 (docs)** = `docs/lessons/` — a hands-on course that turns the tag-by-tag
+  history into a guided path for Go beginners (pilot: lessons 00, 01, 05). Historical
+  lessons pin to immutable tags (drift-resistant); "read the code at the tag, the
+  reference docs on `main`".
 - **Next — Iteration 3**: an explicit planner before multi-step actions; policy
   checks for which tools/args are auto-allowed vs. need approval (generalising
   `ApprovableFor` into a policy the agent consults). Then Iteration 4 (learning/
