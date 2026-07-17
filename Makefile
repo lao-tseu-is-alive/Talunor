@@ -54,7 +54,7 @@ LDFLAGS     := -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(B
 # Container image (local builds). IMAGE overridable; nerdctl for Rancher Desktop.
 IMAGE ?= talunor:local
 
-.PHONY: deps doctor build test release-check atlas-check readme-check tidy clean distclean \
+.PHONY: deps doctor build test release-check atlas-check readme-check lessons-check tidy clean distclean \
         docker-build docker-run nerdctl-build nerdctl-run
 
 ## deps: download the SQLite extensions and the embedding model into ext/
@@ -117,6 +117,8 @@ release-check: deps
 	@$(MAKE) --no-print-directory atlas-check
 	@echo "==> README version banner matches internal/version"
 	@$(MAKE) --no-print-directory readme-check
+	@echo "==> lessons reference valid tags / links / files"
+	@$(MAKE) --no-print-directory lessons-check
 	@echo "release-check: OK"
 
 ## atlas-check: fail if docs/atlas.md doesn't reference every tracked file, so a
@@ -143,6 +145,31 @@ readme-check:
 	  grep -q "Current version: \*\*v$$ver\*\*" README.md \
 	    || { echo "README 'Current version' banner != v$$ver (internal/version) — update it"; exit 1; }; \
 	  echo "readme-check: OK (v$$ver)"
+
+## lessons-check: keep docs/lessons references valid — every pinned git tag exists,
+## every sibling-lesson link resolves, and every file named in a `git diff vA vB --
+## path` exists at both tags. Historical lessons pin to immutable tags, so these
+## refs should never rot; this catches an author's typo (a wrong tag or path). It
+## does NOT judge whether inline snippets are still accurate — that stays the
+## author's job, like the other drift alarms. No-op when docs/lessons is absent.
+lessons-check:
+	@test -d docs/lessons || { echo "lessons-check: no docs/lessons/ (skipped)"; exit 0; }
+	@cur=$$(grep -oE 'Version = "[0-9]+\.[0-9]+\.[0-9]+"' internal/version/version.go | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'); \
+	fail=0; \
+	for v in $$(grep -rhoE 'v[0-9]+\.[0-9]+\.[0-9]+' docs/lessons | sort -u); do \
+	  [ "$$v" = "v$$cur" ] && continue; \
+	  git rev-parse -q --verify "$$v^{commit}" >/dev/null 2>&1 || { echo "lessons: references unknown tag $$v"; fail=1; }; \
+	done; \
+	for d in $$(grep -rhoE '\((\.\./)?[0-9][0-9]-[a-z0-9-]+/\)' docs/lessons | grep -oE '[0-9][0-9]-[a-z0-9-]+' | sort -u); do \
+	  test -d "docs/lessons/$$d" || { echo "lessons: broken link to $$d/"; fail=1; }; \
+	done; \
+	tmp=$$(mktemp); grep -rhoE 'git diff v[0-9.]+ v[0-9.]+ -- [A-Za-z0-9_./-]+' docs/lessons | sort -u > "$$tmp"; \
+	while read -r _ _ ta tb _ p; do \
+	  git cat-file -e "$$ta:$$p" 2>/dev/null || { echo "lessons: $$p missing at $$ta"; fail=1; }; \
+	  git cat-file -e "$$tb:$$p" 2>/dev/null || { echo "lessons: $$p missing at $$tb"; fail=1; }; \
+	done < "$$tmp"; rm -f "$$tmp"; \
+	[ "$$fail" = 0 ] || { echo "lessons-check: FAILED"; exit 1; }; \
+	echo "lessons-check: OK"
 
 ## chat: stream one prompt to a local Ollama model (LLM provider smoke test)
 ##   usage: make chat PROMPT="explain vector search in one sentence"

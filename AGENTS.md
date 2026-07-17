@@ -30,8 +30,9 @@ Module: `github.com/lao-tseu-is-alive/Talunor` · Go 1.26 · **cgo required**.
      **`docs/atlas.md`** (the `repo-atlas` skill).
   4. **`make release-check`** must pass: gofmt + vet + tests, *plus* guards that no
      fetch target was silently dropped, the pinned checksums still match,
-     `docs/atlas.md` still references every tracked file (`atlas-check`), and the
-     README "Current version" banner matches `internal/version` (`readme-check`).
+     `docs/atlas.md` still references every tracked file (`atlas-check`), the
+     README "Current version" banner matches `internal/version` (`readme-check`),
+     and `docs/lessons/` references only valid tags/links/files (`lessons-check`).
      (These drift alarms can't judge whether prose is *accurate*, only that it's
      not stale/missing.) For a networked, clean-room proof also run `make nerdctl-build`.
   5. Commit, then `git tag -a vX.Y.Z`, then push branch **and** tag to `origin`.
