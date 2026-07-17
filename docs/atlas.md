@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.10.4` (learning course — contribution/quality lessons)
+- **Version:** `v0.10.5` (learning course — complete, 11 lessons)
 - **Generated:** 2026-07-17
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -131,7 +131,9 @@ Talunor/
 │       ├── 05-follow-the-agent-loop/README.md   # The minimal cognitive loop at v0.4.0, then its growth.
 │       ├── 06-build-your-first-tool/README.md   # 🛠️ Add a unit_convert tool on main (extend, don't modify).
 │       ├── 07-test-without-a-real-llm/README.md # 🛠️ Deterministic agent tests with a scripted provider.
-│       └── 08-observability-and-errors/README.md # 🛠️ Make a silent store error observable via the trace.
+│       ├── 08-observability-and-errors/README.md # 🛠️ Make a silent store error observable via the trace.
+│       ├── 09-secure-web-fetching/README.md     # The SSRF guard at v0.10.0 (Control hook, blockedIP).
+│       └── 10-understand-the-sandbox/README.md  # The two sandbox backends at v0.9.0 + honest boundaries.
 │
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.

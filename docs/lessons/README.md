@@ -9,8 +9,7 @@ This directory turns that idea into a guided path. Each lesson has a clear goal,
 short reading list, a hands-on experiment, and a checklist so you know when you're
 done.
 
-> **Status: pilot.** Three lessons are ready (**00, 01, 05**). The rest are
-> planned — the table shows the full route so you can see where it's going.
+> **Status: complete.** All eleven lessons (00–10) are ready.
 
 ## Who this is for
 
@@ -54,8 +53,8 @@ make doctor   # your first win — the memory substrate, running offline
 | [06](06-build-your-first-tool/) | Build your first tool | 2 · 🛠️ contribution | 90 min | `main` | ✅ ready |
 | [07](07-test-without-a-real-llm/) | Test without a real LLM | 2–3 · 🛠️ | 75 min | `main` | ✅ ready |
 | [08](08-observability-and-errors/) | Observability & error handling | 2 · 🛠️ | 45 min | `main` | ✅ ready |
-| 09 | Secure web fetching (SSRF) | 3 · **advanced** | 75 min | `v0.10.0` | 🚧 planned |
-| 10 | Understand the sandbox | 4 · **advanced** | 90 min | `v0.9.0` | 🚧 planned |
+| [09](09-secure-web-fetching/) | Secure web fetching (SSRF) | 3 · **advanced** | 75 min | `v0.10.0` | ✅ ready |
+| [10](10-understand-the-sandbox/) | Understand the sandbox | 4 · **advanced** | 90 min | `v0.9.0` | ✅ ready |
 
 ## Two kinds of lesson — don't mix them up
 

@@ -132,5 +132,5 @@ itself the lesson.)
 - [ ] I can name two things that must never appear in a log.
 - [ ] I can explain, in one sentence, "non-blocking ≠ invisible".
 
-**Next (planned):** Lesson 09 — *Secure web fetching* (SSRF), an **advanced**
-security lesson.
+**Next:** [Lesson 09 — Secure web fetching (SSRF)](../09-secure-web-fetching/), an
+**advanced** security lesson.

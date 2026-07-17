@@ -15,6 +15,39 @@ changed but the *lessons learned* while getting there.
   checks for which tools/args are auto-allowed vs. need approval (generalising the
   per-call approval gate that Layer 10 introduced).
 
+## [0.10.5] - 2026-07-17 — Learning course complete: the advanced security lessons (09–10)
+
+The final two lessons — both **advanced** — and with them the course is **complete:
+all 11 lessons (00–10)**. They cover Talunor's two security surfaces, and the
+capstone lands the idea the whole project has been building toward.
+
+### Added
+
+- **`docs/lessons/09-secure-web-fetching/`** *(🔍 `v0.10.0`, advanced)* — SSRF: why
+  a URL allowlist isn't enough, why the guard checks the IP **at connect time**
+  (DNS-rebinding-safe) and on every redirect, and how a security decision written
+  as a *pure, table-tested function* (`blockedIP` / `guardDial`) is a joy to verify.
+  Includes an optional 🛠️ hardening (add `0.0.0.0/8`).
+- **`docs/lessons/10-understand-the-sandbox/`** *(🔍 `v0.9.0`, advanced, capstone)* —
+  the two sandbox backends compared honestly, and the course's central idea: **a
+  guardrail's worth is inseparable from an honest account of where it stops** (the
+  `namespaces` backend says of itself "teaching artifact, not a strong boundary").
+  Ends with a "you've finished the course" recap of the seven things the learner can
+  now do.
+- Course index flipped from *pilot* to *complete*; README banner now advertises the
+  full 11-lesson course.
+
+### Lessons learned
+
+1. **End on the idea, not the hardest mechanism.** The capstone isn't "how Linux
+   namespaces work" — it's *honesty about limits*. The most transferable thing a
+   security-minded codebase teaches is to name where a guardrail stops, and Talunor
+   models that in code you can read.
+2. **A course is finished when it can replace a mentor.** The success test set at the
+   start — run it, explain it, follow a turn, add a tool, test it, reason about its
+   security, justify a trade-off — is now reachable end to end by reading `docs/lessons/`
+   alone. That was the goal.
+
 ## [0.10.4] - 2026-07-17 — Learning course: the contribution & quality lessons (06–08)
 
 The course's first **🛠️ current-contribution** lessons — where the learner stops
