@@ -3,8 +3,8 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.10.9` (learning course — complete & fully bilingual EN/FR)
-- **Generated:** 2026-07-17
+- **Version:** `v0.10.10` (doctor surfaces the sqlite-ai / sqlite-vector versions)
+- **Generated:** 2026-07-21
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
   (`.env`), personal notes (`todo.md`), and review output (`/reports`). Rebuild
@@ -38,6 +38,9 @@ Talunor/
 ├── .gitignore                # Ignored paths: build output, ext/ assets, *.db, .env, todo.md, /reports.
 ├── .env_sample               # Annotated template of every env var — copy to .env to configure.
 │
+├── images/                   # Static image assets referenced by the docs.
+│   └── Talunor.jpg           #   Project logo shown at the top of the README.
+│
 ├── .github/workflows/        # CI/CD pipelines (GitHub Actions).
 │   ├── ci.yml                #   Push/PR to main: make deps + go vet + go test (cgo; caches ext/).
 │   ├── cve-trivy-scan.yml    #   Main + weekly: builds the image, Trivy-scans, fails on fixable HIGH/CRITICAL.
@@ -48,7 +51,7 @@ Talunor/
 │   ├── talunor/main.go       #   THE APP. TUI by default, --plain REPL, --list dump. Wires providers,
 │   │                         #     tools (bash/web_fetch opt-in), prompt history, and the debug trace.
 │   ├── chat/main.go          #   One-shot LLM streaming smoke test (verify a provider streams).
-│   └── doctor/main.go        #   Memory-substrate smoke test: embed a corpus → store → KNN recall.
+│   └── doctor/main.go        #   Memory-substrate smoke test: print ext versions → embed a corpus → store → KNN recall.
 │
 ├── internal/                 # Private packages — one per teaching layer.
 │   │

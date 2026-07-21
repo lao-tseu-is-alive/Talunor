@@ -279,6 +279,10 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   FR coverage now 00–08; only advanced 09–10 remain.
 - **v0.10.9 (docs)** = French translation complete (09–10). **The course is fully
   bilingual EN/FR — every lesson + index in both languages.** Keep new lessons bilingual.
+- **v0.10.10 (patch)** = `doctor` DX: prints the loaded sqlite-ai / sqlite-vector
+  extension versions (`Store.VersionAI` / `Store.VersionVector` → `ai_version()` /
+  `vector_version()`), plus two mountain corpus facts + a third recall query. Cheap
+  observability on the memory smoke test.
 - **Next — Iteration 3**: an explicit planner before multi-step actions; policy
   checks for which tools/args are auto-allowed vs. need approval (generalising
   `ApprovableFor` into a policy the agent consults). Then Iteration 4 (learning/

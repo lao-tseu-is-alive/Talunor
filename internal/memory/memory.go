@@ -94,6 +94,7 @@ func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance flo
 	}
 	// Over-fetch neighbours: assistant turns are filtered out below, so the raw
 	// KNN limit must exceed k to still yield k user-relevant hits.
+	// see : https://docs.sqlitecloud.io/docs/sqlite-vector-api-reference
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT m.id, m.kind, COALESCE(m.role, ''), m.content, m.created_at, v.distance
 		FROM vector_full_scan('memories', 'embedding', ?, ?) AS v
@@ -193,4 +194,18 @@ func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+// VersionAI returns the sqlite-ai extension version string, e.g. "0.1.0".
+func (s *Store) VersionAI(ctx context.Context) (string, error) {
+	var v string
+	err := s.db.QueryRowContext(ctx, `SELECT ai_version()`).Scan(&v)
+	return v, err
+}
+
+// VersionVector returns the sqlite-vector extension version string, e.g. "0.1.0".
+func (s *Store) VersionVector(ctx context.Context) (string, error) {
+	var v string
+	err := s.db.QueryRowContext(ctx, `SELECT vector_version()`).Scan(&v)
+	return v, err
 }

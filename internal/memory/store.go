@@ -201,6 +201,7 @@ func (s *Store) Path() string { return s.cfg.DBPath }
 // Embed returns the embedding of text as a FLOAT32 BLOB, computed in-process by
 // sqlite-ai. The BLOB is directly storable in memories.embedding and directly
 // usable as a query vector for KNN search.
+// see: https://docs.sqlitecloud.io/docs/sqlite-ai-api-reference
 func (s *Store) Embed(ctx context.Context, text string) ([]byte, error) {
 	var blob []byte
 	err := s.db.QueryRowContext(ctx,

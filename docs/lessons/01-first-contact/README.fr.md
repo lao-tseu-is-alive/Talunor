@@ -115,6 +115,50 @@ l'autre parce qu'il a stocké le premier. Tape `/help` pour voir les commandes,
 `/exit` pour quitter. Si tu n'as pas encore Ollama, saute cette étape ; le reste du
 cours n'en a *besoin* qu'occasionnellement, et le signale toujours.
 
+## 🛠️ Bonus optionnel — ta première contribution d'une ligne
+
+Lire est une chose ; modifier le code et voir ta modification tourner, c'est la vraie
+première étape pour contribuer. Voici la plus petite possible.
+
+Sur `main`, `make doctor` affiche les versions des deux extensions SQLite chargées,
+juste après l'ouverture du store :
+
+```text
+• AI version: 1.0.4
+• vector version: 1.0.0
+```
+
+Ouvre `internal/memory/memory.go` et trouve `VersionAI` — une méthode de trois lignes
+qui exécute `SELECT ai_version()` et renvoie la chaîne. C'est ton exemple modèle. Ajoute
+maintenant la tienne à côté : une méthode `StoreVersion` qui renvoie la version de SQLite
+lui-même via la fonction intégrée `SELECT sqlite_version()` :
+
+```go
+// StoreVersion renvoie la version de la bibliothèque SQLite sous-jacente, ex. "3.46.0".
+func (s *Store) StoreVersion(ctx context.Context) (string, error) {
+	var v string
+	err := s.db.QueryRowContext(ctx, `SELECT sqlite_version()`).Scan(&v)
+	return v, err
+}
+```
+
+Puis, dans `cmd/doctor/main.go`, affiche-la à côté des deux autres lignes de version :
+
+```go
+storeVersion, err := store.StoreVersion(ctx)
+if err != nil {
+	return err
+}
+fmt.Println("• SQLite version:", storeVersion)
+```
+
+Lance `make doctor` — ta ligne apparaît. Remarque que tu n'as rien recompilé à la main :
+`make doctor` utilise `go run`, donc il recompile depuis les sources à chaque fois. C'est
+toute la boucle du travail sur ce code : **modifier → `go run` (via une cible `make`) → le
+voir**. (Si tu avais lancé à la place un binaire `./bin/doctor` périmé, compilé *avant* ta
+modification, ta ligne n'apparaîtrait pas — le piège classique du « pourquoi rien ne se
+passe ? ».)
+
 ## Modèle mental
 
 D'après ce que tu as vu, Talunor ressemble à ça :
@@ -148,5 +192,7 @@ Garde cette image ; les prochaines leçons zooment sur chaque case.
 - [ ] J'ai lu `cmd/doctor/main.go` à `v0.1.0` et je suis revenu à `main`.
 - [ ] Je peux dire ce que faisait `v0.1.0` et ce qu'a ajouté `v0.4.0`.
 - [ ] Je peux dessiner le modèle mental à quatre cases de mémoire.
+- [ ] *(optionnel)* J'ai ajouté une méthode `StoreVersion` et vu ma ligne
+      `• SQLite version:` apparaître dans `make doctor`.
 
 **Suivant :** [Leçon 02 — Mémoire persistante avec SQLite](../02-persistent-memory/).

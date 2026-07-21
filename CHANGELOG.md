@@ -15,6 +15,34 @@ changed but the *lessons learned* while getting there.
   checks for which tools/args are auto-allowed vs. need approval (generalising the
   per-call approval gate that Layer 10 introduced).
 
+## [0.10.10] - 2026-07-21 — doctor surfaces the extension versions
+
+A small developer-experience touch on the memory smoke test: `doctor` now prints
+the loaded **sqlite-ai** and **sqlite-vector** extension versions right after the
+store opens, so you can see *which* build of the C extensions you are running. The
+corpus also gains two mountain facts (Matterhorn, Mont Blanc) and a matching recall
+query, giving the semantic-search demo a denser, more convincing cluster to rank.
+
+### Added
+
+- `Store.VersionAI` / `Store.VersionVector` (`internal/memory/memory.go`): thin
+  wrappers over the extensions' `ai_version()` / `vector_version()` SQL functions.
+- `cmd/doctor` prints both versions, and a third recall query ("famous mountains in
+  Europe") over two new corpus entries.
+- Reference-doc links in the doc comments for `Embed` and `Recall`
+  (sqlitecloud.io API references).
+
+### Lessons learned
+
+1. **"Nothing displays" is almost always a stale binary, not a bug.** New output
+   that lives above the first screen of a long run is easy to miss in a scrollback
+   terminal (VS Code opens at the bottom) — and a `./bin/doctor` compiled before the
+   change shows nothing at all. `make doctor` uses `go run`, so it always reflects
+   the source; reach for it before debugging phantom failures.
+2. **Extension versions are cheap observability.** The C extensions are fetched and
+   pinned by `make deps`, but nothing in the app told you *which* version was live.
+   A one-line `SELECT ai_version()` closes that gap and makes bug reports precise.
+
 ## [0.10.9] - 2026-07-17 — Course fully bilingual: French translation complete (09–10)
 
 The last two (advanced) translations land, and with them the course is **completely

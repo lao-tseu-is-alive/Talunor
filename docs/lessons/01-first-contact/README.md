@@ -115,6 +115,49 @@ turns because it stored the first one. Type `/help` to see the commands, `/exit`
 quit. If you don't have Ollama yet, skip this step; the rest of the course only
 *needs* it occasionally, and always says so.
 
+## 🛠️ Optional stretch — your first one-line contribution
+
+Reading is one thing; changing the code and seeing your change run is the real
+first step of contributing. Here's the smallest possible one.
+
+On `main`, `make doctor` prints the versions of the two loaded SQLite extensions,
+right after the store opens:
+
+```text
+• AI version: 1.0.4
+• vector version: 1.0.0
+```
+
+Open `internal/memory/memory.go` and find `VersionAI` — a three-line method that
+runs `SELECT ai_version()` and returns the string. That's your worked example. Now
+add your own next to it: a `StoreVersion` method that returns SQLite's own version
+via the built-in `SELECT sqlite_version()`:
+
+```go
+// StoreVersion returns the underlying SQLite library version, e.g. "3.46.0".
+func (s *Store) StoreVersion(ctx context.Context) (string, error) {
+	var v string
+	err := s.db.QueryRowContext(ctx, `SELECT sqlite_version()`).Scan(&v)
+	return v, err
+}
+```
+
+Then, in `cmd/doctor/main.go`, print it next to the other two version lines:
+
+```go
+storeVersion, err := store.StoreVersion(ctx)
+if err != nil {
+	return err
+}
+fmt.Println("• SQLite version:", storeVersion)
+```
+
+Run `make doctor` — your line appears. Notice you never rebuilt anything by hand:
+`make doctor` uses `go run`, so it recompiles from source every time. That's the
+whole loop of working on this code: **edit → `go run` (via a `make` target) → see
+it**. (If you'd instead run a stale `./bin/doctor` binary compiled *before* your
+edit, your line wouldn't show — a classic "why is nothing happening?" trap.)
+
 ## Mental model
 
 From what you've seen, Talunor looks like this:
@@ -148,5 +191,7 @@ Keep this picture; the next lessons zoom into each box.
 - [ ] I read `cmd/doctor/main.go` at `v0.1.0` and returned to `main`.
 - [ ] I can say what `v0.1.0` did and what `v0.4.0` added.
 - [ ] I can draw the four-box mental model from memory.
+- [ ] *(optional)* I added a `StoreVersion` method and saw my `• SQLite version:`
+      line appear in `make doctor`.
 
 **Next:** [Lesson 02 — Persistent memory with SQLite](../02-persistent-memory/).

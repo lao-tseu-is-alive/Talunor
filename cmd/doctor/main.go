@@ -22,6 +22,8 @@ var corpus = []string{
 	"Photosynthesis converts sunlight into chemical energy in plants.",
 	"The Eiffel Tower was completed in Paris in 1889.",
 	"SQLite stores an entire relational database in a single file.",
+	"The Matterhorn is a mountain of the Alps, straddling the main watershed and border between Switzerland and Italy. It is a large, near-symmetric pyramidal peak in the extended Monte Rosa area of the Pennine Alps, whose summit is 4478 metres above sea level, making it one of the highest summits in the Alps and Europe",
+	"Mont Blanc as the highest peak completely within Western Europe and the Alps. Located on the border of France and Italy, Mont Blanc has an elevation of 4,808 meters ",
 }
 
 // relevanceThreshold is the maximum cosine distance we treat as "relevant".
@@ -51,6 +53,16 @@ func run() error {
 	}
 	defer store.Close()
 	fmt.Printf("✓ store open — embedding dimension = %d\n\n", store.Dim())
+	versionAI, err := store.VersionAI(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Println("• AI version:", versionAI)
+	versionVector, err := store.VersionVector(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Println("• vector version:", versionVector)
 
 	// Long-term memory: Remember embeds + stores in one call.
 	fmt.Println("• remembering corpus…")
@@ -72,6 +84,9 @@ func run() error {
 		return err
 	}
 	if err := recall(ctx, store, "Tell me about a famous French landmark."); err != nil {
+		return err
+	}
+	if err := recall(ctx, store, "Can you list famous mountains in Europe."); err != nil {
 		return err
 	}
 
