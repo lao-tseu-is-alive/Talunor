@@ -91,6 +91,12 @@ type Agent struct {
 	extractor FactExtractor
 	tools     *tools.Registry
 	cfg       Config
+	// screenDebug, when true, streams the loop's otherwise-invisible decisions
+	// (recall rankings, reflection results) inline as dimmed notes, so the user
+	// can watch them in the transcript. Toggled at runtime via SetScreenDebug (the
+	// /debug command); distinct from Config.Debug, which logs to a file/stderr.
+	// Single-user: flip it between turns, not during one.
+	screenDebug bool
 }
 
 // New builds an Agent. Zero-valued config fields fall back to DefaultConfig,
@@ -153,7 +159,7 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 
 	// Run the act→observe loop in the background, streaming to the caller.
 	out := make(chan llm.Chunk)
-	go a.runLoop(ctx, msgs, input, out)
+	go a.runLoop(ctx, msgs, input, hits, out)
 	return out, nil
 }
 
@@ -164,8 +170,12 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 // the caller live; tool activity is surfaced as dimmed notes. On clean
 // completion the final answer is stored and reflection runs — all before the
 // channel closes, so observing the stream end means learning is done.
-func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, out chan<- llm.Chunk) {
+func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, hits []memory.Hit, out chan<- llm.Chunk) {
 	defer close(out)
+
+	// With /debug on, surface the recall ranking that shaped this turn's prompt —
+	// the single most useful thing to see when memory "doesn't remember".
+	a.emitRecallDebug(ctx, out, input, hits)
 
 	opts := a.cfg.Options
 	if a.tools != nil {
@@ -251,7 +261,7 @@ func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, o
 		a.short.Add(llm.RoleAssistant, answer)
 		_, _ = a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, answer)
 	}
-	a.reflect(ctx, input)
+	a.reflect(ctx, out, input)
 }
 
 // runTool runs one tool call, first asking the human for approval if the tool
@@ -316,7 +326,7 @@ func (a *Agent) toolSpecs() []llm.ToolSpec {
 // (memory.KindFact). It is best-effort — an extraction or storage failure must
 // never disturb the reply the caller already received — and it deduplicates
 // against existing facts so restating something does not accumulate copies.
-func (a *Agent) reflect(ctx context.Context, input string) {
+func (a *Agent) reflect(ctx context.Context, out chan<- llm.Chunk, input string) {
 	if a.extractor == nil {
 		return
 	}
@@ -325,6 +335,7 @@ func (a *Agent) reflect(ctx context.Context, input string) {
 		// Reflection is best-effort (see runLoop), but a debug trace explains a
 		// later "why didn't it remember that?" without changing behaviour.
 		a.trace("reflect.error", "err", err)
+		a.sendDebug(ctx, out, "reflect: error: %v", err)
 		return
 	}
 	stored, skipped := 0, 0
@@ -335,9 +346,11 @@ func (a *Agent) reflect(ctx context.Context, input string) {
 		}
 		if _, err := a.store.Remember(ctx, memory.KindFact, "", f); err == nil {
 			stored++
+			a.sendDebug(ctx, out, "reflect: +fact %q", oneLine(f, 60))
 		}
 	}
 	a.trace("reflect", "extracted", len(facts), "stored", stored, "skipped", skipped)
+	a.sendDebug(ctx, out, "reflect: extracted %d, stored %d, skipped %d", len(facts), stored, skipped)
 }
 
 // trace emits a structured debug event when Config.Debug is set; it is a no-op
@@ -436,9 +449,10 @@ func (a *Agent) MemoryCount(ctx context.Context) (int, error) { return a.store.C
 // HelpText lists the slash commands understood by both the TUI and the REPL.
 const HelpText = `Commands:
   /help        show this help
-  /mem         memory stats (count + database file)
+  /mem         memory stats (count + database file + embedding provenance)
   /list [n]    list the most recent n memories (default 10)
   /forget <id> delete the memory with that #id (as shown by /list)
+  /debug [on|off]  toggle inline trace of recall rankings & reflection
   /clear       clear the on-screen transcript (TUI only; does not erase memory)
   /exit, /quit quit
 Keys (TUI): enter = send · ctrl+c / esc = quit · ↑/↓ or PgUp/PgDn = scroll
@@ -447,13 +461,20 @@ Keys (TUI): enter = send · ctrl+c / esc = quit · ↑/↓ or PgUp/PgDn = scroll
 // Help returns the command help text.
 func (a *Agent) Help() string { return HelpText }
 
-// MemoryStats returns a one-line summary of stored memory and where it lives.
+// MemoryStats returns a one-line summary of stored memory and where it lives,
+// plus the embedding-provenance status when it is not OK (a heads-up that recall
+// may be degraded until a re-embed).
 func (a *Agent) MemoryStats(ctx context.Context) (string, error) {
 	n, err := a.store.Count(ctx)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%d memories stored in %s", n, a.store.Path()), nil
+	msg := fmt.Sprintf("%d memories stored in %s\nembedding model: %s (dim %d), provenance: %s",
+		n, a.store.Path(), a.store.EmbedModelName(), a.store.Dim(), a.store.Provenance())
+	if a.store.Provenance() != memory.ProvenanceOK {
+		msg += "\n⚠ recall of older memories may be degraded — run `talunor --reembed` to realign"
+	}
+	return msg, nil
 }
 
 // ListMemories returns a formatted listing of the most recent n memories.

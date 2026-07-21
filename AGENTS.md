@@ -53,7 +53,9 @@ cmd/talunor/    the app: TUI by default, --plain REPL, --list dump
 internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    Remember/Recall (thresholded; recall excludes assistant
                    turns), Forget(id), short-term ring buffer. Kinds: turn
-                   (episodic), fact (semantic), doc_chunk
+                   (episodic), fact (semantic), doc_chunk. provenance.go: a `meta`
+                   table fingerprints the embedding stack (canary vector) and
+                   flags OK/Stale/Unknown on Open; ReEmbed re-vectorises all rows
 internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenRouter),
                    FromEnv() provider selection, NewOpenRouter
 internal/config/   minimal dependency-free .env loader (real env wins)
@@ -64,7 +66,9 @@ internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/obs
                    ends with an explicit error, never silently). reflect.go =
                    FactExtractor (LLM distils facts into KindFact;
                    DisableReflection()). Optional Config.Debug (slog) traces
-                   recall/tools/reflection. Slash-command helpers too.
+                   recall/tools/reflection. debug.go: the /debug runtime toggle
+                   (screenDebug) streams recall rankings + reflection inline as
+                   dimmed Reasoning notes. Slash-command helpers too.
 internal/tools/    action layer: Tool interface + Registry; builtins Calculator
                    (AST-safe), Clock, RecallMemory (searches the store), Bash
                    (sandboxed shell; opt-in TALUNOR_BASH), WebFetch (SSRF-guarded
@@ -283,6 +287,16 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   extension versions (`Store.VersionAI` / `Store.VersionVector` → `ai_version()` /
   `vector_version()`), plus two mountain corpus facts + a third recall query. Cheap
   observability on the memory smoke test.
+- **Layer 11 (done): v0.11.0** = memory integrity & in-session observability.
+  **Embedding provenance** (`internal/memory/provenance.go`): a `meta` side-table stores
+  a canary-vector fingerprint of the embedding stack; every `Open` re-embeds the canary
+  and sets `ProvenanceOK` / `ProvenanceStale` / `ProvenanceUnknown`. `Store.ReEmbed`
+  rewrites all vectors with the current model and re-stamps. `talunor --reembed` runs it;
+  the app warns at startup (and in `/mem`) when provenance ≠ OK. **`/debug [on|off]`**
+  (`internal/agent/debug.go`): runtime toggle streaming recall rankings + reflection
+  results inline as dimmed `Reasoning` notes (TUI + `--plain`), complementing the
+  file/stderr `TALUNOR_DEBUG` trace. Motivated by a real "agent forgot who I am" hunt —
+  old memories embedded by a since-changed model build sat in a stale vector space.
 - **Next — Iteration 3**: an explicit planner before multi-step actions; policy
   checks for which tools/args are auto-allowed vs. need approval (generalising
   `ApprovableFor` into a policy the agent consults). Then Iteration 4 (learning/

@@ -15,6 +15,59 @@ changed but the *lessons learned* while getting there.
   checks for which tools/args are auto-allowed vs. need approval (generalising the
   per-call approval gate that Layer 10 introduced).
 
+## [0.11.0] - 2026-07-21 — Memory integrity (embedding provenance) & in-session observability (`/debug`)
+
+Layer 11 hardens the memory substrate against a silent, nasty failure and makes the
+agent's hidden decisions watchable from inside a session.
+
+The trigger was a real bug hunt: an agent that "forgot" who the user was. It turned
+out its memories had been embedded by a *different build* of the embedding model than
+the one now on disk (the model is fetched from a mutable URL; the checksum pin only
+arrived in v0.9.1). An embedding is only comparable with vectors from the **same**
+embedding stack — swap the model and old vectors quietly land in a different space, so
+KNN still runs but distances become meaningless and recall of older memories degrades
+with no error. Nothing detected it.
+
+### Added
+
+- **Embedding provenance guard** (`internal/memory/provenance.go`). A `meta` side-table
+  stores a fingerprint of the embedding stack — a fixed **canary** sentence embedded
+  and kept as a vector, plus the model name and dimension. Every `Open` re-embeds the
+  canary and compares: match → `ProvenanceOK`; mismatch → `ProvenanceStale`; a
+  pre-provenance database with existing memories → `ProvenanceUnknown`. `Store.ReEmbed`
+  recomputes every stored vector with the current model and re-stamps the fingerprint.
+- **`talunor --reembed`** runs that migration with progress and exits; the app prints a
+  one-line **startup warning** (and `/mem` shows the status) when provenance is not OK,
+  pointing at the fix. `doctor` now reports the model + provenance too.
+- **`/debug [on|off]`** — a runtime toggle that streams the loop's otherwise-invisible
+  decisions (recall ranking with per-hit distances, reflection results) into the
+  transcript as dimmed notes, in both the TUI and the `--plain` REPL. It rides the
+  existing `Reasoning` channel (no renderer changes) and complements the file/stderr
+  `TALUNOR_DEBUG` trace.
+
+### Lessons learned
+
+1. **An embedding is meaningless without its model's identity.** Vectors from two model
+   builds share a dimension and a table but not a space; comparing across them yields
+   plausible-looking distances that are quietly wrong. Storing a fingerprint *in the
+   database* and checking it on open is the difference between a caught error and months
+   of "recall feels off." A canary vector is a cheap, model-agnostic fingerprint: it
+   detects *any* change to the stack (model file, config, extension), not just a renamed
+   file.
+2. **Fetch immutability is a data-integrity property, not just a supply-chain one.** The
+   root cause was a model pulled from a mutable `resolve/main/` URL before checksums
+   existed. The v0.9.1 checksum pin protects *forward*; it can't fix vectors already
+   written by the old file. Pin fetched artifacts by digest from day one.
+3. **The best debugging tool is the one already wired.** The agent had traced recall and
+   reflection to a log file since v0.9.1, but nobody watching a live session could see
+   it. Surfacing the *same* events inline behind `/debug` turned a multi-step forensic
+   dig (copy the DB, write probes, re-embed by hand) into a one-command look. Build the
+   toggle, not a new subsystem.
+4. **A single pinned connection forbids nested queries.** `ReEmbed` must read all rows
+   into memory and close the cursor *before* embedding, because `SetMaxOpenConns(1)`
+   (needed for per-connection model state) means an open `rows` iterator would deadlock
+   the `Embed` queries.
+
 ## [0.10.10] - 2026-07-21 — doctor surfaces the extension versions
 
 A small developer-experience touch on the memory smoke test: `doctor` now prints

@@ -93,9 +93,10 @@ func envOr(key, def string) string {
 // single-user agent this is a fine trade-off and sidesteps a whole class of
 // concurrency issues. (Multi-connection support is a later concern.)
 type Store struct {
-	db  *sql.DB
-	cfg Config
-	dim int // embedding dimension, discovered from the model at open time.
+	db         *sql.DB
+	cfg        Config
+	dim        int              // embedding dimension, discovered from the model at open time.
+	provenance ProvenanceStatus // embedding-stack fingerprint check, set at Open.
 }
 
 // registerDriver registers the custom driver exactly once. The ConnectHook
@@ -179,15 +180,23 @@ func (s *Store) bootstrap(ctx context.Context) error {
 	if err := s.db.QueryRowContext(ctx, `SELECT llm_model_n_embd()`).Scan(&s.dim); err != nil {
 		return fmt.Errorf("llm_model_n_embd: %w", err)
 	}
-	// Apply schema.
+	// Apply schema (memories + the meta side-table for the embedding fingerprint).
 	if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
 		return fmt.Errorf("apply schema: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, metaSchemaSQL); err != nil {
+		return fmt.Errorf("apply meta schema: %w", err)
 	}
 	// Initialise vector search on memories.embedding (per connection).
 	initSQL := fmt.Sprintf(
 		`SELECT vector_init('memories', 'embedding', 'dimension=%d,type=FLOAT32,distance=cosine')`, s.dim)
 	if _, err := s.db.ExecContext(ctx, initSQL); err != nil {
 		return fmt.Errorf("vector_init: %w", err)
+	}
+	// Record or verify the embedding-stack fingerprint so a model change is
+	// detected instead of silently degrading recall (see provenance.go).
+	if err := s.initProvenance(ctx); err != nil {
+		return fmt.Errorf("provenance check: %w", err)
 	}
 	return nil
 }

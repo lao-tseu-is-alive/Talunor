@@ -63,6 +63,8 @@ func run() error {
 		return err
 	}
 	fmt.Println("• vector version:", versionVector)
+	fmt.Printf("• embedding model: %s (dim %d), provenance: %s\n",
+		store.EmbedModelName(), store.Dim(), store.Provenance())
 
 	// Long-term memory: Remember embeds + stores in one call.
 	fmt.Println("• remembering corpus…")

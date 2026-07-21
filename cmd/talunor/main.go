@@ -44,14 +44,15 @@ import (
 func main() {
 	plain := flag.Bool("plain", false, "use the plain line-based REPL instead of the TUI")
 	list := flag.Int("list", 0, "dump the most recent N stored memories and exit")
+	reembed := flag.Bool("reembed", false, "re-embed every stored memory with the current model, then exit")
 	flag.Parse()
-	if err := run(*plain, *list); err != nil {
+	if err := run(*plain, *list, *reembed); err != nil {
 		fmt.Fprintln(os.Stderr, "talunor: "+err.Error())
 		os.Exit(1)
 	}
 }
 
-func run(plain bool, list int) error {
+func run(plain bool, list int, reembed bool) error {
 	// Ctrl-C cancels the current turn / exits cleanly.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -75,6 +76,13 @@ func run(plain bool, list int) error {
 		}
 		fmt.Printf("database: %s\n%s", store.Path(), agent.FormatMemories(mems))
 		return nil
+	}
+
+	// --reembed: realign every stored memory with the currently loaded embedding
+	// model, then exit. Run this after the model changes (a startup warning points
+	// here when the provenance check trips).
+	if reembed {
+		return reembedMemories(ctx, store)
 	}
 
 	provider, model, err := llm.FromEnv()
@@ -138,6 +146,15 @@ func run(plain bool, list int) error {
 	}
 	ag := agent.New(store, provider, cfg)
 	n, _ := store.Count(ctx)
+
+	// If the embedding stack changed since these memories were written, recall of
+	// the old ones is degraded until they are re-embedded. Warn once at startup and
+	// point at the fix (the check itself is silent when everything lines up).
+	if p := store.Provenance(); p != memory.ProvenanceOK {
+		fmt.Fprintf(os.Stderr,
+			"talunor: ⚠ embedding provenance %s\n         recall of older memories may be degraded — run `talunor --reembed` to realign.\n",
+			p)
+	}
 
 	// Persistent, deduplicated prompt history (recalled with ↑/↓ in the TUI),
 	// stored next to the memory database so it survives across sessions.
@@ -249,10 +266,33 @@ func command(ctx context.Context, line string, ag *agent.Agent) (done bool, err 
 			return false, err
 		}
 		fmt.Println(msg)
+	case "/debug":
+		fmt.Println(ag.DebugCommand(fields))
 	default:
 		fmt.Printf("unknown command %q — try /help\n", fields[0])
 	}
 	return false, nil
+}
+
+// reembedMemories recomputes every memory's embedding with the currently loaded
+// model, printing progress, and reports the result. It is the fix for a tripped
+// embedding-provenance check: after a model change, old vectors sit in a stale
+// space and recall degrades until they are realigned.
+func reembedMemories(ctx context.Context, store *memory.Store) error {
+	before := store.Provenance()
+	fmt.Printf("re-embedding all memories with %s (dim %d)…\n", store.EmbedModelName(), store.Dim())
+	n, err := store.ReEmbed(ctx, func(done, total int) {
+		fmt.Printf("\r  %d/%d", done, total)
+	})
+	if err != nil {
+		fmt.Println()
+		return fmt.Errorf("re-embed: %w", err)
+	}
+	if n > 0 {
+		fmt.Println()
+	}
+	fmt.Printf("✓ re-embedded %d memories (provenance: %s → %s)\n", n, before, store.Provenance())
+	return nil
 }
 
 // debugLogger builds the agent's trace logger from TALUNOR_DEBUG:

@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.10.10` (doctor surfaces the sqlite-ai / sqlite-vector versions)
+- **Version:** `v0.11.0` (memory integrity: embedding provenance + re-embed; inline `/debug`)
 - **Generated:** 2026-07-21
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -48,8 +48,9 @@ Talunor/
 │   └── docker-publish.yml    #   On tag: build, Trivy-gate, push image to ghcr.io/lao-tseu-is-alive/talunor.
 │
 ├── cmd/                      # Executable entry points (the binaries).
-│   ├── talunor/main.go       #   THE APP. TUI by default, --plain REPL, --list dump. Wires providers,
-│   │                         #     tools (bash/web_fetch opt-in), prompt history, and the debug trace.
+│   ├── talunor/main.go       #   THE APP. TUI by default, --plain REPL, --list dump, --reembed migration.
+│   │                         #     Wires providers, tools (bash/web_fetch opt-in), prompt history, debug
+│   │                         #     trace, and the startup embedding-provenance warning.
 │   ├── chat/main.go          #   One-shot LLM streaming smoke test (verify a provider streams).
 │   └── doctor/main.go        #   Memory-substrate smoke test: print ext versions → embed a corpus → store → KNN recall.
 │
@@ -59,9 +60,12 @@ Talunor/
 │   │   ├── store.go          #     Open the DB, load sqlite-vector + sqlite-ai, schema; one pinned conn
 │   │   │                     #       (extension state is per-connection). DB path resolution.
 │   │   ├── memory.go         #     Remember / Recall (KNN, thresholded, excludes assistant turns); Kinds
-│   │   │                     #       (turn / fact / doc_chunk); Hit type; Forget.
+│   │   │                     #       (turn / fact / doc_chunk); Hit type; Forget; ext version accessors.
+│   │   ├── provenance.go     #     LAYER 11: meta table fingerprints the embedding stack (canary vector);
+│   │   │                     #       Open flags OK/Stale/Unknown; ReEmbed re-vectorises all rows.
 │   │   ├── shortterm.go      #     Bounded ring buffer of the most recent turns (immediate context).
 │   │   ├── cgo_link.go       #     cgo glue: dlopen libm with RTLD_GLOBAL — vector.so needs it in scope.
+│   │   ├── provenance_test.go #    Tests (fresh=OK, canary mismatch=Stale→ReEmbed, legacy=Unknown, cosine).
 │   │   └── memory_test.go    #     Tests (semantic recall, thresholding, assistant-turn exclusion).
 │   │
 │   ├── llm/                  # LAYER 3 / 6: LLM provider abstraction + OpenAI-compatible adapter.
@@ -76,7 +80,9 @@ Talunor/
 │   │   │                     #       Tool loop with MaxToolIters cap (errors, never silently); approval
 │   │   │                     #       gate (Approvable / ApprovableFor); optional slog debug trace.
 │   │   ├── reflect.go        #     FactExtractor: the LLM distils durable facts into semantic memory.
-│   │   └── agent_test.go     #     Tests (recall+store, approval allow/deny, tool-loop cap, reflection).
+│   │   ├── debug.go          #     LAYER 11: /debug runtime toggle — streams recall rankings + reflection
+│   │   │                     #       inline as dimmed Reasoning notes (TUI + --plain).
+│   │   └── agent_test.go     #     Tests (recall+store, approval allow/deny, tool-loop cap, reflection, /debug).
 │   │
 │   ├── tui/                  # LAYER 5: Bubble Tea + Glamour terminal UI (default front-end).
 │   │   ├── tui.go            #     Model/Update loop, stream→UI bridge, ↑/↓ history recall, approval prompt.

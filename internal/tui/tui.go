@@ -342,6 +342,8 @@ func (m *Model) runCommand(line string) tea.Cmd {
 				m.memCount = n
 			}
 		}
+	case "/debug":
+		m.appendInfo(m.ag.DebugCommand(fields))
 	case "/clear":
 		m.turns = nil
 	default:

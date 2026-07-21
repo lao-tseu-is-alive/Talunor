@@ -247,6 +247,66 @@ func TestTurnRecallsAndStores(t *testing.T) {
 	}
 }
 
+// drainReasoning collects the Reasoning half of a chunk stream (where debug notes
+// and tool activity ride), draining Content too so the loop finishes.
+func drainReasoning(ch <-chan llm.Chunk) string {
+	var sb strings.Builder
+	for c := range ch {
+		sb.WriteString(c.Reasoning)
+	}
+	return sb.String()
+}
+
+// TestScreenDebugStreamsRecall: with /debug on, a turn streams the recall ranking
+// as dimmed notes; with it off, nothing extra appears. Deterministic (fake
+// provider, reflection off).
+func TestScreenDebugStreamsRecall(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	if _, err := store.Remember(ctx, memory.KindDocChunk, "", "The user's favourite colour is teal."); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	cfg := DefaultConfig()
+	cfg.Extractor = DisableReflection()
+	ag := New(store, &fakeProvider{reply: "teal."}, cfg)
+
+	// Off by default: no debug notes.
+	out, err := ag.Turn(ctx, "what is my favourite colour?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := drainReasoning(out); strings.Contains(r, debugPrefix+"recall:") {
+		t.Errorf("debug off: unexpected recall note in stream:\n%s", r)
+	}
+
+	// On: the recall ranking must appear.
+	if got := ag.DebugCommand([]string{"/debug", "on"}); !strings.Contains(got, "ON") {
+		t.Fatalf("DebugCommand(on) = %q; want it to report ON", got)
+	}
+	if !ag.ScreenDebug() {
+		t.Fatal("ScreenDebug() = false after /debug on")
+	}
+	out, err = ag.Turn(ctx, "what is my favourite colour?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := drainReasoning(out)
+	if !strings.Contains(r, debugPrefix+"recall:") {
+		t.Errorf("debug on: recall note missing from stream:\n%s", r)
+	}
+	if !strings.Contains(r, "teal") {
+		t.Errorf("debug on: recalled hit content missing from stream:\n%s", r)
+	}
+
+	// Toggling back off silences it again.
+	if got := ag.DebugCommand([]string{"/debug", "off"}); strings.Contains(got, "ON") {
+		t.Fatalf("DebugCommand(off) = %q; want off", got)
+	}
+	if ag.ScreenDebug() {
+		t.Fatal("ScreenDebug() = true after /debug off")
+	}
+}
+
 // fakeExtractor returns canned facts, ignoring the input — lets us drive the
 // reflection path deterministically without an LLM.
 type fakeExtractor struct{ facts []string }
