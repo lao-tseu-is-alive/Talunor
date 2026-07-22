@@ -342,6 +342,8 @@ func (m *Model) runCommand(line string) tea.Cmd {
 				m.memCount = n
 			}
 		}
+	case "/plan":
+		m.appendInfo(m.ag.PlanCommand())
 	case "/debug":
 		m.appendInfo(m.ag.DebugCommand(fields))
 	case "/clear":

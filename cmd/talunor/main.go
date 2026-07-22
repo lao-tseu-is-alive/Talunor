@@ -6,8 +6,8 @@
 // By default it launches the Bubble Tea TUI (markdown via Glamour). Pass --plain
 // for a minimal line-based REPL, or --list to dump stored memories and exit.
 //
-// Commands (TUI and REPL): /help, /mem, /list [n], /forget <id>, /clear (TUI),
-// /exit.
+// Commands (TUI and REPL): /help, /mem, /list [n], /forget <id>, /plan,
+// /debug [on|off], /clear (TUI), /exit.
 //
 // Environment: TALUNOR_MODEL, TALUNOR_OLLAMA_URL (see cmd/chat), TALUNOR_DB and
 // the extension/model path overrides (see internal/memory.DefaultConfig).
@@ -94,7 +94,7 @@ func run(plain bool, list int, reembed bool) error {
 	// Assemble the agent's configuration from the environment (reflection, debug
 	// trace, tools, policy). closeDebug is the debug log's closer — nil when the
 	// trace is off — kept open for the process's lifetime.
-	cfg, closeDebug, err := buildAgentConfig(store)
+	cfg, closeDebug, err := buildAgentConfig(store, provider)
 	if err != nil {
 		return err
 	}
@@ -134,10 +134,12 @@ func buildProvider() (llm.Provider, string, error) {
 }
 
 // buildAgentConfig assembles the agent.Config from the environment: the
-// reflection toggle, the debug trace, the tool registry, and the action policy.
-// It returns the config and an optional Closer for the debug log (nil when
-// tracing is off) so the caller can keep it open for the process's lifetime.
-func buildAgentConfig(store *memory.Store) (agent.Config, io.Closer, error) {
+// reflection toggle, the debug trace, the tool registry, the action policy, and
+// the optional planner. It returns the config and an optional Closer for the debug
+// log (nil when tracing is off) so the caller can keep it open for the process's
+// lifetime. provider is needed only to build the planner (it plans with the same
+// model).
+func buildAgentConfig(store *memory.Store, provider llm.Provider) (agent.Config, io.Closer, error) {
 	cfg := agent.DefaultConfig()
 
 	// Reflection makes a second model call per turn; on a paid provider that
@@ -173,7 +175,31 @@ func buildAgentConfig(store *memory.Store) (agent.Config, io.Closer, error) {
 	}
 	cfg.Policy = pol
 
+	// Planner: opt-in (TALUNOR_PLANNER=1). When on, the agent plans before acting
+	// and executes the plan capped to its tools; TALUNOR_APPROVAL picks how the plan
+	// is approved (plan | step | highrisk; default plan). Off = the plain ReAct loop.
+	if envBool("TALUNOR_PLANNER", false) {
+		cfg.Planner = agent.NewLLMPlanner(provider, cfg.Options)
+		cfg.ApprovalMode = planApprovalMode()
+		fmt.Fprintf(os.Stderr, "talunor: planner enabled (approval: %s)\n", cfg.ApprovalMode)
+	}
+
 	return cfg, dbgClose, nil
+}
+
+// planApprovalMode reads TALUNOR_APPROVAL, defaulting to the safest showcase mode
+// (whole-plan approval). An unrecognised value falls back to the default too — the
+// agent re-validates, but reporting the resolved value here keeps the startup
+// notice honest.
+func planApprovalMode() string {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("TALUNOR_APPROVAL"))) {
+	case agent.ApprovalStep:
+		return agent.ApprovalStep
+	case agent.ApprovalHighRisk:
+		return agent.ApprovalHighRisk
+	default:
+		return agent.ApprovalPlan
+	}
 }
 
 // buildTools assembles the tool registry from the environment. It returns nil
@@ -329,6 +355,8 @@ func command(ctx context.Context, line string, ag *agent.Agent) (done bool, err 
 			return false, err
 		}
 		fmt.Println(msg)
+	case "/plan":
+		fmt.Println(ag.PlanCommand())
 	case "/debug":
 		fmt.Println(ag.DebugCommand(fields))
 	default:

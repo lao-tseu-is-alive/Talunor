@@ -7,11 +7,12 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.12.1** — Iterations 1 & 2 complete, plus Layers 10–12
-> (Iteration 3 begun). The agent talks to local **Ollama** or hosted **OpenRouter**
-> models (via `.env`) and *acts* — a ReAct tool loop (calculator, clock, memory
-> search) gated by a first-class **policy engine** (auto-allow / approve / deny,
-> YAML-configurable via `TALUNOR_POLICY`) with a human-in-the-loop **approval
+> Current version: **v0.13.0** — Iterations 1–3 complete (Layers 1–13). The agent
+> talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and *acts* —
+> a ReAct tool loop (calculator, clock, memory search) gated by a first-class
+> **policy engine** (auto-allow / approve / deny, YAML-configurable via
+> `TALUNOR_POLICY`), with an optional **planner** (`TALUNOR_PLANNER=1`) that lays out
+> an inspectable, human-approved plan before acting, a human-in-the-loop **approval
 > gate**, an opt-in sandboxed **`bash`** tool that
 > runs shell commands in a network-less throwaway container (nerdctl or a rootless
 > user-namespace backend), and an opt-in, SSRF-guarded **`web_fetch`** tool (the
@@ -133,13 +134,17 @@ agent. Iteration 2 gives it the ability to *act*.
 | Layer | What | Status |
 |-------|------|--------|
 | 12 | **Policy engine** — a `Policy` consulted before each tool call (auto-allow / approve / deny), a `plan` vocabulary, YAML rule files via `TALUNOR_POLICY` | ✅ done (v0.12.0) |
-| 13 | **Explicit planner** — the model emits a structured, inspectable plan before multi-step actions; the policy gates it whole and step-by-step | ⏳ next |
+| 13 | **Explicit planner** — an opt-in plan-then-execute turn: an inspectable, human-approved plan, then ReAct execution *capped to the plan's tools* (`TALUNOR_PLANNER`, `TALUNOR_APPROVAL`) | ✅ done (v0.13.0) |
+
+**Iteration 3 is complete** — Talunor now has both a guardrail (policy) and
+forethought (planner). Deferred to later increments: `/edit-plan`, semantic
+deviation detection, and automatic re-planning.
 
 ### Later iterations
 
 | Iter | Theme | Adds |
 |------|-------|------|
-| 4 | Learning | memory consolidation, salience/decay, async reflection |
+| 4 | Learning | memory consolidation, salience/decay, async reflection, learning from executed plans |
 
 ## Requirements
 
@@ -352,6 +357,8 @@ lives in the same directory.
 | `TALUNOR_REFLECT` | set `0` to disable per-turn fact reflection | `1` |
 | `TALUNOR_TOOLS` | set `0` to disable tools (model without tool support) | `1` |
 | `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow / prompt / deny); unset = default per-tool gate | — |
+| `TALUNOR_PLANNER` | set `1` to plan before acting (inspectable, approved plan, then capped ReAct execution) | `0` |
+| `TALUNOR_APPROVAL` | plan approval mode: `plan` (whole plan once), `step` (plan + each risky step), `highrisk` (advisory plan) | `plan` |
 | `TALUNOR_BASH` | set `1` to enable the sandboxed, approval-gated `bash` tool | `0` |
 | `TALUNOR_DEBUG` | trace recall/tools/reflection: `1` → log file next to DB, `stderr`, or a path | off |
 | `TALUNOR_SANDBOX` | bash backend: `nerdctl` or `namespaces` (unset = auto-detect) | auto |

@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.12.1` (course Lesson 12 — the open bar: why an agent needs a policy)
+- **Version:** `v0.13.0` (Iteration 3 complete — the explicit planner, Layer 13)
 - **Generated:** 2026-07-22
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -76,13 +76,19 @@ Talunor/
 │   │   └── config_test.go    #     Provider-selection tests.
 │   │
 │   ├── agent/                # LAYER 4: the cognitive loop (orchestrator).
-│   │   ├── agent.go          #     Turn = perceive → recall → reason (act/observe loop) → store → reflect.
+│   │   ├── agent.go          #     Turn = perceive → recall → reason (reactLoop) → store → reflect.
 │   │   │                     #       Tool loop with MaxToolIters cap (errors, never silently); each call
 │   │   │                     #       consults Config.Policy (deny fails closed, risk≥medium prompts).
+│   │   ├── planner.go        #     LAYER 13: Planner — LLM emits a validated plan.Plan (retry on bad JSON,
+│   │   │                     #       never runs tools); opt-in Config.Planner / TALUNOR_PLANNER.
+│   │   ├── execute.go        #     LAYER 13: runPlanned — plan → policy pre-screen → whole-plan approval
+│   │   │                     #       → reactLoop capped to the plan's tools → learn; FormatPlan, /plan.
 │   │   ├── reflect.go        #     FactExtractor: the LLM distils durable facts into semantic memory.
 │   │   ├── debug.go          #     LAYER 11: /debug runtime toggle — streams recall rankings + reflection
 │   │   │                     #       inline as dimmed Reasoning notes (TUI + --plain).
-│   │   └── agent_test.go     #     Tests (recall+store, approval allow/deny, tool-loop cap, policy deny/override).
+│   │   ├── agent_test.go     #     Tests (recall+store, approval allow/deny, tool-loop cap, policy deny/override).
+│   │   ├── planner_test.go   #     Planner tests (happy path, retry-then-succeed, decodePlan tolerance).
+│   │   └── execute_test.go   #     Planned-turn tests (whole-plan approval, deny/reject, high-risk, fallback).
 │   │
 │   ├── plan/                 # LAYER 12: the plan vocabulary shared by policy + (future) planner.
 │   │   ├── plan.go           #     Plan / PlanStep (Type tool|think|final, Rationale required) + Validate;
@@ -187,4 +193,5 @@ each one a tagged release (see `CHANGELOG.md`):
 | 9 | `internal/sandbox` | run a real `bash` safely (kernel isolation) |
 | 10 | `internal/webfetch` | reach the network safely (application-layer SSRF guard) |
 | 12 | `internal/policy` (+ `internal/plan`) | the action guardrail: allow / prompt / deny before each tool call |
+| 13 | `agent/planner.go` + `agent/execute.go` | plan before acting: an approved plan, then ReAct execution capped to it |
 | — | `internal/history`, `internal/version`, `internal/config`, `internal/render` | supporting infrastructure |

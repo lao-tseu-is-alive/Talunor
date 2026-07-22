@@ -60,13 +60,18 @@ internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenRou
                    FromEnv() provider selection, NewOpenRouter
 internal/config/   minimal dependency-free .env loader (real env wins)
 internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/observe
-                   loop)→store→reflect. runLoop offers Config.Tools, executes
-                   tool calls, feeds observations back (MaxToolIters cap), streams
-                   the final answer (an unanswered tool-loop that hits MaxToolIters
-                   ends with an explicit error, never silently). Each tool call is
-                   gated by Config.Policy (runTool wraps it as a one-step
-                   plan.Plan and calls policy.Evaluate: deny fails closed, medium+
-                   risk prompts, Modified may rewrite the step). reflect.go =
+                   loop)→store→reflect. reactLoop (shared core) offers Config.Tools,
+                   executes tool calls, feeds observations back (MaxToolIters cap),
+                   streams the final answer (an unanswered tool-loop that hits
+                   MaxToolIters ends with an explicit error, never silently). Each
+                   tool call is gated by Config.Policy (runTool wraps it as a
+                   one-step plan.Plan and calls policy.Evaluate: deny fails closed,
+                   medium+ risk prompts, Modified may rewrite the step). planner.go =
+                   Planner (LLM emits a validated plan.Plan, retry on bad JSON, never
+                   runs tools; opt-in Config.Planner/TALUNOR_PLANNER). execute.go =
+                   runPlanned: plan→policy pre-screen→whole-plan approval
+                   (Config.ApprovalMode plan|step|highrisk)→reactLoop capped to the
+                   plan's tools→learn; /plan shows the last plan. reflect.go =
                    FactExtractor (LLM distils facts into KindFact;
                    DisableReflection()). Optional Config.Debug (slog) traces
                    recall/tools/reflection. debug.go: the /debug runtime toggle
@@ -118,6 +123,13 @@ risky step (`RiskLevel ≥ medium`) pauses the loop — the agent emits an
 observation, fail closed). The default `policy.ToolGatePolicy` derives that from
 each tool's own `Approvable`/`ApprovableFor`, so behaviour matches pre-policy.
 
+With `Config.Planner` set (opt-in), `Turn` instead runs `runPlanned`: the planner
+emits a validated `plan.Plan` up front; the policy pre-screens it (a denied step
+blocks the whole plan); the human approves the whole plan (per `ApprovalMode`); then
+`reactLoop` executes it **capped to the plan's tools** (`execCtx.allowTools`), so the
+model can only act within what was approved. A planning failure falls back to the
+plain loop. Planning is off by default — the ReAct path above is unchanged.
+
 ## Build, test, run
 
 ```bash
@@ -165,6 +177,8 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_REFLECT` | `0` disables per-turn reflection (cost on paid APIs) | `1` |
 | `TALUNOR_TOOLS` | `0` disables tools (model without tool-calling support) | `1` |
 | `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow/prompt/deny; `docs/policy.sample.yaml`); unset = default per-tool gate | — |
+| `TALUNOR_PLANNER` | `1` plans before acting (inspectable, approved plan → ReAct execution capped to the plan's tools) | `0` |
+| `TALUNOR_APPROVAL` | plan approval mode: `plan` / `step` / `highrisk` (ignored when planner off) | `plan` |
 | `TALUNOR_DEBUG` | trace recall/tools/reflection: `1` → log file next to DB, `stderr`, or a path | off |
 | `TALUNOR_BASH` | `1` enables the sandboxed, approval-gated `bash` tool | `0` |
 | `TALUNOR_SANDBOX` | bash backend: `nerdctl`/`docker` or `namespaces` (unset = auto) | auto |
@@ -333,9 +347,17 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   needs a policy" (`docs/lessons/12-the-open-bar/`, bilingual EN/FR). Pinned to
   `v0.12.0`; argues the threat (prompt-injected text → tool call) before reading the
   `Policy`/`Decision` code; course now 00–12. Keep new lessons bilingual.
-- **Next — Layer 13 (Iteration 3)**: the **explicit planner** — the model emits a
-  structured, inspectable `plan.Plan` up front (strict validation + retry; it never
-  calls tools); the policy gates the whole plan then step-by-step (two-level
-  approval); `reflect` receives the executed plan (feeds Iteration 4). A `/plan`
-  command inspects it. Then Iteration 4 (learning/consolidation). Same per-layer
-  checkpoint rhythm.
+- **Iteration 3 COMPLETE — Layer 13 (done): v0.13.0** = the **explicit planner**.
+  `agent/planner.go` (`Planner` interface + default `llmPlanner`: LLM → JSON plan →
+  validate + retry, never runs tools; `NewLLMPlanner`, opt-in via `TALUNOR_PLANNER`).
+  `agent/execute.go` (`runPlanned`: plan → policy pre-screen → whole-plan approval →
+  `reactLoop` **capped to the plan's tools** → learn; `FormatPlan`; `/plan` command).
+  `runLoop` split into `runLoop` (plain entry) + `reactLoop` (shared core); `runTool`
+  + core take `execCtx{allowTools, skipStepApproval}`; `toolSpecs(allow)` enforces the
+  cap. `Config.Planner` + `Config.ApprovalMode` (`TALUNOR_APPROVAL` = plan|step|
+  highrisk, default plan). A planning failure falls back to the plain ReAct loop.
+  **Deferred (future layers/lessons):** `/edit-plan`, semantic deviation detection,
+  automatic re-planning — the v0.13.0 cap is *structural* (only planned tools offered).
+- **Next — Iteration 4 (learning):** memory consolidation, salience/decay, async
+  reflection (it runs synchronously in the loop today), and learning from executed
+  plans. Then continue the per-layer checkpoint rhythm.

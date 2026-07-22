@@ -27,6 +27,32 @@ import (
 	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 )
 
+// Plan-approval modes for Config.ApprovalMode.
+const (
+	// ApprovalPlan asks once for the whole plan, then runs its (in-plan) tools
+	// without further prompts — the human's plan approval is the consent.
+	ApprovalPlan = "plan"
+	// ApprovalStep asks for the whole plan AND still confirms each risky step.
+	ApprovalStep = "step"
+	// ApprovalHighRisk skips the whole-plan prompt: the plan is advisory and the
+	// per-call policy gate prompts as usual (≈ the pre-planner behaviour, plus a
+	// visible plan).
+	ApprovalHighRisk = "highrisk"
+)
+
+// execCtx carries the per-turn constraints the planner imposes on the ReAct loop.
+// Its zero value is the pre-planner behaviour: every tool offered, the policy's own
+// per-step approval applied.
+type execCtx struct {
+	// allowTools, when non-nil, is the only set of tools offered to the model this
+	// turn — the structural "cap" that keeps a planned execution on-plan (the model
+	// literally cannot call a tool the approved plan didn't name). Nil = all tools.
+	allowTools map[string]bool
+	// skipStepApproval suppresses the per-step approval prompt because the human
+	// already approved the whole plan (ApprovalPlan). The policy's deny still holds.
+	skipStepApproval bool
+}
+
 // Config tunes an Agent.
 type Config struct {
 	// SystemPrompt frames every conversation.
@@ -70,6 +96,19 @@ type Config struct {
 	// gate) — or an AllowAllPolicy when there are no tools to gate.
 	Policy policy.Policy
 
+	// Planner, when set, makes the agent plan before it acts: each turn it produces
+	// an explicit, inspectable plan.Plan, the human approves it (see ApprovalMode),
+	// and the ReAct loop then executes *capped to the plan's tools*. Nil (the
+	// default) keeps the plain emergent ReAct loop — tools are discovered one call
+	// at a time. cmd/talunor wires it from TALUNOR_PLANNER.
+	Planner Planner
+	// ApprovalMode governs how a plan is approved, one of ApprovalPlan (approve the
+	// whole plan once, then run its tools without per-step prompts), ApprovalStep
+	// (approve the plan, and still confirm each risky step), or ApprovalHighRisk
+	// (no whole-plan prompt; the plan is advisory and per-call policy prompts as
+	// usual). Empty defaults to ApprovalPlan. Ignored when Planner is nil.
+	ApprovalMode string
+
 	// Debug, when non-nil, receives a structured trace of the loop's otherwise
 	// invisible decisions: which memories were recalled (id + distance), which
 	// tools ran, and what reflection stored or skipped. It is a teaching/debug
@@ -100,7 +139,11 @@ type Agent struct {
 	extractor FactExtractor
 	tools     *tools.Registry
 	policy    policy.Policy
-	cfg       Config
+	planner   Planner
+	// lastPlan is the most recent plan produced this session, surfaced by the
+	// /plan command. Single-user: written once per planned turn, read between turns.
+	lastPlan *plan.Plan
+	cfg      Config
 	// screenDebug, when true, streams the loop's otherwise-invisible decisions
 	// (recall rankings, reflection results) inline as dimmed notes, so the user
 	// can watch them in the transcript. Toggled at runtime via SetScreenDebug (the
@@ -145,6 +188,13 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 			cfg.Policy = policy.AllowAllPolicy{}
 		}
 	}
+	// ApprovalMode only matters when planning; default it and reject typos so an
+	// unknown value never silently weakens the gate.
+	switch cfg.ApprovalMode {
+	case ApprovalPlan, ApprovalStep, ApprovalHighRisk:
+	default:
+		cfg.ApprovalMode = ApprovalPlan
+	}
 	return &Agent{
 		store:     store,
 		short:     memory.NewShortTerm(cfg.ShortTermCap),
@@ -152,6 +202,7 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 		extractor: cfg.Extractor,
 		tools:     cfg.Tools,
 		policy:    cfg.Policy,
+		planner:   cfg.Planner,
 		cfg:       cfg,
 	}
 }
@@ -178,29 +229,42 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 		return nil, err
 	}
 
-	// Run the act→observe loop in the background, streaming to the caller.
+	// Run the turn in the background, streaming to the caller. With a planner the
+	// agent plans first, then executes the plan; otherwise it runs the plain ReAct
+	// loop, discovering tool calls as it goes.
 	out := make(chan llm.Chunk)
-	go a.runLoop(ctx, msgs, input, hits, out)
+	if a.planner != nil {
+		go a.runPlanned(ctx, msgs, input, hits, out)
+	} else {
+		go a.runLoop(ctx, msgs, input, hits, out)
+	}
 	return out, nil
 }
 
-// runLoop is the cognitive loop's reasoning+acting core. It calls the model with
-// the offered tools; while the model asks for tools it executes them, feeds the
-// observations back, and calls again (up to MaxToolIters); once the model answers
-// without a tool call, that answer is the final reply. Answer content streams to
-// the caller live; tool activity is surfaced as dimmed notes. On clean
-// completion the final answer is stored and reflection runs — all before the
-// channel closes, so observing the stream end means learning is done.
+// runLoop is the plain (planner-off) entry point: it surfaces the recall trace,
+// runs the ReAct core with no plan constraints — every tool offered, the policy's
+// own per-step approval — then closes the channel.
 func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, hits []memory.Hit, out chan<- llm.Chunk) {
 	defer close(out)
-
 	// With /debug on, surface the recall ranking that shaped this turn's prompt —
 	// the single most useful thing to see when memory "doesn't remember".
 	a.emitRecallDebug(ctx, out, input, hits)
+	a.reactLoop(ctx, msgs, input, out, execCtx{})
+}
 
+// reactLoop is the cognitive loop's reasoning+acting core, shared by the plain and
+// the planned paths. It calls the model with the offered tools (capped by
+// exec.allowTools when a plan is in force); while the model asks for tools it
+// executes them, feeds the observations back, and calls again (up to MaxToolIters);
+// once the model answers without a tool call, that answer is the final reply.
+// Answer content streams to the caller live; tool activity is surfaced as dimmed
+// notes. On clean completion the final answer is stored and reflection runs. It does
+// NOT close out — the caller owns the channel — so observing the stream end still
+// means learning is done.
+func (a *Agent) reactLoop(ctx context.Context, msgs []llm.Message, input string, out chan<- llm.Chunk, exec execCtx) {
 	opts := a.cfg.Options
 	if a.tools != nil {
-		opts.Tools = a.toolSpecs()
+		opts.Tools = a.toolSpecs(exec.allowTools)
 	}
 
 	var answer string
@@ -253,7 +317,7 @@ func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, h
 				return
 			}
 			a.trace("tool.call", "iter", iter, "name", tc.Name, "args", oneLine(tc.Args, 80))
-			obs, done := a.runTool(ctx, out, tc)
+			obs, done := a.runTool(ctx, out, tc, exec)
 			if done {
 				return // context cancelled mid-tool.
 			}
@@ -289,10 +353,12 @@ func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, h
 // one-step plan and asks a.policy whether it may run: a policy error or a denial
 // fails closed (the model observes the refusal and can react); a step needing
 // approval pauses for a human y/n (deny/cancel also become observations). A
-// policy may rewrite the step (Decision.Modified) before it runs. It returns the
-// observation and done=true if the context was cancelled while waiting (the
+// policy may rewrite the step (Decision.Modified) before it runs. When
+// exec.skipStepApproval is set (the human already approved the whole plan) the
+// per-step approval prompt is skipped, but a policy denial still holds. It returns
+// the observation and done=true if the context was cancelled while waiting (the
 // caller should stop).
-func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCall) (obs string, done bool) {
+func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCall, exec execCtx) (obs string, done bool) {
 	p := plan.NewToolCallPlan(tc.Name, json.RawMessage(tc.Args))
 	step := p.Steps[0]
 
@@ -318,7 +384,7 @@ func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCa
 		a.trace("policy.modify", "name", name, "reason", d.Reason)
 	}
 
-	if d.NeedsApproval() {
+	if d.NeedsApproval() && !exec.skipStepApproval {
 		req := llm.NewApprovalRequest(name, string(args))
 		if !a.send(ctx, out, llm.Chunk{Approval: req}) {
 			return "", true
@@ -344,11 +410,16 @@ func (a *Agent) send(ctx context.Context, out chan<- llm.Chunk, c llm.Chunk) boo
 }
 
 // toolSpecs converts the registry's definitions into the provider's tool specs.
-func (a *Agent) toolSpecs() []llm.ToolSpec {
-	defs := a.tools.Defs()
-	specs := make([]llm.ToolSpec, len(defs))
-	for i, d := range defs {
-		specs[i] = llm.ToolSpec{Name: d.Name, Description: d.Description, Parameters: d.Parameters}
+// toolSpecs renders the registry's tools as LLM tool specs. When allow is non-nil
+// only tools whose name is in it are offered — the planner's structural cap: the
+// model cannot call a tool the approved plan didn't name because it never sees it.
+func (a *Agent) toolSpecs(allow map[string]bool) []llm.ToolSpec {
+	specs := make([]llm.ToolSpec, 0, a.tools.Len())
+	for _, d := range a.tools.Defs() {
+		if allow != nil && !allow[d.Name] {
+			continue
+		}
+		specs = append(specs, llm.ToolSpec{Name: d.Name, Description: d.Description, Parameters: d.Parameters})
 	}
 	return specs
 }
@@ -484,6 +555,7 @@ const HelpText = `Commands:
   /mem         memory stats (count + database file + embedding provenance)
   /list [n]    list the most recent n memories (default 10)
   /forget <id> delete the memory with that #id (as shown by /list)
+  /plan        show the most recent plan (when TALUNOR_PLANNER=1)
   /debug [on|off]  toggle inline trace of recall rankings & reflection
   /clear       clear the on-screen transcript (TUI only; does not erase memory)
   /exit, /quit quit

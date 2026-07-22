@@ -11,10 +11,85 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Iteration 3, continued** — the explicit planner (Layer 13): before a
-  multi-step turn the model emits a structured, inspectable plan the policy can
-  gate whole and step-by-step, instead of discovering the sequence one tool-call
-  at a time. Reflection will receive the executed plan (feeding Iteration 4).
+- **Iteration 4, next** — learning: memory consolidation, salience/decay, and
+  making reflection asynchronous (it runs synchronously in the loop today). The
+  executed plan becomes an input to learning (was deferred from Layer 13).
+- **Planner follow-ups (deferred from Layer 13):** `/edit-plan` (hand-edit a plan
+  before it runs), semantic deviation detection, and automatic light re-planning
+  when a step surprises — each a small layer / lesson of its own.
+
+## [0.13.0] - 2026-07-22 — Iteration 3 complete: the explicit planner (Layer 13)
+
+Talunor now **plans before it acts**. Where the ReAct loop discovers the sequence
+one tool call at a time, an optional planner first produces a whole, structured
+[plan.Plan] the human can read and approve — then the loop executes it *capped to
+the plan's tools*, so a plan-injected model can't wander off into actions nobody
+approved. It is the capstone of Iteration 3: Layer 12 gave the agent a guardrail,
+Layer 13 gives it forethought.
+
+Planning is **opt-in** (`TALUNOR_PLANNER=1`); off, the plain ReAct loop is
+unchanged — so a reader can toggle the two and feel the difference.
+
+### Added
+
+- **`internal/agent/planner.go`** — the `Planner` interface and the default
+  `llmPlanner`: it asks the model for a JSON plan, extracts the object (tolerating
+  prose / code fences), validates it (structure via `plan.Validate`, plus "every
+  tool step names a known tool" and "ends in a final step"), and **retries once**
+  with the exact error fed back. The planner **never executes tools** — it only
+  plans. `NewLLMPlanner` builds it over the agent's own provider (temperature 0).
+- **`internal/agent/execute.go`** — `runPlanned`, the planned turn: **plan → policy
+  pre-screen → whole-plan approval → capped execution → learn**. A denied step
+  blocks the whole plan before anything runs; the human approves the plan as a
+  whole (the exact actions they see); execution reuses the ReAct core but offers
+  **only the plan's tools** (the structural cap). `FormatPlan` renders a plan for
+  approval, the trace, and `/plan`.
+- **`Config.Planner`** and **`Config.ApprovalMode`** (`plan` — approve the whole
+  plan once, then run its tools; `step` — approve the plan *and* confirm each risky
+  step; `highrisk` — no whole-plan prompt, the plan is advisory and per-call policy
+  prompts as before; default `plan`).
+- **`TALUNOR_PLANNER`** (opt-in) and **`TALUNOR_APPROVAL`** env knobs; a **`/plan`**
+  command (TUI + REPL) shows the most recent plan. A planning *failure* falls back
+  to the plain ReAct loop, so the turn still answers.
+
+### Changed
+
+- `runLoop` is split into `runLoop` (the plain entry point) and **`reactLoop`** (the
+  act/observe core), now shared by the plain and planned paths. `runTool` and the
+  core take an `execCtx` carrying the tool cap and whether the whole-plan approval
+  already stands in for per-step prompts. `toolSpecs(allow)` filters the offered
+  tools — the cap's teeth.
+
+### Deferred (documented, future layers)
+
+- `/edit-plan` (editing a structured plan in a terminal is fiddly — approve/refuse
+  first), **semantic** deviation detection, and automatic re-planning on a
+  surprising result. The v0.13.0 cap is *structural* (only planned tools are
+  offered); semantic "did it drift from the intent?" needs a second LLM judgement
+  and is a layer of its own.
+
+### Lessons learned
+
+1. **Plan-level approval is only as safe as the cap that keeps execution inside the
+   plan.** A blanket "yes" to a plan would be *weaker* than per-tool approval if the
+   model could then call anything — so the load-bearing trick is that execution only
+   *offers* the tools the approved plan named. The model can't call what it can't
+   see. Enforce the boundary at the API surface, not by asking the model to behave.
+2. **Reuse the loop you already trust.** The planner did not replace the ReAct loop;
+   `reactLoop` was extracted and *reused* for execution. Planning only changes two
+   things — which tools are offered and how approval is solicited — so the
+   hard-won loop behaviour (streaming, the tool-iteration cap, fail-closed tools)
+   carries over for free.
+3. **A `json.Decoder` reads one value and ignores the rest.** Models wrap JSON in
+   prose and ```fences```. Rather than a brittle regex, `decodePlan` finds the first
+   `{` and lets a Decoder read exactly one object — which also handles braces inside
+   strings correctly. Robust extraction, five lines.
+4. **Design the failure as a downgrade, not a dead end.** A malformed plan after
+   retries doesn't abort the turn; it falls back to the plain ReAct loop. The user
+   still gets an answer; planning is an enhancement, not a single point of failure.
+5. **Opt-in is a teaching tool, not a hedge.** `TALUNOR_PLANNER` isn't there because
+   we're unsure of the feature — it's there so a learner can run the *same* prompt
+   with and without a plan and watch emergent ReAct become deliberate planning.
 
 ## [0.12.1] - 2026-07-22 — Course: Lesson 12 (the open bar — why an agent needs a policy), bilingual
 
