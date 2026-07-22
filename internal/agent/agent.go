@@ -22,6 +22,8 @@ import (
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
+	"github.com/lao-tseu-is-alive/Talunor/internal/plan"
+	"github.com/lao-tseu-is-alive/Talunor/internal/policy"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 )
 
@@ -61,6 +63,13 @@ type Config struct {
 	// loop forever. Defaults to 6.
 	MaxToolIters int
 
+	// Policy decides, before each tool call, whether it may run automatically,
+	// needs human approval, or is denied outright (see internal/policy). If nil,
+	// New installs the default policy.ToolGatePolicy backed by Tools — which
+	// preserves the pre-policy behaviour (each tool's own Approvable/ApprovableFor
+	// gate) — or an AllowAllPolicy when there are no tools to gate.
+	Policy policy.Policy
+
 	// Debug, when non-nil, receives a structured trace of the loop's otherwise
 	// invisible decisions: which memories were recalled (id + distance), which
 	// tools ran, and what reflection stored or skipped. It is a teaching/debug
@@ -90,6 +99,7 @@ type Agent struct {
 	provider  llm.Provider
 	extractor FactExtractor
 	tools     *tools.Registry
+	policy    policy.Policy
 	cfg       Config
 	// screenDebug, when true, streams the loop's otherwise-invisible decisions
 	// (recall rankings, reflection results) inline as dimmed notes, so the user
@@ -125,12 +135,23 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 	if cfg.Extractor == nil {
 		cfg.Extractor = newLLMExtractor(provider, cfg.Options)
 	}
+	// Default guardrail: consult each tool's own approval interfaces, exactly
+	// reproducing pre-policy behaviour. With no tools there is nothing to gate,
+	// so an AllowAllPolicy avoids handing the tool-gate a nil lookup.
+	if cfg.Policy == nil {
+		if cfg.Tools != nil {
+			cfg.Policy = policy.NewToolGate(cfg.Tools.Get)
+		} else {
+			cfg.Policy = policy.AllowAllPolicy{}
+		}
+	}
 	return &Agent{
 		store:     store,
 		short:     memory.NewShortTerm(cfg.ShortTermCap),
 		provider:  provider,
 		extractor: cfg.Extractor,
 		tools:     cfg.Tools,
+		policy:    cfg.Policy,
 		cfg:       cfg,
 	}
 }
@@ -264,13 +285,41 @@ func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, h
 	a.reflect(ctx, out, input)
 }
 
-// runTool runs one tool call, first asking the human for approval if the tool
-// requires it (a denied or cancelled request becomes an observation the model
-// can react to). It returns the observation and done=true if the context was
-// cancelled while waiting for approval (the caller should stop).
+// runTool runs one tool call after consulting the policy. It wraps the call as a
+// one-step plan and asks a.policy whether it may run: a policy error or a denial
+// fails closed (the model observes the refusal and can react); a step needing
+// approval pauses for a human y/n (deny/cancel also become observations). A
+// policy may rewrite the step (Decision.Modified) before it runs. It returns the
+// observation and done=true if the context was cancelled while waiting (the
+// caller should stop).
 func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCall) (obs string, done bool) {
-	if a.needsApproval(tc.Name, tc.Args) {
-		req := llm.NewApprovalRequest(tc.Name, tc.Args)
+	p := plan.NewToolCallPlan(tc.Name, json.RawMessage(tc.Args))
+	step := p.Steps[0]
+
+	d, err := a.policy.Evaluate(ctx, p, step)
+	if err != nil {
+		// A policy that cannot decide does not get to run the tool.
+		a.trace("policy.error", "name", tc.Name, "err", err)
+		return fmt.Sprintf("error: policy evaluation failed, tool not run: %v", err), false
+	}
+	if d.Denied() {
+		a.trace("policy.deny", "name", tc.Name, "reason", d.Reason)
+		return fmt.Sprintf("error: policy denied this tool call (%s)", d.Reason), false
+	}
+
+	// A policy may rewrite the step before it runs (e.g. force a safer argument
+	// set). The default policies leave Modified nil.
+	name, args := tc.Name, step.Arguments
+	if d.Modified != nil {
+		if d.Modified.Tool != "" {
+			name = d.Modified.Tool
+		}
+		args = d.Modified.Arguments
+		a.trace("policy.modify", "name", name, "reason", d.Reason)
+	}
+
+	if d.NeedsApproval() {
+		req := llm.NewApprovalRequest(name, string(args))
 		if !a.send(ctx, out, llm.Chunk{Approval: req}) {
 			return "", true
 		}
@@ -281,24 +330,7 @@ func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCa
 			return "error: the user denied permission to run this tool", false
 		}
 	}
-	return a.tools.Execute(ctx, tc.Name, json.RawMessage(tc.Args)), false
-}
-
-// needsApproval reports whether calling the named tool with these arguments
-// requires human approval. A tool implementing tools.ApprovableFor decides per
-// call from its arguments (e.g. web_fetch waving through an allowlisted host);
-// otherwise the coarse tools.Approvable applies; tools implementing neither run
-// freely.
-func (a *Agent) needsApproval(name, args string) bool {
-	t, ok := a.tools.Get(name)
-	if !ok {
-		return false
-	}
-	if af, ok := t.(tools.ApprovableFor); ok {
-		return af.RequiresApprovalForArgs(json.RawMessage(args))
-	}
-	ap, ok := t.(tools.Approvable)
-	return ok && ap.RequiresApproval()
+	return a.tools.Execute(ctx, name, args), false
 }
 
 // send delivers c unless the context is cancelled first; returns false if it was.

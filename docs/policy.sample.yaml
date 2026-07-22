@@ -1,0 +1,46 @@
+# Talunor policy rules — a starting point for TALUNOR_POLICY.
+#
+#   export TALUNOR_POLICY=./docs/policy.sample.yaml
+#
+# The policy is consulted before every tool call. Each rule matches a tool by
+# name and chooses an action:
+#
+#   allow   run automatically, no prompt        (low risk)
+#   prompt  run only after you approve (y/n)     (medium risk)
+#   deny    never run; the model is told it was refused, and can recover
+#
+# The FIRST rule whose `tool` matches wins. `tool: '*'` (or an omitted tool)
+# matches anything, so it is how you write catch-all rules. If no rule matches,
+# the `default` applies; an omitted default is `prompt` (fail safe: ask a human).
+#
+# NOTE: matching is by tool NAME only. A rule file does not see per-argument
+# conditions such as web_fetch's per-host allowlist (TALUNOR_WEBFETCH_ALLOW).
+# Leave TALUNOR_POLICY unset to keep the default policy, which preserves each
+# tool's own approval behaviour (including that allowlist).
+
+default:
+  action: prompt          # anything not listed below asks first
+
+rules:
+  # Read-only, side-effect-free tools run freely.
+  - tool: calculator
+    action: allow
+  - tool: clock
+    action: allow
+  - tool: recall_memory
+    action: allow
+
+  # Side-effecting tools stay behind the human gate. `reason` (optional) is
+  # surfaced in the trace and, for denials, fed back to the model.
+  - tool: bash
+    action: prompt
+    reason: runs shell commands in a sandbox — confirm each one
+
+  - tool: web_fetch
+    action: prompt
+    reason: makes an outbound network request
+
+  # Example of a hard block: uncomment to forbid a tool entirely.
+  # - tool: bash
+  #   action: deny
+  #   reason: shell disabled in this deployment

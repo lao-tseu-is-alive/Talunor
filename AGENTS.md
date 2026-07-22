@@ -63,18 +63,31 @@ internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/obs
                    loop)→store→reflect. runLoop offers Config.Tools, executes
                    tool calls, feeds observations back (MaxToolIters cap), streams
                    the final answer (an unanswered tool-loop that hits MaxToolIters
-                   ends with an explicit error, never silently). reflect.go =
+                   ends with an explicit error, never silently). Each tool call is
+                   gated by Config.Policy (runTool wraps it as a one-step
+                   plan.Plan and calls policy.Evaluate: deny fails closed, medium+
+                   risk prompts, Modified may rewrite the step). reflect.go =
                    FactExtractor (LLM distils facts into KindFact;
                    DisableReflection()). Optional Config.Debug (slog) traces
                    recall/tools/reflection. debug.go: the /debug runtime toggle
                    (screenDebug) streams recall rankings + reflection inline as
                    dimmed Reasoning notes. Slash-command helpers too.
+internal/plan/     plan vocabulary shared by policy + (future) planner: Plan{Goal,
+                   Steps, Confidence}, PlanStep{ID, Type tool|think|final, Tool,
+                   Arguments, Rationale, DependsOn} with Validate(); RiskLevel;
+                   NewToolCallPlan wraps one tool call as a one-step plan
+internal/policy/   action guardrail: Policy.Evaluate(ctx,*Plan,PlanStep)→Decision
+                   {Allowed, Reason, Modified, RiskLevel}. Decision.Denied() /
+                   NeedsApproval() (RiskLevel≥medium) centralise the mapping.
+                   AllowAllPolicy; ToolGatePolicy (default — consults each tool's
+                   Approvable/ApprovableFor, preserves pre-policy behaviour);
+                   RuleEnginePolicy (YAML rules, TALUNOR_POLICY)
 internal/tools/    action layer: Tool interface + Registry; builtins Calculator
                    (AST-safe), Clock, RecallMemory (searches the store), Bash
                    (sandboxed shell; opt-in TALUNOR_BASH), WebFetch (SSRF-guarded
                    HTTP; opt-in TALUNOR_WEBFETCH). Approvable = coarse human-OK
                    interface; ApprovableFor = per-call gate from args (web_fetch's
-                   allowlist bypass) — the agent prefers it when a tool implements it
+                   allowlist bypass) — the default ToolGatePolicy consults these
 internal/sandbox/  runs an untrusted script under limits; Sandbox iface + FromEnv.
                    Two backends: ociRuntime (nerdctl/docker — strong) and
                    namespaces (rootless userns re-exec — Linux-only, teaching, no
@@ -97,10 +110,13 @@ recent turns → build prompt → **act/observe loop**: `Provider.Chat` with too
 while it returns tool calls, run them and append observations, then call again
 (cap `MaxToolIters`); the final answer streams live, tool activity shows dimmed →
 `Store.Remember` user + final answer → **reflect** (extractor distils durable
-facts into `KindFact`, deduped). Learning runs before the stream closes. A tool
-that implements `tools.Approvable` pauses the loop: the agent emits an
-`llm.ApprovalRequest` on the stream and blocks on `Decision`; TUI/REPL prompt y/n
-(deny → observation, fail closed).
+facts into `KindFact`, deduped). Learning runs before the stream closes. Before
+each tool runs, `runTool` wraps it as a one-step `plan.Plan` and asks
+`Config.Policy`: a **deny** becomes an observation (fail closed); an allowed but
+risky step (`RiskLevel ≥ medium`) pauses the loop — the agent emits an
+`llm.ApprovalRequest` and blocks on `Decision`, TUI/REPL prompt y/n (deny →
+observation, fail closed). The default `policy.ToolGatePolicy` derives that from
+each tool's own `Approvable`/`ApprovableFor`, so behaviour matches pre-policy.
 
 ## Build, test, run
 
@@ -148,6 +164,7 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_MODEL` | model for the selected provider | provider default |
 | `TALUNOR_REFLECT` | `0` disables per-turn reflection (cost on paid APIs) | `1` |
 | `TALUNOR_TOOLS` | `0` disables tools (model without tool-calling support) | `1` |
+| `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow/prompt/deny; `docs/policy.sample.yaml`); unset = default per-tool gate | — |
 | `TALUNOR_DEBUG` | trace recall/tools/reflection: `1` → log file next to DB, `stderr`, or a path | off |
 | `TALUNOR_BASH` | `1` enables the sandboxed, approval-gated `bash` tool | `0` |
 | `TALUNOR_SANDBOX` | bash backend: `nerdctl`/`docker` or `namespaces` (unset = auto) | auto |
@@ -300,7 +317,21 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
 - **v0.11.1 (docs)** = course **Lesson 11** — "When memory silently forgets: embedding
   provenance & observability" (`docs/lessons/11-when-memory-forgets/`, bilingual EN/FR).
   First lesson drawn from a real fixed bug (pinned to `v0.11.0`); course now 00–11.
-- **Next — Iteration 3**: an explicit planner before multi-step actions; policy
-  checks for which tools/args are auto-allowed vs. need approval (generalising
-  `ApprovableFor` into a policy the agent consults). Then Iteration 4 (learning/
-  consolidation). Same per-layer checkpoint rhythm.
+- **Iteration 3 STARTED — Layer 12 (done): v0.12.0** = the **policy engine**. New
+  `internal/plan` (Plan/PlanStep/RiskLevel + Validate; `NewToolCallPlan`) and
+  `internal/policy` (Policy interface `Evaluate(ctx,*Plan,PlanStep)→Decision`;
+  `AllowAllPolicy`, the default `ToolGatePolicy` delegating to each tool's
+  `Approvable`/`ApprovableFor`, and `RuleEnginePolicy` reading YAML rules).
+  `agent.runTool` wraps each call as a one-step plan and consults `Config.Policy`
+  (deny fails closed; `RiskLevel ≥ medium` prompts; `Modified` may rewrite the
+  step); `needsApproval` removed. `TALUNOR_POLICY` = YAML rule path
+  (`docs/policy.sample.yaml`); unset ⇒ ToolGate, so v0.11.1 behaviour is preserved
+  (the 3 old approval tests pass unchanged). `cmd/talunor` wiring extracted into
+  `buildProvider`/`buildTools`/`buildPolicy`/`buildAgentConfig`. First dep outside
+  the SQLite/TUI/LLM substrate: `gopkg.in/yaml.v3`.
+- **Next — Layer 13 (Iteration 3)**: the **explicit planner** — the model emits a
+  structured, inspectable `plan.Plan` up front (strict validation + retry; it never
+  calls tools); the policy gates the whole plan then step-by-step (two-level
+  approval); `reflect` receives the executed plan (feeds Iteration 4). A `/plan`
+  command inspects it. Then Iteration 4 (learning/consolidation). Same per-layer
+  checkpoint rhythm.

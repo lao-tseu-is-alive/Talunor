@@ -13,6 +13,7 @@ import (
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
+	"github.com/lao-tseu-is-alive/Talunor/internal/policy"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 )
 
@@ -556,6 +557,87 @@ func TestApprovableForGating(t *testing.T) {
 	}
 	if sawApproval, ran := driveArgGated(t, `{"host":"other"}`); !sawApproval || !ran {
 		t.Errorf("untrusted args: sawApproval=%v ran=%v; want true/true (prompt, then runs)", sawApproval, ran)
+	}
+}
+
+// TestPolicyDenyFailsClosed: a policy that denies a tool stops it running without
+// prompting, and the model observes the refusal so it can recover.
+func TestPolicyDenyFailsClosed(t *testing.T) {
+	store := testStore(t)
+	var ran bool
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "danger", Args: `{}`}}}},
+		{{Content: "understood"}},
+	}}
+	pol, err := policy.ParseRules([]byte("rules:\n  - tool: danger\n    action: deny\n    reason: not allowed\n"))
+	if err != nil {
+		t.Fatalf("policy: %v", err)
+	}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(fakeTool{approval: true, ran: &ran})
+	cfg.Policy = pol
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	out, err := ag.Turn(context.Background(), "go")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	var sawApproval bool
+	for c := range out {
+		if c.Approval != nil {
+			sawApproval = true
+			c.Approval.Respond(true)
+		}
+	}
+	if sawApproval {
+		t.Error("a denied tool must not prompt for approval")
+	}
+	if ran {
+		t.Error("a denied tool must not run")
+	}
+	var sawDenial bool
+	for _, m := range prov.lastMsgs {
+		if m.Role == llm.RoleTool && strings.Contains(m.Content, "policy denied") {
+			sawDenial = true
+		}
+	}
+	if !sawDenial {
+		t.Error("the model should observe the policy denial as a tool result")
+	}
+}
+
+// TestPolicyOverrideAutoAllows: an injected AllowAllPolicy supersedes a tool's
+// own approval gate — the gated tool runs without a prompt.
+func TestPolicyOverrideAutoAllows(t *testing.T) {
+	store := testStore(t)
+	var ran bool
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "danger", Args: `{}`}}}},
+		{{Content: "done"}},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(fakeTool{approval: true, ran: &ran})
+	cfg.Policy = policy.AllowAllPolicy{} // overrides the tool's own gate
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	out, err := ag.Turn(context.Background(), "go")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	var sawApproval bool
+	for c := range out {
+		if c.Approval != nil {
+			sawApproval = true
+			c.Approval.Respond(true)
+		}
+	}
+	if sawApproval {
+		t.Error("allow-all policy should skip approval even for a gated tool")
+	}
+	if !ran {
+		t.Error("the tool should run under an allow-all policy")
 	}
 }
 

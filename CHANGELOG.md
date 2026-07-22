@@ -11,9 +11,92 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Iteration 3, next** — an explicit planner before multi-step actions; policy
-  checks for which tools/args are auto-allowed vs. need approval (generalising the
-  per-call approval gate that Layer 10 introduced).
+- **Iteration 3, continued** — the explicit planner (Layer 13): before a
+  multi-step turn the model emits a structured, inspectable plan the policy can
+  gate whole and step-by-step, instead of discovering the sequence one tool-call
+  at a time. Reflection will receive the executed plan (feeding Iteration 4).
+
+## [0.12.0] - 2026-07-22 — Iteration 3 begins: the policy engine (Layer 12)
+
+Iteration 3 turns the ad-hoc approval gate into a first-class **guardrail the agent
+consults before it acts**. Where Layer 8 asked "does this tool require approval?"
+through a boolean interface method, Layer 12 asks a `Policy`: *given this planned
+step, is it allowed, does it need a human, or is it denied?* — three outcomes, one
+seam, data-driven if you want it.
+
+It also lays the **plan vocabulary** (`internal/plan`) that the explicit planner
+(Layer 13) will produce: the policy's `Evaluate` already takes a `*plan.Plan`, so
+the abstraction is plan-shaped from day one. Until the planner exists, the agent
+wraps each individual tool call as a one-step plan — so the policy is real, wired,
+and tested now, with **zero behaviour change** (the pre-policy approval tests pass
+unchanged).
+
+### Added
+
+- **`internal/plan`** — the shared vocabulary of intent: `Plan{Goal, Steps,
+  Confidence}` and `PlanStep{ID, Type(tool|think|final), Tool, Arguments,
+  Rationale, DependsOn}`, each with a `Validate()` (rationale is required; a
+  `tool` step needs a tool name; `DependsOn` must resolve to a real, non-self
+  step). `RiskLevel` (low/medium/high) lives here too. `NewToolCallPlan` wraps a
+  single tool call as a valid one-step plan — the bridge that lets the policy gate
+  tool calls before the planner exists.
+- **`internal/policy`** — the guardrail. A `Policy` interface —
+  `Evaluate(ctx, *plan.Plan, plan.PlanStep) (Decision, error)` — plus three
+  implementations:
+  - `AllowAllPolicy` — permits everything at low risk (tests / permissive mode);
+  - `ToolGatePolicy` — **the default**: it consults each tool's own
+    `Approvable` / `ApprovableFor`, exactly reproducing pre-policy behaviour
+    (bash always prompts; web_fetch prompts unless the host is allowlisted);
+  - `RuleEnginePolicy` — data-driven, reads a YAML rule file (allow / prompt /
+    deny per tool, first match wins, `*` wildcard, fail-safe `prompt` default).
+  `Decision{Allowed, Reason, Modified, RiskLevel}` centralises the mapping onto
+  the agent's behaviour: `Denied()` (fail closed) and `NeedsApproval()`
+  (`Allowed && RiskLevel ≥ medium`). `Modified` lets a policy rewrite a step
+  (e.g. force a dry-run) — wired end-to-end though the default policies leave it nil.
+- **`TALUNOR_POLICY`** — path to a YAML rule file; unset ⇒ the default
+  `ToolGatePolicy`. A malformed file fails closed at startup. Commented starting
+  point in [`docs/policy.sample.yaml`](docs/policy.sample.yaml).
+- Agent gains `Config.Policy`; `agent.runTool` now consults the policy (deny → the
+  model observes the refusal and can recover; approval → the existing human y/n
+  gate; otherwise it runs). New tests cover deny-fail-closed and a policy
+  overriding a tool's own gate.
+
+### Changed
+
+- `cmd/talunor`: the crowded `run()` wiring is extracted into `buildProvider`,
+  `buildTools`, `buildPolicy`, and `buildAgentConfig`; `run` now reads as
+  orchestration. Flagged by the external model reviews (`reports/`) as the first
+  thing to refactor before Iteration 3 grew the wiring further.
+- `agent.needsApproval` is gone, replaced by the policy call.
+- First third-party dependency outside the SQLite/TUI/LLM substrate:
+  `gopkg.in/yaml.v3`, for policy rule files.
+
+### Lessons learned
+
+1. **Design the interface around where you're going, not where you are.** The
+   policy only needs `(tool, args)` today, but its `Evaluate` takes a whole
+   `*Plan`. That looks like over-reach until you notice it means Layer 13's planner
+   drops in without touching the policy's signature. Wrapping today's single tool
+   call as a one-step plan (`NewToolCallPlan`) made the forward-looking shape *free*
+   and testable immediately — the abstraction earns its keep before the feature
+   that motivates it ships.
+2. **Preserve behaviour by delegating, not by re-encoding it.** The tempting move
+   was to bake bash-prompts and the web_fetch allowlist into rule data. But the
+   allowlist needs the per-argument host introspection the tool already does.
+   Making the *default* policy (`ToolGatePolicy`) simply consult the existing
+   `Approvable` / `ApprovableFor` interfaces preserved v0.11.1 behaviour exactly —
+   the three old approval tests pass unchanged — and left the declarative rule
+   engine free to stay coarse (per-tool) for now.
+3. **Collapse three outcomes into a struct the caller can't misread.** Instead of
+   an enum the agent must switch on, `Decision` exposes `Denied()` and
+   `NeedsApproval()`, and the risk→approval threshold lives in exactly one place.
+   A caller physically cannot forget the "deny" case or apply the threshold
+   inconsistently.
+4. **A new dependency in a zero-dep-ethos repo is a decision, not a reflex.** We
+   chose YAML (`yaml.v3`) over stdlib JSON for policy rules *because the files are
+   human-authored* — native comments explain *why* a rule exists, and the policy
+   ecosystem (K8s / Docker / OPA) is YAML. Worth one dependency; recorded here so
+   the next contributor knows it was weighed, not defaulted into.
 
 ## [0.11.1] - 2026-07-22 — Course: Lesson 11 (embedding provenance & observability), bilingual
 

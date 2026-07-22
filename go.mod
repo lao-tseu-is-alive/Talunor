@@ -9,6 +9,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/mattn/go-sqlite3 v1.14.48
 	golang.org/x/sys v0.46.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

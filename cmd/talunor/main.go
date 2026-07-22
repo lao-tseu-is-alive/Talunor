@@ -33,6 +33,7 @@ import (
 	"github.com/lao-tseu-is-alive/Talunor/internal/history"
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
+	"github.com/lao-tseu-is-alive/Talunor/internal/policy"
 	"github.com/lao-tseu-is-alive/Talunor/internal/render"
 	"github.com/lao-tseu-is-alive/Talunor/internal/sandbox"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
@@ -85,65 +86,22 @@ func run(plain bool, list int, reembed bool) error {
 		return reembedMemories(ctx, store)
 	}
 
-	provider, model, err := llm.FromEnv()
+	provider, model, err := buildProvider()
 	if err != nil {
 		return err
 	}
 
-	cfg := agent.DefaultConfig()
-	// Reflection makes a second model call per turn; on a paid provider that
-	// doubles cost, so allow disabling it with TALUNOR_REFLECT=0.
-	if !envBool("TALUNOR_REFLECT", true) {
-		cfg.Extractor = agent.DisableReflection()
-	}
-	// TALUNOR_DEBUG turns on a structured trace of recall/tools/reflection (see
-	// debugLogger). It logs to a file by default so the TUI's screen stays clean;
-	// the closer is deferred until the program exits.
-	dbg, dbgClose, dbgDest, err := debugLogger(store.Path())
+	// Assemble the agent's configuration from the environment (reflection, debug
+	// trace, tools, policy). closeDebug is the debug log's closer — nil when the
+	// trace is off — kept open for the process's lifetime.
+	cfg, closeDebug, err := buildAgentConfig(store)
 	if err != nil {
 		return err
 	}
-	if dbgClose != nil {
-		defer dbgClose.Close()
+	if closeDebug != nil {
+		defer closeDebug.Close()
 	}
-	if dbg != nil {
-		cfg.Debug = dbg
-		fmt.Fprintf(os.Stderr, "talunor: debug trace → %s\n", dbgDest)
-	}
-	// Tools: the agent can do arithmetic, tell the time, and search its own
-	// memory. Disable with TALUNOR_TOOLS=0 (e.g. for a model without tool support).
-	if envBool("TALUNOR_TOOLS", true) {
-		reg := tools.NewRegistry(
-			tools.Calculator{},
-			tools.Clock{},
-			tools.NewRecallMemory(store),
-		)
-		// The sandboxed bash tool is opt-in (TALUNOR_BASH=1) and approval-gated.
-		// If the sandbox can't be set up on this host, warn and carry on without
-		// it rather than failing the whole app.
-		if envBool("TALUNOR_BASH", false) {
-			if sb, err := sandbox.FromEnv(); err != nil {
-				fmt.Fprintf(os.Stderr, "talunor: bash tool disabled: %v\n", err)
-			} else {
-				reg.Register(tools.NewBash(sb, sandbox.DefaultLimits()))
-				fmt.Fprintf(os.Stderr, "talunor: bash tool enabled (sandbox: %s, approval-gated)\n", sb.Name())
-			}
-		}
-		// The web_fetch tool is opt-in (TALUNOR_WEBFETCH=1). It is SSRF-guarded and
-		// approval-gated, except for hosts on TALUNOR_WEBFETCH_ALLOW which skip the
-		// prompt (the guard still applies).
-		if envBool("TALUNOR_WEBFETCH", false) {
-			lim := webFetchLimits()
-			allow := splitList(os.Getenv("TALUNOR_WEBFETCH_ALLOW"))
-			reg.Register(tools.NewWebFetch(webfetch.New(lim, nil), allow))
-			msg := "talunor: web_fetch tool enabled (SSRF-guarded, approval-gated"
-			if len(allow) > 0 {
-				msg += fmt.Sprintf(", allowlist: %s", strings.Join(allow, ","))
-			}
-			fmt.Fprintln(os.Stderr, msg+")")
-		}
-		cfg.Tools = reg
-	}
+
 	ag := agent.New(store, provider, cfg)
 	n, _ := store.Count(ctx)
 
@@ -166,6 +124,111 @@ func run(plain bool, list int, reembed bool) error {
 		return repl(ctx, ag, hist)
 	}
 	return tui.Run(ctx, ag, hist, provider.Name(), model, n)
+}
+
+// buildProvider selects the chat backend from the environment (TALUNOR_PROVIDER
+// / TALUNOR_MODEL and the provider-specific URL/key vars). It is a thin seam so
+// run reads as orchestration; the selection logic lives in llm.FromEnv.
+func buildProvider() (llm.Provider, string, error) {
+	return llm.FromEnv()
+}
+
+// buildAgentConfig assembles the agent.Config from the environment: the
+// reflection toggle, the debug trace, the tool registry, and the action policy.
+// It returns the config and an optional Closer for the debug log (nil when
+// tracing is off) so the caller can keep it open for the process's lifetime.
+func buildAgentConfig(store *memory.Store) (agent.Config, io.Closer, error) {
+	cfg := agent.DefaultConfig()
+
+	// Reflection makes a second model call per turn; on a paid provider that
+	// doubles cost, so allow disabling it with TALUNOR_REFLECT=0.
+	if !envBool("TALUNOR_REFLECT", true) {
+		cfg.Extractor = agent.DisableReflection()
+	}
+
+	// TALUNOR_DEBUG turns on a structured trace of recall/tools/reflection. It
+	// logs to a file by default so the TUI's screen stays clean; the closer is
+	// returned so run can defer it until the program exits.
+	dbg, dbgClose, dbgDest, err := debugLogger(store.Path())
+	if err != nil {
+		return agent.Config{}, nil, err
+	}
+	if dbg != nil {
+		cfg.Debug = dbg
+		fmt.Fprintf(os.Stderr, "talunor: debug trace → %s\n", dbgDest)
+	}
+
+	// Tools: arithmetic, clock, memory recall, plus the opt-in bash/web_fetch.
+	cfg.Tools = buildTools(store)
+
+	// Policy: the guardrail consulted before each tool call. When TALUNOR_POLICY
+	// is unset, agent.New installs the default policy that preserves each tool's
+	// own approval behaviour.
+	pol, err := buildPolicy()
+	if err != nil {
+		if dbgClose != nil {
+			dbgClose.Close()
+		}
+		return agent.Config{}, nil, err
+	}
+	cfg.Policy = pol
+
+	return cfg, dbgClose, nil
+}
+
+// buildTools assembles the tool registry from the environment. It returns nil
+// when tools are disabled (TALUNOR_TOOLS=0, e.g. a model without tool-calling).
+// The sandboxed bash and SSRF-guarded web_fetch tools are opt-in and
+// approval-gated; if a tool's setup fails it is skipped with a warning rather
+// than failing the whole app.
+func buildTools(store *memory.Store) *tools.Registry {
+	if !envBool("TALUNOR_TOOLS", true) {
+		return nil
+	}
+	reg := tools.NewRegistry(
+		tools.Calculator{},
+		tools.Clock{},
+		tools.NewRecallMemory(store),
+	)
+	if envBool("TALUNOR_BASH", false) {
+		if sb, err := sandbox.FromEnv(); err != nil {
+			fmt.Fprintf(os.Stderr, "talunor: bash tool disabled: %v\n", err)
+		} else {
+			reg.Register(tools.NewBash(sb, sandbox.DefaultLimits()))
+			fmt.Fprintf(os.Stderr, "talunor: bash tool enabled (sandbox: %s, approval-gated)\n", sb.Name())
+		}
+	}
+	// web_fetch is SSRF-guarded and approval-gated, except for hosts on
+	// TALUNOR_WEBFETCH_ALLOW which skip the prompt (the guard still applies).
+	if envBool("TALUNOR_WEBFETCH", false) {
+		lim := webFetchLimits()
+		allow := splitList(os.Getenv("TALUNOR_WEBFETCH_ALLOW"))
+		reg.Register(tools.NewWebFetch(webfetch.New(lim, nil), allow))
+		msg := "talunor: web_fetch tool enabled (SSRF-guarded, approval-gated"
+		if len(allow) > 0 {
+			msg += fmt.Sprintf(", allowlist: %s", strings.Join(allow, ","))
+		}
+		fmt.Fprintln(os.Stderr, msg+")")
+	}
+	return reg
+}
+
+// buildPolicy loads the action policy from TALUNOR_POLICY, a path to a YAML rule
+// file (see internal/policy). When unset it returns nil, letting agent.New
+// install the default ToolGatePolicy that preserves each tool's own approval
+// gate — including web_fetch's per-host allowlist, which a name-matched rule file
+// does not see. A malformed rule file is a hard error (fail closed at startup).
+func buildPolicy() (policy.Policy, error) {
+	path := strings.TrimSpace(os.Getenv("TALUNOR_POLICY"))
+	if path == "" {
+		return nil, nil
+	}
+	pol, err := policy.LoadRules(path)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Fprintf(os.Stderr, "talunor: policy rules → %s\n", path)
+	return pol, nil
 }
 
 // repl is the plain line-based front-end. It shares hist with the TUI so

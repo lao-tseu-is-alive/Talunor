@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.11.1` (course Lesson 11 — embedding provenance & observability, bilingual)
+- **Version:** `v0.12.0` (Iteration 3 begins — the policy engine, Layer 12)
 - **Generated:** 2026-07-22
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -77,12 +77,27 @@ Talunor/
 │   │
 │   ├── agent/                # LAYER 4: the cognitive loop (orchestrator).
 │   │   ├── agent.go          #     Turn = perceive → recall → reason (act/observe loop) → store → reflect.
-│   │   │                     #       Tool loop with MaxToolIters cap (errors, never silently); approval
-│   │   │                     #       gate (Approvable / ApprovableFor); optional slog debug trace.
+│   │   │                     #       Tool loop with MaxToolIters cap (errors, never silently); each call
+│   │   │                     #       consults Config.Policy (deny fails closed, risk≥medium prompts).
 │   │   ├── reflect.go        #     FactExtractor: the LLM distils durable facts into semantic memory.
 │   │   ├── debug.go          #     LAYER 11: /debug runtime toggle — streams recall rankings + reflection
 │   │   │                     #       inline as dimmed Reasoning notes (TUI + --plain).
-│   │   └── agent_test.go     #     Tests (recall+store, approval allow/deny, tool-loop cap, reflection, /debug).
+│   │   └── agent_test.go     #     Tests (recall+store, approval allow/deny, tool-loop cap, policy deny/override).
+│   │
+│   ├── plan/                 # LAYER 12: the plan vocabulary shared by policy + (future) planner.
+│   │   ├── plan.go           #     Plan / PlanStep (Type tool|think|final, Rationale required) + Validate;
+│   │   │                     #       RiskLevel; NewToolCallPlan wraps one tool call as a one-step plan.
+│   │   └── plan_test.go      #     Validation tests (required fields, unique ids, DependsOn resolvable).
+│   │
+│   ├── policy/               # LAYER 12: the action guardrail consulted before each tool call.
+│   │   ├── policy.go         #     Policy interface + Decision{Allowed,Reason,Modified,RiskLevel};
+│   │   │                     #       Denied() / NeedsApproval() mapping; AllowAllPolicy.
+│   │   ├── toolgate.go       #     ToolGatePolicy (default): delegates to each tool's Approvable /
+│   │   │                     #       ApprovableFor, reproducing pre-policy behaviour exactly.
+│   │   ├── ruleengine.go     #     RuleEnginePolicy: data-driven YAML rules (allow/prompt/deny, TALUNOR_POLICY).
+│   │   ├── policy_test.go    #     Decision-mapping + allow-all tests.
+│   │   ├── toolgate_test.go  #     Tool-gate risk/approval tests with fake tools.
+│   │   └── ruleengine_test.go #    YAML parse/evaluate, wildcard, deny, invalid-action, file-load tests.
 │   │
 │   ├── tui/                  # LAYER 5: Bubble Tea + Glamour terminal UI (default front-end).
 │   │   ├── tui.go            #     Model/Update loop, stream→UI bridge, ↑/↓ history recall, approval prompt.
@@ -129,6 +144,7 @@ Talunor/
 │
 ├── docs/                  # Documentation.
 │   ├── atlas.md           #   THIS FILE — the repository map.
+│   ├── policy.sample.yaml #   Commented example TALUNOR_POLICY rule file (allow / prompt / deny per tool).
 │   ├── ollama-networking.md # Reaching a loopback Ollama from inside the container, securely.
 │   └── lessons/           #   Hands-on course: a guided path through the tag-by-tag history.
 │       │                  #     Each lesson is fully bilingual: README.md (EN, canonical) + README.fr.md (FR).
@@ -169,4 +185,5 @@ each one a tagged release (see `CHANGELOG.md`):
 | 8 | approval gate | human-in-the-loop y/N (`Approvable`, in `agent` + `tools`) |
 | 9 | `internal/sandbox` | run a real `bash` safely (kernel isolation) |
 | 10 | `internal/webfetch` | reach the network safely (application-layer SSRF guard) |
+| 12 | `internal/policy` (+ `internal/plan`) | the action guardrail: allow / prompt / deny before each tool call |
 | — | `internal/history`, `internal/version`, `internal/config`, `internal/render` | supporting infrastructure |
