@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.13.0` (Iteration 3 complete — the explicit planner, Layer 13)
+- **Version:** `v0.13.1` (course Lesson 13 — plan before you act)
 - **Generated:** 2026-07-22
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -167,7 +167,8 @@ Talunor/
 │       ├── 09-secure-web-fetching/README.md     # The SSRF guard at v0.10.0 (Control hook, blockedIP).
 │       ├── 10-understand-the-sandbox/README.md  # The two sandbox backends at v0.9.0 + honest boundaries.
 │       ├── 11-when-memory-forgets/README.md     # 🔍 Embedding provenance + /debug, from a real bug (v0.11.0).
-│       └── 12-the-open-bar/README.md            # 🔍 Why an agent needs a policy: the open-bar risk (v0.12.0).
+│       ├── 12-the-open-bar/README.md            # 🔍 Why an agent needs a policy: the open-bar risk (v0.12.0).
+│       └── 13-plan-before-you-act/README.md     # 🔍 Emergent ReAct vs deliberate planning; capped execution (v0.13.0).
 │
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.

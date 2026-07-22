@@ -18,6 +18,34 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.13.1] - 2026-07-22 — Course: Lesson 13 (plan before you act), bilingual
+
+A docs-only release. The planner (`v0.13.0`) gets its lesson, closing the course's
+coverage of Iteration 3: the course reaches its **fourteenth** entry (00–13).
+
+### Added
+
+- **Lesson 13 — "Plan before you act: from emergent ReAct to a plan you can read"**
+  (`docs/lessons/13-plan-before-you-act/`), in 🇬🇧 English and 🇫🇷 French. An advanced
+  (Level 3, ~90 min) 🔍 exploration pinned to `v0.13.0`: it contrasts emergent (ReAct)
+  and deliberate (plan-first) execution, reads `planner.go` as a four-part discipline
+  for getting reliable structured output from an LLM (strict contract → tolerant
+  extraction → validation → self-correcting retry), traces `runPlanned` (plan → policy
+  pre-screen → whole-plan approval → capped execution → learn), and has the reader run
+  the planner live, view `/plan`, and watch a policy `deny` block a plan.
+- Course index (EN + FR) updated to 00–13.
+
+### Lessons learned
+
+1. **A capstone lesson should name the trade-off, not just the feature.** The planner
+   is easy to sell as "better"; the honest lesson makes the reader feel what deliberate
+   planning *costs* (adaptivity) against what it *buys* (an inspectable, cappable,
+   refusable artifact) — so they choose per situation rather than cargo-culting.
+2. **Reliable structured output is the reusable takeaway.** The single most portable
+   skill in the planner isn't agent-specific — it's the contract → extraction →
+   validation → retry loop for coaxing JSON out of a text model. The lesson leads with
+   it because a reader will need it far beyond Talunor.
+
 ## [0.13.0] - 2026-07-22 — Iteration 3 complete: the explicit planner (Layer 13)
 
 Talunor now **plans before it acts**. Where the ReAct loop discovers the sequence

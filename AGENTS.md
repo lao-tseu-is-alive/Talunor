@@ -358,6 +358,11 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   highrisk, default plan). A planning failure falls back to the plain ReAct loop.
   **Deferred (future layers/lessons):** `/edit-plan`, semantic deviation detection,
   automatic re-planning — the v0.13.0 cap is *structural* (only planned tools offered).
+- **v0.13.1 (docs)** = course **Lesson 13** — "Plan before you act: from emergent
+  ReAct to a plan you can read" (`docs/lessons/13-plan-before-you-act/`, bilingual
+  EN/FR). Pinned to `v0.13.0`; contrasts emergent vs deliberate execution, reads the
+  structured-output discipline in `planner.go` and the capped execution in
+  `execute.go`; course now 00–13. Keep new lessons bilingual.
 - **Next — Iteration 4 (learning):** memory consolidation, salience/decay, async
   reflection (it runs synchronously in the loop today), and learning from executed
   plans. Then continue the per-layer checkpoint rhythm.
