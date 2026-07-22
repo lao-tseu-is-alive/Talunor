@@ -154,3 +154,10 @@ devenu un cours pratique de **Go, d'agents IA, de testabilité et de code sûr p
 conception**.
 
 Retour à l'[index du cours](../).
+
+> **Encore une, tirée du réel.** La Leçon 10 est l'apogée du programme prévu, mais le
+> cours continue de grandir avec le projet. **[Leçon 11 — Quand la mémoire oublie en
+> silence](../11-when-memory-forgets/)** dissèque un *vrai* bug corrigé dans
+> l'histoire de Talunor : un rappel qui renvoyait discrètement les mauvais souvenirs
+> après un changement de modèle d'embeddings. Un rappel bienvenu de la façon dont les
+> systèmes en production échouent *en silence*.

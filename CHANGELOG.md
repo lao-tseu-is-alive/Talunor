@@ -15,6 +15,34 @@ changed but the *lessons learned* while getting there.
   checks for which tools/args are auto-allowed vs. need approval (generalising the
   per-call approval gate that Layer 10 introduced).
 
+## [0.11.1] - 2026-07-22 — Course: Lesson 11 (embedding provenance & observability), bilingual
+
+A docs-only release. The `v0.11.0` bug hunt becomes a lesson: the course gains its
+**twelfth** entry (00–11), and the first one drawn from a *real bug fixed in the
+project's own history* rather than a planned layer.
+
+### Added
+
+- **Lesson 11 — "When memory silently forgets: embedding provenance & observability"**
+  (`docs/lessons/11-when-memory-forgets/`), in 🇬🇧 English and 🇫🇷 French. An advanced
+  (Level 3, ~75 min) 🔍 exploration pinned to `v0.11.0`: it retraces the recall failure
+  caused by an embedding-model swap, reads the provenance guard (`provenance.go`) and the
+  `/debug` toggle (`debug.go`), and has the reader run `TestProvenanceStaleThenReEmbed`,
+  `talunor --reembed`, and a live `/debug` recall ranking.
+- Course index (EN + FR) updated to 00–11; Lesson 10's capstone now points forward to
+  Lesson 11 as a real-world encore.
+
+### Lessons learned
+
+1. **The best lessons are post-mortems.** A planned-curriculum lesson teaches a concept;
+   a lesson reconstructed from a real bug teaches the *instinct* ("nothing errored, so
+   distrust everything") that no feature list conveys. Mining the CHANGELOG's own
+   "Lessons learned" for teaching material keeps the course honest and growing.
+2. **`lessons-check` shapes how a historical lesson can cite code.** Its guard rejects a
+   `git diff vA vB -- path` when `path` is absent at `vA`, so a lesson about a *new* file
+   pins to the tag where it first exists (`v0.11.0`) and says "read it here" rather than
+   diffing across its birth — the drift alarm doubles as an accuracy constraint.
+
 ## [0.11.0] - 2026-07-21 — Memory integrity (embedding provenance) & in-session observability (`/debug`)
 
 Layer 11 hardens the memory substrate against a silent, nasty failure and makes the

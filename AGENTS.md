@@ -297,6 +297,9 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   results inline as dimmed `Reasoning` notes (TUI + `--plain`), complementing the
   file/stderr `TALUNOR_DEBUG` trace. Motivated by a real "agent forgot who I am" hunt —
   old memories embedded by a since-changed model build sat in a stale vector space.
+- **v0.11.1 (docs)** = course **Lesson 11** — "When memory silently forgets: embedding
+  provenance & observability" (`docs/lessons/11-when-memory-forgets/`, bilingual EN/FR).
+  First lesson drawn from a real fixed bug (pinned to `v0.11.0`); course now 00–11.
 - **Next — Iteration 3**: an explicit planner before multi-step actions; policy
   checks for which tools/args are auto-allowed vs. need approval (generalising
   `ApprovableFor` into a policy the agent consults). Then Iteration 4 (learning/

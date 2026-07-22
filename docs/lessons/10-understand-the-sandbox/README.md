@@ -149,3 +149,9 @@ Talunor is no longer just *intended* as a teaching project — for you, it has b
 a practical course in **Go, AI agents, testability, and safe-by-design code**.
 
 Back to the [course index](../).
+
+> **One more, from the real world.** Lesson 10 is the planned curriculum's capstone,
+> but the course keeps growing with the project. **[Lesson 11 — When memory silently
+> forgets](../11-when-memory-forgets/)** dissects an *actual* bug fixed in Talunor's
+> history: recall that quietly returned the wrong memories after the embedding model
+> changed. A fitting encore on how production systems fail *silently*.
