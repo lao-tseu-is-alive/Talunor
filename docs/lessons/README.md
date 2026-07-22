@@ -11,7 +11,7 @@ This directory turns that idea into a guided path. Each lesson has a clear goal,
 short reading list, a hands-on experiment, and a checklist so you know when you're
 done.
 
-> **Status: complete.** All twelve lessons (00–11) are ready.
+> **Status: complete.** All thirteen lessons (00–12) are ready.
 
 ## Who this is for
 
@@ -58,6 +58,7 @@ make doctor   # your first win — the memory substrate, running offline
 | [09](09-secure-web-fetching/) | Secure web fetching (SSRF) | 3 · **advanced** | 75 min | `v0.10.0` | ✅ ready |
 | [10](10-understand-the-sandbox/) | Understand the sandbox | 4 · **advanced** | 90 min | `v0.9.0` | ✅ ready |
 | [11](11-when-memory-forgets/) | When memory silently forgets: provenance & observability | 3 · **advanced** | 75 min | `v0.11.0` → `main` | ✅ ready |
+| [12](12-the-open-bar/) | The open bar: why an agent needs a policy | 3 · **advanced** | 75 min | `v0.12.0` → `main` | ✅ ready |
 
 ## Two kinds of lesson — don't mix them up
 

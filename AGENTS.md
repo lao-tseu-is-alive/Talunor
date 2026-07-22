@@ -329,6 +329,10 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   (the 3 old approval tests pass unchanged). `cmd/talunor` wiring extracted into
   `buildProvider`/`buildTools`/`buildPolicy`/`buildAgentConfig`. First dep outside
   the SQLite/TUI/LLM substrate: `gopkg.in/yaml.v3`.
+- **v0.12.1 (docs)** = course **Lesson 12** — "The open bar: why an autonomous agent
+  needs a policy" (`docs/lessons/12-the-open-bar/`, bilingual EN/FR). Pinned to
+  `v0.12.0`; argues the threat (prompt-injected text → tool call) before reading the
+  `Policy`/`Decision` code; course now 00–12. Keep new lessons bilingual.
 - **Next — Layer 13 (Iteration 3)**: the **explicit planner** — the model emits a
   structured, inspectable `plan.Plan` up front (strict validation + retry; it never
   calls tools); the policy gates the whole plan then step-by-step (two-level

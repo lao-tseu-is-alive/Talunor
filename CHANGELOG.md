@@ -16,6 +16,36 @@ changed but the *lessons learned* while getting there.
   gate whole and step-by-step, instead of discovering the sequence one tool-call
   at a time. Reflection will receive the executed plan (feeding Iteration 4).
 
+## [0.12.1] - 2026-07-22 — Course: Lesson 12 (the open bar — why an agent needs a policy), bilingual
+
+A docs-only release. The policy engine (`v0.12.0`) gets its lesson: the course
+gains its **thirteenth** entry (00–12), the second drawn from a real layer's
+*motivation* rather than its mechanics — it argues **why** the guardrail exists
+before reading how.
+
+### Added
+
+- **Lesson 12 — "The open bar: why an autonomous agent needs a policy"**
+  (`docs/lessons/12-the-open-bar/`), in 🇬🇧 English and 🇫🇷 French. An advanced
+  (Level 3, ~75 min) 🔍 exploration pinned to `v0.12.0`: it frames the risk of a
+  tool-using agent driven by untrusted text (prompt injection via a recalled memory
+  or fetched page), shows why a boolean approval gate can't express *deny*, reads
+  the `Policy` interface / `Decision` / the three implementations, and has the
+  reader run the deterministic policy + agent tests and author a YAML rule file that
+  allows, prompts, and denies.
+- Course index (EN + FR) updated to 00–12.
+
+### Lessons learned
+
+1. **Some lessons teach a mechanism; the best security lessons teach a threat.**
+   Lesson 12 leads with the *attack* (injected text → tool call) before a line of
+   the policy code, because the guardrail only makes sense once you feel what it
+   guards against. A feature explained without its adversary reads as ceremony.
+2. **A "why" lesson still has to touch running code.** The argument lands because
+   the reader can `deny` bash from a text file and watch the refusal happen — the
+   principle and the `go test` / `TALUNOR_POLICY` run reinforce each other, the
+   course's standing pattern.
+
 ## [0.12.0] - 2026-07-22 — Iteration 3 begins: the policy engine (Layer 12)
 
 Iteration 3 turns the ad-hoc approval gate into a first-class **guardrail the agent

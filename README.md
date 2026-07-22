@@ -7,7 +7,7 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.12.0** — Iterations 1 & 2 complete, plus Layers 10–12
+> Current version: **v0.12.1** — Iterations 1 & 2 complete, plus Layers 10–12
 > (Iteration 3 begun). The agent talks to local **Ollama** or hosted **OpenRouter**
 > models (via `.env`) and *acts* — a ReAct tool loop (calculator, clock, memory
 > search) gated by a first-class **policy engine** (auto-allow / approve / deny,
@@ -18,7 +18,7 @@ reads as a guided tour of how to build a full cognitive-loop agent
 > network opt-in). See [CHANGELOG.md](CHANGELOG.md) for the version-by-version
 > build log and lessons.
 >
-> 📚 **New:** a complete **[12-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
+> 📚 **New:** a complete **[13-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
 > French) turns the tag-by-tag history into a guided path for Go beginners — start at
 > [Lesson 00](docs/lessons/).
 
