@@ -231,7 +231,9 @@ An AI's output is a claim; only what you can verify is evidence.
 
 ## 🎓 About this lesson
 
-This is the course's meta-lesson, and its last as of writing. Every earlier lesson
+This is the course's meta-lesson. **Lesson 16** takes its next step — automating this
+manual verification into a *reliability canary* that measures a model continuously.
+Every earlier lesson
 taught you to distrust something specific — a silent recall (11), an untrusted memory
 (12), an over-promising approval (14). This one generalises the instinct to the tool
 you'll increasingly point at Talunor itself. It is fitting that a course about

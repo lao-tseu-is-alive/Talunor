@@ -11,7 +11,7 @@ Ce répertoire transforme cette idée en un parcours guidé. Chaque leçon a un 
 clair, une courte liste de lecture, une expérience pratique et une checklist pour
 savoir quand tu as terminé.
 
-> **Statut : complet.** Les seize leçons (00–15) sont prêtes, **entièrement en
+> **Statut : complet.** Les dix-sept leçons (00–16) sont prêtes, **entièrement en
 > anglais et en français** (utilise le sélecteur de langue en haut de chaque page).
 
 ## Pour qui
@@ -65,6 +65,7 @@ make doctor   # ta première victoire — le substrat mémoire, en local, hors-l
 | [13](13-plan-before-you-act/) | Planifier avant d'agir : du ReAct à un plan qu'on peut lire | 3 · **avancé** | 90 min | `v0.13.0` → `main` | ✅ prête |
 | [14](14-the-approval-that-didnt-bind/) | L'approbation qui ne liait rien : post-mortem sécurité du mode plan | 3 · **avancé** | 60 min | `v0.13.1` → `main` | ✅ prête |
 | [15](15-dont-trust-the-review/) | Ne fais pas confiance à la revue : vérifier ce qu'une IA affirme sur ton code | 2 · méta | 60 min | `main` | ✅ prête |
+| [16](16-measure-the-model/) | Mesurer le modèle : construire un canary de fiabilité | 3 · **avancé** | 75 min | `main` | ✅ prête |
 
 ## Deux types de leçon — à ne pas confondre
 

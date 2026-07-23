@@ -18,6 +18,36 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.14.1] - 2026-07-23 — Course: Lesson 16 (measure the model), bilingual
+
+A docs-only release. Layer 14 (`v0.14.0`) gets its lesson, closing the course's
+trust-and-verify arc (11 → 15 → 16) and bridging to Iteration 4.
+
+### Added
+
+- **Lesson 16 — "Measure the model: building a reliability canary"**
+  (`docs/lessons/16-measure-the-model/`, bilingual EN/FR). A ~75-min Level-3 🔍
+  exploration + hands-on on `main`: it reads `internal/calibration` to teach the
+  **three design decisions that make an LLM eval harness trustworthy** — the verifier
+  must be deterministic (never an LLM: the recursive trap of Lesson 15); accuracy and
+  consistency are different axes (a pass-rate near 0.5 is the danger; a standard
+  deviation belongs on latency, not a binary outcome); and the value is *drift* from a
+  pinned baseline, not the absolute score (the canary of Lesson 11) — plus the honest
+  threat model of a public/hosted suite. The reader runs the seed suite, authors a
+  scenario, and catches a regression against a baseline. Model-agnostic. Course now 00–16.
+- Course index (EN + FR) updated to 00–16; Lesson 15's forward pointer now leads to Lesson 16.
+
+### Lessons learned
+
+1. **A "how it's built" lesson earns its place by teaching the *decisions*, not the
+   API.** Lesson 16 could have been a `cmd/calibrate` tutorial; instead it isolates the
+   three choices (deterministic verifier, the right statistic per axis, drift over
+   absolute) that recur in every eval system — the transferable part.
+2. **Distinct-but-adjacent lessons need an explicit hinge.** Lesson 15 (verify one
+   claim by hand) and Lesson 16 (measure continuously, automatically) are close enough
+   to blur; naming the difference in both — manual/one-off vs automated/continuous —
+   is what keeps each sharp.
+
 ## [0.14.0] - 2026-07-23 — Layer 14: model calibration (a reliability canary)
 
 A preliminary layer before Iteration 4 (learning), motivated by the review episode

@@ -246,7 +246,9 @@ La sortie d'une IA est une affirmation ; seul ce que tu peux vérifier est une p
 
 ## 🎓 À propos de cette leçon
 
-C'est la méta-leçon du cours, et sa dernière à ce jour. Chaque leçon précédente t'a
+C'est la méta-leçon du cours. La **Leçon 16** en fait le pas suivant — automatiser cette
+vérification manuelle en un *canary de fiabilité* qui mesure un modèle en continu.
+Chaque leçon précédente t'a
 appris à te méfier de quelque chose de précis — un recall silencieux (11), une mémoire
 non fiable (12), une approbation qui sur-promet (14). Celle-ci généralise l'instinct à
 l'outil que tu pointeras de plus en plus vers Talunor lui-même. Il est juste qu'un

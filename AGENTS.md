@@ -407,6 +407,11 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   Also: Lesson 15 gained a model-agnostic "naming the defects" aside (EN/FR).
   **Deferred:** wiring calibration into the policy (route a low-calibration model away
   from high-risk steps).
+- **v0.14.1 (docs)** = course **Lesson 16** — "Measure the model: building a reliability
+  canary" (`docs/lessons/16-measure-the-model/`, bilingual). Reads `internal/calibration`
+  to teach the three design decisions of a trustworthy LLM eval (deterministic verifier,
+  accuracy vs consistency, drift over absolute); closes the 11→15→16 trust-and-verify arc.
+  Course now 00–16.
 - **Next — Iteration 4 (learning):** memory consolidation, salience/decay, async
   reflection (it runs synchronously in the loop today), and learning from executed
   plans (informed by calibration). Then continue the per-layer checkpoint rhythm.
