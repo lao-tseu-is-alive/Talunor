@@ -48,9 +48,13 @@ type execCtx struct {
 	// turn — the structural "cap" that keeps a planned execution on-plan (the model
 	// literally cannot call a tool the approved plan didn't name). Nil = all tools.
 	allowTools map[string]bool
-	// skipStepApproval suppresses the per-step approval prompt because the human
-	// already approved the whole plan (ApprovalPlan). The policy's deny still holds.
-	skipStepApproval bool
+	// reapproveAtOrAbove sets how much a whole-plan approval can cover. A step the
+	// policy wants approved still re-prompts — with its *live* arguments — when its
+	// RiskLevel is at or above this level. This closes the gap that a blanket
+	// plan-approval binds the tool *name* but not the arguments the ReAct executor
+	// ultimately chooses. RiskLow (the zero value) means "always re-prompt when the
+	// policy asks" — the pre-planner behaviour. The policy's deny always holds.
+	reapproveAtOrAbove plan.RiskLevel
 }
 
 // Config tunes an Agent.
@@ -353,11 +357,11 @@ func (a *Agent) reactLoop(ctx context.Context, msgs []llm.Message, input string,
 // one-step plan and asks a.policy whether it may run: a policy error or a denial
 // fails closed (the model observes the refusal and can react); a step needing
 // approval pauses for a human y/n (deny/cancel also become observations). A
-// policy may rewrite the step (Decision.Modified) before it runs. When
-// exec.skipStepApproval is set (the human already approved the whole plan) the
-// per-step approval prompt is skipped, but a policy denial still holds. It returns
-// the observation and done=true if the context was cancelled while waiting (the
-// caller should stop).
+// policy may rewrite the step (Decision.Modified) before it runs. A whole-plan
+// approval can cover lower-risk steps (exec.reapproveAtOrAbove), but a step at or
+// above that risk still re-prompts with its *live* arguments; a policy denial
+// always holds. It returns the observation and done=true if the context was
+// cancelled while waiting (the caller should stop).
 func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCall, exec execCtx) (obs string, done bool) {
 	p := plan.NewToolCallPlan(tc.Name, json.RawMessage(tc.Args))
 	step := p.Steps[0]
@@ -384,7 +388,7 @@ func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCa
 		a.trace("policy.modify", "name", name, "reason", d.Reason)
 	}
 
-	if d.NeedsApproval() && !exec.skipStepApproval {
+	if d.NeedsApproval() && d.RiskLevel >= exec.reapproveAtOrAbove {
 		req := llm.NewApprovalRequest(name, string(args))
 		if !a.send(ctx, out, llm.Chunk{Approval: req}) {
 			return "", true

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -67,18 +68,122 @@ func TestPlannedApproveWholePlan(t *testing.T) {
 
 	approvals, final, _ := drainPlanned(t, ag, true)
 
-	// Exactly one approval — for the whole plan, not the individual step.
-	if len(approvals) != 1 || approvals[0] != "(plan)" {
-		t.Fatalf("approvals = %v, want exactly [(plan)]", approvals)
+	// Two-level approval: the whole plan first, then the high-risk step (bash-like)
+	// re-confirmed with its live arguments — the fix for the plan-mode
+	// approval-integrity gap. Low/medium-risk steps would ride on the plan approval.
+	if len(approvals) != 2 || approvals[0] != "(plan)" || approvals[1] != "danger" {
+		t.Fatalf("approvals = %v, want [(plan) danger] (high-risk step re-confirmed)", approvals)
 	}
 	if !ran {
-		t.Error("the tool should run once the plan is approved")
+		t.Error("the tool should run once both approvals are granted")
 	}
 	if !strings.Contains(final, "all done") {
 		t.Errorf("final = %q, want it to contain the model's answer", final)
 	}
 	if ag.LastPlan() == nil {
 		t.Error("LastPlan should expose the executed plan")
+	}
+}
+
+// TestPlannedPlanModeReapprovesHighRiskLiveArgs is the regression test for the
+// plan-mode approval-integrity gap (P1): the approved plan shows an innocuous
+// command, the model executes a dangerous one, and the high-risk step must
+// re-prompt with the LIVE arguments — not the ones the plan displayed.
+func TestPlannedPlanModeReapprovesHighRiskLiveArgs(t *testing.T) {
+	store := testStore(t)
+	var ran bool
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "danger", Args: `{"cmd":"rm -rf /"}`}}}},
+		{{Content: "done"}},
+	}}
+	pl := &plan.Plan{Goal: "list files", Steps: []plan.PlanStep{
+		{ID: "s1", Type: plan.StepTool, Tool: "danger", Arguments: json.RawMessage(`{"cmd":"ls"}`), Rationale: "list"},
+		{ID: "s2", Type: plan.StepFinal, Rationale: "answer"},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(fakeTool{approval: true, ran: &ran})
+	cfg.Planner = fakePlanner{pl: pl}
+	cfg.ApprovalMode = ApprovalPlan
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	out, err := ag.Turn(context.Background(), "list the files")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	var stepArgs string
+	for c := range out {
+		if c.Approval != nil {
+			if c.Approval.Tool == "danger" {
+				stepArgs = c.Approval.Args
+			}
+			c.Approval.Respond(true)
+		}
+	}
+	if !strings.Contains(stepArgs, "rm -rf") {
+		t.Errorf("high-risk re-prompt args = %q, want the LIVE 'rm -rf' args, not the plan's 'ls'", stepArgs)
+	}
+	if !ran {
+		t.Error("the tool should run once both approvals are granted")
+	}
+}
+
+// TestPlannedPlanModeDenyHighRiskStops: denying the live-args re-prompt of a
+// high-risk step stops it, even after the whole plan was approved.
+func TestPlannedPlanModeDenyHighRiskStops(t *testing.T) {
+	store := testStore(t)
+	var ran bool
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "danger", Args: `{"cmd":"rm -rf /"}`}}}},
+		{{Content: "ok, skipped"}},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(fakeTool{approval: true, ran: &ran})
+	cfg.Planner = fakePlanner{pl: dangerPlan()}
+	cfg.ApprovalMode = ApprovalPlan
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	out, err := ag.Turn(context.Background(), "go")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	for c := range out {
+		if c.Approval != nil {
+			c.Approval.Respond(c.Approval.Tool == "(plan)") // approve the plan, deny the step
+		}
+	}
+	if ran {
+		t.Error("denying the high-risk step must stop it running")
+	}
+}
+
+// TestPlannedPlanModeMediumRiskCoveredByPlan: a medium-risk step (an arg-gated
+// tool, like web_fetch) rides on the whole-plan approval — no per-step re-prompt.
+func TestPlannedPlanModeMediumRiskCoveredByPlan(t *testing.T) {
+	store := testStore(t)
+	var ran bool
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "arg_gated", Args: `{"host":"other"}`}}}},
+		{{Content: "done"}},
+	}}
+	pl := &plan.Plan{Goal: "fetch", Steps: []plan.PlanStep{
+		{ID: "s1", Type: plan.StepTool, Tool: "arg_gated", Arguments: json.RawMessage(`{"host":"other"}`), Rationale: "fetch"},
+		{ID: "s2", Type: plan.StepFinal, Rationale: "answer"},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(argGatedTool{ran: &ran})
+	cfg.Planner = fakePlanner{pl: pl}
+	cfg.ApprovalMode = ApprovalPlan
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	approvals, _, _ := drainPlanned(t, ag, true)
+	if len(approvals) != 1 || approvals[0] != "(plan)" {
+		t.Fatalf("approvals = %v, want [(plan)] (medium risk covered by the plan approval)", approvals)
+	}
+	if !ran {
+		t.Error("the medium-risk tool should run under the plan approval")
 	}
 }
 

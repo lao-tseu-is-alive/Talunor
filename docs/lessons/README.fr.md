@@ -11,7 +11,7 @@ Ce répertoire transforme cette idée en un parcours guidé. Chaque leçon a un 
 clair, une courte liste de lecture, une expérience pratique et une checklist pour
 savoir quand tu as terminé.
 
-> **Statut : complet.** Les quatorze leçons (00–13) sont prêtes, **entièrement en
+> **Statut : complet.** Les quinze leçons (00–14) sont prêtes, **entièrement en
 > anglais et en français** (utilise le sélecteur de langue en haut de chaque page).
 
 ## Pour qui
@@ -63,6 +63,7 @@ make doctor   # ta première victoire — le substrat mémoire, en local, hors-l
 | [11](11-when-memory-forgets/) | Quand la mémoire oublie en silence : provenance & observabilité | 3 · **avancé** | 75 min | `v0.11.0` → `main` | ✅ prête |
 | [12](12-the-open-bar/) | L'open bar : pourquoi un agent a besoin d'une policy | 3 · **avancé** | 75 min | `v0.12.0` → `main` | ✅ prête |
 | [13](13-plan-before-you-act/) | Planifier avant d'agir : du ReAct à un plan qu'on peut lire | 3 · **avancé** | 90 min | `v0.13.0` → `main` | ✅ prête |
+| [14](14-the-approval-that-didnt-bind/) | L'approbation qui ne liait rien : post-mortem sécurité du mode plan | 3 · **avancé** | 60 min | `v0.13.1` → `main` | ✅ prête |
 
 ## Deux types de leçon — à ne pas confondre
 

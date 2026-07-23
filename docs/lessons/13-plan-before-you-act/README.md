@@ -255,9 +255,12 @@ forethought (the planner). Notice what the plan gave you that ReAct could not �
 single artifact to *inspect, approve, cap, and refuse*. That is the recurring shape
 of safe autonomy: make the intent explicit, then constrain the execution to it.
 
-The honest limits are worth remembering: Talunor's cap is **structural** (only
-planned tools are offered), not **semantic** (it doesn't judge whether an in-plan
-call drifted from the intent), and it does not re-plan when a step surprises it.
+The honest limits are worth remembering — and one of them turned out to be a real
+security gap: at `v0.13.0` the whole-plan approval bound the tool *names* but not the
+*arguments* the executor ran, so **Lesson 14 is a post-mortem of exactly that**, and
+its fix. Talunor's cap is **structural** (only planned tools are offered), not
+**semantic** (it doesn't judge whether an in-plan call drifted from the intent), and
+it does not re-plan when a step surprises it.
 Those — plus letting you hand-edit a plan before it runs — are deferred to later
 increments, and each is a fine lesson waiting to be written. Next comes Iteration 4:
 learning — consolidating memory, and learning from the plans the agent has run.

@@ -274,10 +274,13 @@ pas — un artefact unique à *inspecter, approuver, caper, et refuser*. C'est l
 récurrente de l'autonomie sûre : rendre l'intention explicite, puis contraindre
 l'exécution à celle-ci.
 
-Les limites honnêtes valent d'être retenues : le cap de Talunor est **structurel**
-(seuls les outils du plan sont offerts), pas **sémantique** (il ne juge pas si un
-appel prévu s'est éloigné de l'intention), et il ne re-planifie pas quand une étape
-surprend. Ces points — plus te laisser éditer un plan à la main avant qu'il ne tourne
+Les limites honnêtes valent d'être retenues — et l'une d'elles s'est révélée être une
+vraie faille de sécurité : à `v0.13.0`, l'approbation du plan entier liait les *noms*
+d'outils mais pas les *arguments* que l'exécuteur lançait, si bien que **la Leçon 14
+est un post-mortem exactement de cela**, et de son correctif. Le cap de Talunor est
+**structurel** (seuls les outils du plan sont offerts), pas **sémantique** (il ne juge
+pas si un appel prévu s'est éloigné de l'intention), et il ne re-planifie pas quand
+une étape surprend. Ces points — plus te laisser éditer un plan à la main avant qu'il ne tourne
 — sont différés à des incréments ultérieurs, et chacun est une belle leçon en
 attente. Ensuite vient l'Itération 4 : l'apprentissage — consolider la mémoire, et
 apprendre des plans que l'agent a exécutés.

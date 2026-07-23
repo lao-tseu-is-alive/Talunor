@@ -127,8 +127,11 @@ With `Config.Planner` set (opt-in), `Turn` instead runs `runPlanned`: the planne
 emits a validated `plan.Plan` up front; the policy pre-screens it (a denied step
 blocks the whole plan); the human approves the whole plan (per `ApprovalMode`); then
 `reactLoop` executes it **capped to the plan's tools** (`execCtx.allowTools`), so the
-model can only act within what was approved. A planning failure falls back to the
-plain loop. Planning is off by default — the ReAct path above is unchanged.
+model can only act within what was approved. The cap is by tool *name*, so
+`execCtx.reapproveAtOrAbove` still re-prompts (with the **live** arguments) for steps
+at/above a risk level — `RiskHigh` in `plan` mode (shell re-confirms), `RiskLow` in
+`step`/`highrisk` (every risky call). A planning failure falls back to the plain
+loop. Planning is off by default — the ReAct path above is unchanged.
 
 ## Build, test, run
 
@@ -363,6 +366,12 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   EN/FR). Pinned to `v0.13.0`; contrasts emergent vs deliberate execution, reads the
   structured-output discipline in `planner.go` and the capped execution in
   `execute.go`; course now 00–13. Keep new lessons bilingual.
+- **v0.13.2 (fix + docs)** = **plan-mode approval integrity** (P1 from a cross-model
+  review): the whole-plan approval bound tool *names* but not the *arguments* the
+  ReAct executor ran, so `plan` mode could execute a different command than the one
+  approved. `execCtx.skipStepApproval` → `reapproveAtOrAbove plan.RiskLevel`;
+  high-risk steps re-confirm live args in `plan` mode (regression tests added). Ships
+  with course **Lesson 14** (post-mortem, bilingual; course now 00–14).
 - **Next — Iteration 4 (learning):** memory consolidation, salience/decay, async
   reflection (it runs synchronously in the loop today), and learning from executed
   plans. Then continue the per-layer checkpoint rhythm.

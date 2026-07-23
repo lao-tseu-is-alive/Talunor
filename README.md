@@ -7,7 +7,7 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.13.1** — Iterations 1–3 complete (Layers 1–13). The agent
+> Current version: **v0.13.2** — Iterations 1–3 complete (Layers 1–13). The agent
 > talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and *acts* —
 > a ReAct tool loop (calculator, clock, memory search) gated by a first-class
 > **policy engine** (auto-allow / approve / deny, YAML-configurable via
@@ -19,7 +19,7 @@ reads as a guided tour of how to build a full cognitive-loop agent
 > network opt-in). See [CHANGELOG.md](CHANGELOG.md) for the version-by-version
 > build log and lessons.
 >
-> 📚 **New:** a complete **[14-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
+> 📚 **New:** a complete **[15-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
 > French) turns the tag-by-tag history into a guided path for Go beginners — start at
 > [Lesson 00](docs/lessons/).
 
@@ -358,7 +358,7 @@ lives in the same directory.
 | `TALUNOR_TOOLS` | set `0` to disable tools (model without tool support) | `1` |
 | `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow / prompt / deny); unset = default per-tool gate | — |
 | `TALUNOR_PLANNER` | set `1` to plan before acting (inspectable, approved plan, then capped ReAct execution) | `0` |
-| `TALUNOR_APPROVAL` | plan approval mode: `plan` (whole plan once), `step` (plan + each risky step), `highrisk` (advisory plan) | `plan` |
+| `TALUNOR_APPROVAL` | plan approval mode: `plan` (approve the plan; high-risk steps still re-confirm live args), `step` (plan + every risky step), `highrisk` (advisory plan) | `plan` |
 | `TALUNOR_BASH` | set `1` to enable the sandboxed, approval-gated `bash` tool | `0` |
 | `TALUNOR_DEBUG` | trace recall/tools/reflection: `1` → log file next to DB, `stderr`, or a path | off |
 | `TALUNOR_SANDBOX` | bash backend: `nerdctl` or `namespaces` (unset = auto-detect) | auto |

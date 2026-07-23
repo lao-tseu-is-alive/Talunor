@@ -18,6 +18,58 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.13.2] - 2026-07-23 — Fix: plan-mode approval integrity (P1) + Lesson 14 (post-mortem)
+
+A security fix and its post-mortem lesson, shipped together. A cross-model review of
+`v0.13.1` flagged a real gap in the planner's default approval mode: **a whole-plan
+approval bound the tool *names* but not the *arguments* the ReAct executor actually
+ran.** A plan that displayed `bash({"cmd":"ls"})` could execute
+`bash({"cmd":"rm -rf /"})` — the human approved "the plan", but never saw the second
+command. This is exactly the confused-deputy pattern Lesson 12 was built to prevent,
+re-introduced by the guardrail meant to make things safer.
+
+### Fixed
+
+- **Plan-mode approval integrity (`internal/agent`).** The blunt boolean
+  `execCtx.skipStepApproval` is replaced by a risk threshold `reapproveAtOrAbove`.
+  In `runTool` a policy-flagged step now re-prompts — **with its live arguments** —
+  when `RiskLevel >= reapproveAtOrAbove`. `runPlanned` sets the threshold per mode:
+  `plan` → `RiskHigh` (low/medium ride on the plan approval; **high-risk steps like
+  the shell re-confirm the arguments actually about to run**), `step` → `RiskLow`
+  (every risky step re-confirms), `highrisk` → `RiskLow` (advisory plan, per-call
+  policy as before). The planner-off ReAct loop is unchanged (zero value =
+  `RiskLow` = prompt whenever the policy asks). This is the two-level approval
+  Lesson 13 described — now actually enforced.
+- Regression tests: `TestPlannedPlanModeReapprovesHighRiskLiveArgs` (the re-prompt
+  shows `rm -rf`, not the plan's `ls`), `TestPlannedPlanModeDenyHighRiskStops`, and
+  `TestPlannedPlanModeMediumRiskCoveredByPlan`.
+
+### Added
+
+- **Lesson 14 — "The approval that didn't bind: a plan-mode security post-mortem"**
+  (`docs/lessons/14-the-approval-that-didnt-bind/`, bilingual EN/FR). The course's
+  second post-mortem (after Lesson 11) and the first from a bug in a *guardrail*: it
+  reads the gap at `v0.13.1`, the fix on `main`, and draws the review lesson — an
+  author is the worst reviewer of their own guardrail; independent perspectives (and
+  their *disagreements*) find the holes intent conceals. Course now 00–14.
+
+### Lessons learned
+
+1. **An approval protects only what it mechanically binds — not what it displays.**
+   The plan UI showed arguments; the mechanism bound only tool names. Whenever a
+   human decision is taken against a *representation* but produces an *effect* on
+   something else, the distance between them is the vulnerability. Gate the effect.
+2. **A boolean is a blunt instrument for a graded decision.** `skipStepApproval`
+   (all-or-nothing) hid the gap; a *risk threshold* expressed the real intent —
+   "the plan approval covers up to here, re-confirm above it" — in one comparison.
+3. **"Documented limitation" is a smell, not a defence.** The structural cap was
+   genuinely documented, which is exactly why the gap survived review: everyone read
+   the note and no one re-derived the consequence. If a safety control needs a
+   caveat that it's weaker than it looks, fix the control.
+4. **You are the worst reviewer of your own guardrail** — you test it against your
+   intent, not its behaviour. This gap was written by the author of Lesson 12 (which
+   teaches not to do it) and caught only by independent cross-model review.
+
 ## [0.13.1] - 2026-07-22 — Course: Lesson 13 (plan before you act), bilingual
 
 A docs-only release. The planner (`v0.13.0`) gets its lesson, closing the course's

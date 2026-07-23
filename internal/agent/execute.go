@@ -78,12 +78,26 @@ func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string
 	}
 
 	// 4. Execute via the ReAct core. In plan/step modes the offered tools are capped
-	//    to the plan's tools, so the model cannot act outside what was approved; in
-	//    plan mode the whole-plan approval also stands in for per-step prompts.
+	//    to the plan's tools, so the model cannot act outside what was approved. How
+	//    much the whole-plan approval covers depends on the mode — see below. The cap
+	//    is by tool *name*, so a high-risk step must still re-confirm its live args.
 	msgs = append(msgs, llm.Message{Role: llm.RoleSystem, Content: planFollowPrompt(pl)})
-	exec := execCtx{skipStepApproval: a.cfg.ApprovalMode == ApprovalPlan}
-	if a.cfg.ApprovalMode != ApprovalHighRisk {
+	exec := execCtx{}
+	switch a.cfg.ApprovalMode {
+	case ApprovalPlan:
+		// The plan approval covers low/medium-risk steps; high-risk steps (e.g. the
+		// shell) still re-prompt with the arguments the executor actually chose,
+		// which may differ from those the approved plan displayed.
 		exec.allowTools = toolSetOf(pl)
+		exec.reapproveAtOrAbove = plan.RiskHigh
+	case ApprovalStep:
+		// Belt and braces: approve the plan AND re-confirm every risky step live.
+		exec.allowTools = toolSetOf(pl)
+		exec.reapproveAtOrAbove = plan.RiskLow
+	case ApprovalHighRisk:
+		// The plan is advisory: no whole-plan prompt, and the per-call policy gate
+		// prompts as it would without a planner.
+		exec.reapproveAtOrAbove = plan.RiskLow
 	}
 	a.reactLoop(ctx, msgs, input, out, exec)
 }
