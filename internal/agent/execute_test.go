@@ -8,19 +8,25 @@ import (
 	"testing"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
+	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
 	"github.com/lao-tseu-is-alive/Talunor/internal/plan"
 	"github.com/lao-tseu-is-alive/Talunor/internal/policy"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 )
 
 // fakePlanner returns a canned plan (or error), so the planned path is tested
-// without a live model deciding the plan.
+// without a live model deciding the plan. gotMemCtx, when non-nil, captures the
+// memoryContext the agent passed — to assert recalled memory is wired through.
 type fakePlanner struct {
-	pl  *plan.Plan
-	err error
+	pl        *plan.Plan
+	err       error
+	gotMemCtx *string
 }
 
-func (f fakePlanner) Plan(context.Context, string, string, []tools.Def) (*plan.Plan, error) {
+func (f fakePlanner) Plan(_ context.Context, _, memoryContext string, _ []tools.Def) (*plan.Plan, error) {
+	if f.gotMemCtx != nil {
+		*f.gotMemCtx = memoryContext
+	}
 	return f.pl, f.err
 }
 
@@ -268,6 +274,36 @@ func TestPlannedHighRiskPromptsPerStep(t *testing.T) {
 	}
 	if !ran {
 		t.Error("the tool should run after the per-step approval")
+	}
+}
+
+// TestPlannerReceivesRecalledMemory: the planner is given the turn's recalled
+// memories (framed as untrusted DATA), so plans can use what the agent knows.
+func TestPlannerReceivesRecalledMemory(t *testing.T) {
+	store := testStore(t)
+	if _, err := store.Remember(context.Background(), memory.KindFact, "", "User's name is Carlos"); err != nil {
+		t.Fatal(err)
+	}
+	var memCtx string
+	prov := &scriptedProvider{steps: [][]llm.Chunk{{{Content: "done"}}}}
+	pl := &plan.Plan{Goal: "answer", Steps: []plan.PlanStep{{ID: "s1", Type: plan.StepFinal, Rationale: "answer"}}}
+	cfg := DefaultConfig()
+	cfg.RecallMaxDistance = 0 // keep all matches, so the seeded fact is recalled
+	cfg.Planner = fakePlanner{pl: pl, gotMemCtx: &memCtx}
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	out, err := ag.Turn(context.Background(), "who am I?")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	for range out {
+	}
+	if !strings.Contains(memCtx, "Carlos") {
+		t.Errorf("planner memoryContext = %q, want it to include the recalled fact", memCtx)
+	}
+	if !strings.Contains(memCtx, "untrusted DATA") {
+		t.Errorf("planner memoryContext should be framed as untrusted DATA, got %q", memCtx)
 	}
 }
 

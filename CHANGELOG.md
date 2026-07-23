@@ -18,6 +18,60 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.13.3] - 2026-07-23 — Convergent review batch: privacy, integrity, honesty, CI
+
+Six small, low-risk fixes that a round of independent cross-model reviews of `v0.13.1`
+converged on — each cheap, each closing a real (if bounded) gap. No behaviour change
+for the happy path; several classes of silent or latent failure are now closed or
+observable.
+
+### Fixed / Changed
+
+- **Local data privacy.** The memory database holds personal facts and verbatim
+  turns, so `memory.Open` now creates its directory `0700` and `chmod`s the DB file
+  `0600` (it was a `0755` dir + umask-dependent file); the prompt-history directory is
+  `0700` too. Owner-only on shared machines. (`internal/memory/store.go`,
+  `internal/history/history.go`; test `TestStoreFilePermissions`.)
+- **`ReEmbed` is now atomic.** It computed and wrote each new embedding row-by-row
+  with no transaction, so a mid-way failure left the store with a *mix* of old- and
+  new-space vectors. It now computes every embedding first (untouched DB on failure),
+  then applies all updates **and** the fingerprint stamp in one transaction — all or
+  nothing. (`internal/memory/provenance.go`.)
+- **Silent assistant-store errors are now observable.** The best-effort
+  `Remember(assistant turn)` ignored its error (short-term had the reply, long-term
+  might not). It stays non-fatal but is now traced and shown under `/debug`.
+  (`internal/agent/agent.go`, `internal/agent/execute.go`.)
+- **The planner sees recalled memory.** `runPlanned` passed the planner an empty
+  memory context while the executor got the recalled memories. It now passes the same
+  memories, framed as untrusted DATA (the framing is extracted into `fencedMemories`,
+  shared with `buildMessages`). Plans can use what the agent knows. (`internal/agent`;
+  test `TestPlannerReceivesRecalledMemory`.)
+- **Plan `DependsOn` is validated as a DAG.** `plan.Validate` checked that
+  dependencies resolve and aren't self-referential but not that the graph is acyclic
+  (a stale comment said cycle detection was "deferred to the executor"). It now
+  rejects cycles (three-colour DFS) and the comment states honestly that DependsOn is
+  advisory today. (`internal/plan/plan.go`; test case `dependency cycle`.)
+- **CI now runs the drift guards and the race detector.** `ci.yml` ran only
+  `vet` + `test`; the release guards (gofmt, atlas-check, readme-check, lessons-check,
+  checksums) were enforced only locally before a tag. CI now runs `make release-check`
+  (with `fetch-depth: 0` so `lessons-check` sees the pinned tags) and `go test -race`.
+
+### Lessons learned
+
+1. **Independent review converges on the cheap wins.** These six came from separate
+   model reviews that mostly *agreed*; the overlap was the signal that they were real,
+   not stylistic. A single reviewer (even a thorough one) missed some that two others
+   caught — breadth of perspective beats depth of one.
+2. **"Personal" is broader than "secret".** No credentials live in the DB, but names,
+   preferences, and prompt history do. File permissions are a one-line default that
+   should match the sensitivity of the data, not the absence of obvious secrets.
+3. **A data migration must be all-or-nothing.** Row-by-row rewrites of vectors are the
+   textbook case for a transaction: a partial migration that *looks* done but mixes
+   two vector spaces corrupts recall silently — the worst failure mode.
+4. **A guard that isn't run by the machine is a guideline.** The drift alarms existed
+   and were excellent; enforcing them only by human discipline before a tag meant a PR
+   could still merge them broken. Move the guard to where it can't be skipped.
+
 ## [0.13.2] - 2026-07-23 — Fix: plan-mode approval integrity (P1) + Lesson 14 (post-mortem)
 
 A security fix and its post-mortem lesson, shipped together. A cross-model review of

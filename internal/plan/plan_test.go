@@ -131,6 +131,14 @@ func TestPlanValidate(t *testing.T) {
 			}},
 			wantErr: "unknown step",
 		},
+		{
+			name: "dependency cycle",
+			plan: Plan{Goal: "g", Steps: []PlanStep{
+				{ID: "s1", Type: StepThink, Rationale: "a", DependsOn: []string{"s2"}},
+				{ID: "s2", Type: StepFinal, Rationale: "b", DependsOn: []string{"s1"}},
+			}},
+			wantErr: "dependency cycle",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

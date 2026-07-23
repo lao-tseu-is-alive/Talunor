@@ -19,6 +19,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Full history + tags: lessons-check verifies the git tags that historical
+          # course lessons pin to, which a shallow clone would not have.
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -38,8 +42,14 @@ jobs:
       - name: Fetch extensions + embedding model
         run: make deps
 
-      - name: Vet
-        run: go vet ./...
+      # release-check is the canonical pre-tag gate: gofmt + vet + tests, plus the
+      # drift guards (fetch targets, checksums, atlas-check, readme-check,
+      # lessons-check). Running it here means a PR that breaks formatting or lets
+      # the docs/atlas/lessons drift fails CI, not just a local pre-tag run.
+      - name: Release guards (gofmt + vet + tests + drift alarms)
+        run: make release-check
 
-      - name: Test
-        run: go test -v ./...
+      # The race detector isn't part of release-check (it changes the test build);
+      # run it separately so data races surface in CI.
+      - name: Test with the race detector
+        run: go test -race ./...

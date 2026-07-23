@@ -176,7 +176,7 @@ func (h *History) save() {
 		return
 	}
 	if dir := filepath.Dir(h.path); dir != "" && dir != "." {
-		_ = os.MkdirAll(dir, 0o755)
+		_ = os.MkdirAll(dir, 0o700) // prompt history is personal; owner-only dir.
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(h.path), ".history-*")
 	if err != nil {

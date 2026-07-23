@@ -126,10 +126,12 @@ func registerDriver(cfg Config) {
 func Open(cfg Config) (*Store, error) {
 	registerDriver(cfg)
 
-	// Ensure the parent directory exists for a file-backed database.
+	// Ensure the parent directory exists for a file-backed database. The store holds
+	// personal memory (extracted facts, verbatim turns), so it is created owner-only
+	// (0700) rather than world-readable on shared machines.
 	if cfg.DBPath != ":memory:" {
 		if dir := filepath.Dir(cfg.DBPath); dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			if err := os.MkdirAll(dir, 0o700); err != nil {
 				return nil, fmt.Errorf("create database dir %s: %w", dir, err)
 			}
 		}
@@ -145,6 +147,11 @@ func Open(cfg Config) (*Store, error) {
 	if err := s.bootstrap(context.Background()); err != nil {
 		db.Close()
 		return nil, err
+	}
+	// Restrict the database file to the owner too — SQLite creates it honouring the
+	// umask (often 0644). Best-effort: a chmod failure must not stop the app.
+	if cfg.DBPath != ":memory:" {
+		_ = os.Chmod(cfg.DBPath, 0o600)
 	}
 	return s, nil
 }

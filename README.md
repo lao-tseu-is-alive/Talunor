@@ -7,7 +7,7 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.13.2** — Iterations 1–3 complete (Layers 1–13). The agent
+> Current version: **v0.13.3** — Iterations 1–3 complete (Layers 1–13). The agent
 > talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and *acts* —
 > a ReAct tool loop (calculator, clock, memory search) gated by a first-class
 > **policy engine** (auto-allow / approve / deny, YAML-configurable via

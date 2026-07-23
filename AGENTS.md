@@ -152,9 +152,12 @@ make nerdctl-build && make nerdctl-run   # self-contained image (or docker-*)
 
 ## CI/CD & packaging (`.github/workflows/`, `Dockerfile`)
 
-- **`ci.yml`** (push/PR to main): `make deps` + `go vet` + `go test` (cgo; caches
-  `ext/`). **`cve-trivy-scan.yml`** (main + weekly): builds the image, Trivy scan,
-  fails on fixable HIGH/CRITICAL.
+- **`ci.yml`** (push/PR to main): `make deps` + **`make release-check`** (gofmt + vet
+  + tests + the drift guards: atlas/readme/lessons + checksums) + **`go test -race`**
+  (cgo; caches `ext/`; `fetch-depth: 0` so `lessons-check` sees the pinned tags). Since
+  v0.13.3 CI enforces the same guards as a local pre-tag run — a PR that breaks gofmt
+  or lets the docs drift now fails CI. **`cve-trivy-scan.yml`** (main + weekly): builds
+  the image, Trivy scan, fails on fixable HIGH/CRITICAL.
 - **Tag `vX.Y.Z`** fires two publishers: **`release.yml`** uploads a
   self-contained linux/amd64 `.tar.gz` (binary + extensions + model + `run.sh`) to
   the GitHub Release; **`docker-publish.yml`** builds, Trivy-scans/gates, and
@@ -372,6 +375,14 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   approved. `execCtx.skipStepApproval` → `reapproveAtOrAbove plan.RiskLevel`;
   high-risk steps re-confirm live args in `plan` mode (regression tests added). Ships
   with course **Lesson 14** (post-mortem, bilingual; course now 00–14).
+- **v0.13.3 (fixes)** = convergent cross-model-review batch: DB dir `0700` + file
+  `0600` (personal-data privacy); `ReEmbed` made atomic (transaction, no mixed vector
+  spaces on failure); silent assistant-store errors now traced (`store.assistant.error`
+  + `/debug`); the planner now receives the recalled memories (`fencedMemories`, shared
+  with `buildMessages`); `plan.Validate` now rejects `DependsOn` cycles (DFS) and the
+  stale "deferred to executor" comment is corrected; **CI runs `make release-check` +
+  `go test -race`** (`fetch-depth: 0`). Still open: the `lastPlan`/`screenDebug`
+  cross-goroutine access (narrow, untested by the suite).
 - **Next — Iteration 4 (learning):** memory consolidation, salience/decay, async
   reflection (it runs synchronously in the loop today), and learning from executed
   plans. Then continue the per-layer checkpoint rhythm.

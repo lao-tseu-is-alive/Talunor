@@ -121,16 +121,27 @@ func (s *Store) initProvenance(ctx context.Context) error {
 	return nil
 }
 
+// execer is the write subset shared by *sql.DB and *sql.Tx, so the meta upserts
+// can run either on the pool or inside a transaction (see ReEmbed).
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 // stampProvenance records the fingerprint of the embedding stack that produced
-// canary (the current one).
+// canary (the current one) on the pool.
 func (s *Store) stampProvenance(ctx context.Context, canary []byte) error {
-	if err := s.metaSet(ctx, metaEmbedCanary, canary); err != nil {
+	return stampProvenanceOn(ctx, s.db, s, canary)
+}
+
+// stampProvenanceOn writes the fingerprint via any execer (pool or transaction).
+func stampProvenanceOn(ctx context.Context, e execer, s *Store, canary []byte) error {
+	if err := metaSetOn(ctx, e, metaEmbedCanary, canary); err != nil {
 		return err
 	}
-	if err := s.metaSet(ctx, metaEmbedModel, []byte(s.EmbedModelName())); err != nil {
+	if err := metaSetOn(ctx, e, metaEmbedModel, []byte(s.EmbedModelName())); err != nil {
 		return err
 	}
-	return s.metaSet(ctx, metaEmbedDim, fmt.Appendf(nil, "%d", s.dim))
+	return metaSetOn(ctx, e, metaEmbedDim, fmt.Appendf(nil, "%d", s.dim))
 }
 
 // ReEmbed recomputes and rewrites the embedding of every stored memory with the
@@ -166,27 +177,46 @@ func (s *Store) ReEmbed(ctx context.Context, progress func(done, total int)) (in
 	}
 
 	total := len(items)
+
+	// Phase 1 — compute every embedding first, WITHOUT touching the DB. The pool is
+	// pinned to one connection, so we cannot embed (which queries) while a
+	// transaction holds that connection; computing up front also means a mid-way
+	// embedding failure leaves the store completely untouched.
+	embs := make([][]byte, total)
 	for done, it := range items {
 		emb, err := s.Embed(ctx, it.content)
 		if err != nil {
-			return done, fmt.Errorf("re-embed #%d: %w", it.id, err)
+			return 0, fmt.Errorf("re-embed #%d: %w", it.id, err)
 		}
-		if _, err := s.db.ExecContext(ctx,
-			`UPDATE memories SET embedding = ? WHERE id = ?`, emb, it.id); err != nil {
-			return done, fmt.Errorf("update #%d: %w", it.id, err)
-		}
+		embs[done] = emb
 		if progress != nil {
 			progress(done+1, total)
 		}
 	}
-
-	// Stamp the store with the fingerprint of the model we just embedded with.
 	canary, err := s.Embed(ctx, embedCanaryText)
 	if err != nil {
-		return total, err
+		return 0, err
 	}
-	if err := s.stampProvenance(ctx, canary); err != nil {
-		return total, err
+
+	// Phase 2 — apply every update and the fingerprint stamp in ONE transaction, so
+	// a failure can never leave the store with a mix of old- and new-space vectors
+	// (which would corrupt recall silently). All-or-nothing.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback() // no-op once Commit succeeds.
+	for i, it := range items {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE memories SET embedding = ? WHERE id = ?`, embs[i], it.id); err != nil {
+			return 0, fmt.Errorf("update #%d: %w", it.id, err)
+		}
+	}
+	if err := stampProvenanceOn(ctx, tx, s, canary); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("re-embed commit: %w", err)
 	}
 	s.provenance = ProvenanceOK
 	return total, nil
@@ -204,9 +234,14 @@ func (s *Store) metaGet(ctx context.Context, key string) (value []byte, ok bool,
 	return value, true, nil
 }
 
-// metaSet upserts a meta value.
+// metaSet upserts a meta value on the pool.
 func (s *Store) metaSet(ctx context.Context, key string, value []byte) error {
-	_, err := s.db.ExecContext(ctx,
+	return metaSetOn(ctx, s.db, key, value)
+}
+
+// metaSetOn upserts a meta value via any execer (pool or transaction).
+func metaSetOn(ctx context.Context, e execer, key string, value []byte) error {
+	_, err := e.ExecContext(ctx,
 		`INSERT INTO meta(key, value) VALUES(?, ?)
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	return err

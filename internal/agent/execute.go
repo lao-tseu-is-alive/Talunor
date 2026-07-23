@@ -28,7 +28,10 @@ func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string
 	if a.tools != nil {
 		toolDefs = a.tools.Defs()
 	}
-	pl, err := a.planner.Plan(ctx, input, "", toolDefs)
+	// Give the planner the same recalled memories the executor gets, framed as
+	// untrusted DATA — so plans can use what the agent knows (the user's name,
+	// preferences) instead of re-discovering it.
+	pl, err := a.planner.Plan(ctx, input, fencedMemories(hits), toolDefs)
 	if err != nil {
 		a.trace("plan.failed", "err", err)
 		a.sendDebug(ctx, out, "plan: failed (%v) — falling back to ReAct", err)
@@ -109,7 +112,10 @@ func (a *Agent) finishAnswer(ctx context.Context, out chan<- llm.Chunk, input, a
 	if answer != "" {
 		a.send(ctx, out, llm.Chunk{Content: answer})
 		a.short.Add(llm.RoleAssistant, answer)
-		_, _ = a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, answer)
+		if _, err := a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, answer); err != nil {
+			a.trace("store.assistant.error", "err", err)
+			a.sendDebug(ctx, out, "store: assistant turn not persisted: %v", err)
+		}
 	}
 	a.reflect(ctx, out, input)
 }

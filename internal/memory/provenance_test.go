@@ -28,6 +28,32 @@ func provConfig(t *testing.T) Config {
 	return cfg
 }
 
+// TestStoreFilePermissions: the memory database holds personal data, so Open
+// creates its parent dir 0700 and the DB file 0600 (owner-only).
+func TestStoreFilePermissions(t *testing.T) {
+	cfg := provConfig(t)
+	// A path whose parent does not exist yet, so Open must create it (t.TempDir's
+	// own dir already exists and would bypass our MkdirAll).
+	cfg.DBPath = filepath.Join(t.TempDir(), "sub", "talunor.db")
+
+	s, err := Open(cfg)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer s.Close()
+
+	if info, err := os.Stat(filepath.Dir(cfg.DBPath)); err != nil {
+		t.Fatal(err)
+	} else if perm := info.Mode().Perm(); perm != 0o700 {
+		t.Errorf("db dir mode = %o, want 700", perm)
+	}
+	if info, err := os.Stat(cfg.DBPath); err != nil {
+		t.Fatal(err)
+	} else if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("db file mode = %o, want 600", perm)
+	}
+}
+
 // TestProvenanceFreshIsOK: a brand-new store stamps itself and reports OK, and
 // the fingerprint survives a close/reopen (canary still matches).
 func TestProvenanceFreshIsOK(t *testing.T) {

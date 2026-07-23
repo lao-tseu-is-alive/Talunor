@@ -140,8 +140,7 @@ func (p Plan) Validate() error {
 		}
 		seen[s.ID] = true
 	}
-	// DependsOn must reference another existing step (resolvable, non-self).
-	// Cycle detection is deferred to the plan executor (added with the planner).
+	// DependsOn must reference another existing step (resolvable, non-self)…
 	for _, s := range p.Steps {
 		for _, dep := range s.DependsOn {
 			if dep == s.ID {
@@ -152,7 +151,55 @@ func (p Plan) Validate() error {
 			}
 		}
 	}
+	// …and the dependency graph must be acyclic. NOTE: today's executor runs a ReAct
+	// loop capped to the plan's tools and does *not* order steps by DependsOn (see
+	// the planner lessons) — so DependsOn is advisory for display. Validating the DAG
+	// here anyway keeps a malformed plan from ever reaching a future step executor
+	// that would rely on it, and stops a cyclic plan from being displayed as if valid.
+	if id, ok := firstCycle(p.Steps); ok {
+		return fmt.Errorf("plan: dependency cycle through step %q", id)
+	}
 	return nil
+}
+
+// firstCycle reports whether the steps' DependsOn graph has a cycle, returning a
+// step id on it. Plain DFS with three-colour marking (unvisited / on-stack / done);
+// callers must have already checked that every DependsOn resolves to a real step.
+func firstCycle(steps []PlanStep) (string, bool) {
+	deps := make(map[string][]string, len(steps))
+	for _, s := range steps {
+		deps[s.ID] = s.DependsOn
+	}
+	const (
+		white = iota // unvisited
+		grey         // on the current DFS stack
+		black        // fully explored
+	)
+	colour := make(map[string]int, len(steps))
+	var visit func(id string) (string, bool)
+	visit = func(id string) (string, bool) {
+		colour[id] = grey
+		for _, dep := range deps[id] {
+			switch colour[dep] {
+			case grey:
+				return dep, true // back-edge to a step on the stack → cycle
+			case white:
+				if c, ok := visit(dep); ok {
+					return c, true
+				}
+			}
+		}
+		colour[id] = black
+		return "", false
+	}
+	for _, s := range steps {
+		if colour[s.ID] == white {
+			if c, ok := visit(s.ID); ok {
+				return c, true
+			}
+		}
+	}
+	return "", false
 }
 
 // NewToolCallPlan wraps a single pending tool call as a valid one-step Plan.
