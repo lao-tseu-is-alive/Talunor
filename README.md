@@ -7,8 +7,9 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.13.4** — Iterations 1–3 complete (Layers 1–13). The agent
-> talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and *acts* —
+> Current version: **v0.14.0** — Iterations 1–3 complete (Layers 1–13), plus Layer 14
+> (**model calibration** — a deterministic reliability canary, `cmd/calibrate`). The
+> agent talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and *acts* —
 > a ReAct tool loop (calculator, clock, memory search) gated by a first-class
 > **policy engine** (auto-allow / approve / deny, YAML-configurable via
 > `TALUNOR_POLICY`), with an optional **planner** (`TALUNOR_PLANNER=1`) that lays out
@@ -140,11 +141,21 @@ agent. Iteration 2 gives it the ability to *act*.
 forethought (planner). Deferred to later increments: `/edit-plan`, semantic
 deviation detection, and automatic re-planning.
 
+### Layer 14 — model calibration (a bridge to Iteration 4)
+
+| Layer | What | Status |
+|-------|------|--------|
+| 14 | **Model calibration** — a deterministic reliability canary (`internal/calibration`, `cmd/calibrate`): a YAML suite of known-answer scenarios scored with machine-checkable matchers (no LLM judge), with pass-rate/consistency, baseline **drift** detection, and optional AES-256-GCM encryption of private suites | ✅ done (v0.14.0) |
+
+Motivated by the review episode behind Lesson 15: before an agent *learns* from a
+model (Iteration 4), you must *measure* whether that model is reliable — and catch
+silent drift when it degrades.
+
 ### Later iterations
 
 | Iter | Theme | Adds |
 |------|-------|------|
-| 4 | Learning | memory consolidation, salience/decay, async reflection, learning from executed plans |
+| 4 | Learning | memory consolidation, salience/decay, async reflection, learning from executed plans (informed by calibration) |
 
 ## Requirements
 
@@ -372,6 +383,7 @@ lives in the same directory.
 | `TALUNOR_OPENROUTER_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |
 | `TALUNOR_DB` | database file | per-user data dir (above) |
 | `TALUNOR_VECTOR_EXT` / `TALUNOR_AI_EXT` / `TALUNOR_EMBED_MODEL` | extension / model paths | under `ext/` |
+| `CALIBRATION_KEY` | passphrase to decrypt (and `calibrate encrypt`) a private calibration suite | — |
 
 See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
@@ -431,11 +443,13 @@ Full details per version in [CHANGELOG.md](CHANGELOG.md). Highlights:
 cmd/doctor/            memory substrate smoke test
 cmd/chat/              LLM provider smoke test (streaming)
 cmd/talunor/           interactive agent REPL (persistent memory)
+cmd/calibrate/         deterministic model-calibration CLI (Layer 14)
 internal/memory/       SQLite store: extensions, in-DB embeddings, KNN
 internal/llm/          provider interface + OpenAI-compatible adapter
 internal/agent/        the cognitive loop
 internal/plan/         plan vocabulary (Plan / PlanStep / RiskLevel)
 internal/policy/       action guardrail: Policy interface + tool-gate / rule-engine
+internal/calibration/  deterministic reliability canary (scenarios, drift, encryption)
 internal/render/       shared streaming console renderer
 internal/tui/          Bubble Tea + Glamour front-end
 internal/history/      persistent, deduplicated prompt history (↑/↓ recall)
@@ -445,6 +459,7 @@ Makefile               deps / doctor / chat / run / test / build / docker-*
 Dockerfile             self-contained image (binary + extensions + model)
 docs/lessons/          hands-on course: a guided path through the tag-by-tag history
 docs/policy.sample.yaml  commented example TALUNOR_POLICY rule file
+docs/calibration.seed.yaml  public example calibration suite (Layer 14)
 docs/atlas.md          full annotated map of every tracked file (see below)
 docs/ollama-networking.md  reaching a loopback Ollama from the container (secure)
 .github/workflows/     CI (build+test), Release (bundle), Docker-publish, CVE scan

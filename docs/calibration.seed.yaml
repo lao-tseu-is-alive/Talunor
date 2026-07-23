@@ -1,0 +1,96 @@
+# Talunor calibration — seed suite (a public, deterministic example set).
+#
+#   go run ./cmd/calibrate --suite docs/calibration.seed.yaml
+#
+# Each scenario is a fixed 1..5-turn conversation whose correct answer is known,
+# checked by a DETERMINISTIC matcher (equals / contains / regex / number /
+# json_valid / …). No LLM judges the output: a verifier that itself called a model
+# would inherit the unreliability the harness exists to measure.
+#
+# ── Threat model (read this) ────────────────────────────────────────────────────
+# This file is PUBLIC. A provider may have trained on it, so it measures the
+# *absolute* score weakly (a model could have memorised the answers). Its honest
+# use is RELATIVE drift: same suite, same provider, over time — a later run that
+# scores lower than a saved baseline signals a silently degraded model/version.
+# For a trustworthy absolute measure, keep a PRIVATE suite out of the public repo
+# (or encrypt it — a later, drop-in loader step). And note: with a HOSTED model you
+# hand the provider these prompts at inference time, so encryption protects against
+# third-party scrapers, not the provider itself. Fully private testing = a local
+# model (Ollama) + a private suite.
+
+suite: seed
+
+scenarios:
+  - id: arithmetic-chain
+    category: arithmetic
+    risk: low
+    runs: 3
+    turns:
+      - user: "What is 137 * 4? Reply with only the number."
+        expect: { equals: "548" }
+      - user: "Now divide that result by 2. Reply with only the number."
+        expect: { number: { equals: 274 } }
+
+  - id: percentage
+    category: arithmetic
+    risk: low
+    turns:
+      - user: "What is 15% of 240? Reply with only the number."
+        expect: { number: { equals: 36 } }
+
+  - id: capital-of-japan
+    category: factuality
+    risk: low
+    turns:
+      - user: "What is the capital city of Japan? Reply with only the city name."
+        expect: { contains: "Tokyo" }
+
+  - id: json-only
+    category: format
+    risk: low
+    turns:
+      - user: >-
+          Reply with ONLY a compact JSON object with a single key "status" whose
+          value is "ok". No code fences, no prose.
+        expect:
+          all_of:
+            - { json_valid: true }
+            - { contains: "status" }
+            - { contains: "ok" }
+
+  - id: lowercase-list
+    category: instruction-following
+    risk: low
+    turns:
+      - user: >-
+          List the three additive primary colors of light, comma-separated, all
+          lowercase, and nothing else.
+        expect:
+          contains_all: ["red", "green", "blue"]
+
+  # INDICATIVE only: refusal-to-fabricate can be checked deterministically just by
+  # keyword, which is brittle (a model could refuse with other words, or comply
+  # with these words). Treat this scenario's score as a weak signal, not a verdict.
+  - id: refuse-fabrication
+    category: hallucination-refusal
+    risk: medium
+    turns:
+      - user: >-
+          In what year was the Treaty of Vexborough signed? If it is not a real,
+          documented treaty, say so plainly instead of guessing a year.
+        expect:
+          contains_any:
+            - "not a real"
+            - "not real"
+            - "no record"
+            - "fictional"
+            - "does not exist"
+            - "doesn't exist"
+            - "cannot find"
+            - "could not find"
+            - "not aware"
+            - "no such"
+            - "unable to"
+            - "made up"
+            - "don't have"
+            - "do not have"

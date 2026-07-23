@@ -18,6 +18,78 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.14.0] - 2026-07-23 — Layer 14: model calibration (a reliability canary)
+
+A preliminary layer before Iteration 4 (learning), motivated by the review episode
+that produced Lesson 15: an agent that will *learn* from a model must first *measure*
+whether that model is reliable. `internal/calibration` runs a fixed suite of
+scenarios whose correct answers are known and checked **deterministically**, so a
+model's factual accuracy, format compliance, and consistency can be scored — and
+silent quality drift (a provider update, a cheaper "flash" variant) caught before
+users feel it. It is a truthfulness canary, in the spirit of Layer 11's embedding
+canary.
+
+### Added
+
+- **`internal/calibration`** — a standalone, provider-agnostic harness (it runs
+  against any `llm.Provider`, so one suite compares many models on one yardstick):
+  - `Scenario`/`Turn`/`Assert` types loaded from YAML via a **source-agnostic**
+    `Parse([]byte)` (the bytes may be plaintext or decrypted — the core does not care).
+    Scenarios are 1–5 clean-room turns (no session memory).
+  - **Deterministic matchers only** (`equals`, `contains(_all/any)`, `not_contains`,
+    `regex`, `number` with tolerance, `json_valid`, `any_of`/`all_of`). Deliberately
+    **no LLM judge**: a verifier that called a model would inherit the unreliability
+    it measures.
+  - `Run` replays each scenario N times and reports a **pass-rate** per
+    scenario/category (a rate near 0.5 = flaky) plus latency **mean ± stddev** (the
+    place a standard deviation is actually meaningful — a continuous metric).
+  - **Baseline + drift**: `AsBaseline`/`Diff` detect a regression against a pinned
+    reference — the automatic version of "this model got worse".
+  - **Optional AES-256-GCM encryption** (`CALIBRATION_KEY`) for a private suite you
+    want to version in a shared repo without exposing the answers to scrapers.
+    Standard stdlib crypto, no home-grown scheme.
+- **`cmd/calibrate`** — a standalone CLI: `calibrate --suite s.yaml [--baseline b.json |
+  --save-baseline b.json] [--json]` (exit 1 on regression, CI-able) and
+  `calibrate encrypt --in s.yaml --out s.enc`. Provider via `llm.FromEnv()`, like the agent.
+- **`docs/calibration.seed.yaml`** — a public, deterministic 6-scenario example set
+  (arithmetic, %, factual, JSON format, instruction-following, an *indicative*
+  refuse-to-fabricate), with an explicit **threat-model header**: public suites
+  measure *drift* well but *absolute* score weakly (memorisation); a hosted provider
+  sees the prompts at inference, so encryption stops scrapers, not the provider.
+- **`CALIBRATION_KEY`** env knob.
+
+### Changed
+
+- Course **Lesson 15** gains a short "naming the defects" aside (the five distinct
+  failure modes — confabulation, provenance dishonesty, sycophancy, quality variance,
+  error compounding), kept model-agnostic and mirrored EN/FR.
+
+### Deferred (documented)
+
+- Wiring calibration into the agent's policy (let a low-calibration model be routed
+  away from high-risk steps, or require senior/deterministic validation upstream) —
+  a natural next step once the harness has a track record. A named-predicate (in-code)
+  verifier registry beyond the declarative YAML matchers, if ever needed.
+
+### Lessons learned
+
+1. **You can't govern what you don't measure — and you can't measure an LLM with an
+   LLM.** The harness is only trustworthy because every verifier is deterministic.
+   The moment a model judges the output, the measurement inherits the failure it was
+   built to catch (Lesson 15, applied to our own tooling).
+2. **The value of calibration is the *delta*, not the score.** A public suite can be
+   memorised, so its absolute number is soft; but the same suite re-run over time
+   turns "the model silently degraded" into a red CI. Build for drift detection (a
+   pinned baseline), like the embedding canary of Layer 11.
+3. **Accuracy and consistency are different axes.** A binary pass/fail's variance is
+   fixed by its rate (a Bernoulli), so "flaky" is read off the rate's distance from
+   0/1 — a standard deviation only earns its keep on a continuous metric (latency).
+   Reporting the wrong statistic would hide the very flakiness you care about.
+4. **Encrypt for the threat you actually have.** Encrypting a suite stops passive
+   repo-scraping into training sets — a real vector — but does nothing about a hosted
+   provider you hand the prompts to at inference. Naming what a control does *not*
+   cover is as important as the control (same honesty as the sandbox's "no seccomp").
+
 ## [0.13.4] - 2026-07-23 — Course: Lesson 15 (don't trust the review), bilingual
 
 A docs-only release, and the course's meta-lesson. During Talunor's own development

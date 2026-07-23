@@ -50,6 +50,8 @@ Module: `github.com/lao-tseu-is-alive/Talunor` · Go 1.26 · **cgo required**.
 cmd/doctor/     memory substrate smoke test (embed → store → KNN)
 cmd/chat/       one-shot LLM streaming smoke test
 cmd/talunor/    the app: TUI by default, --plain REPL, --list dump
+cmd/calibrate/  standalone model-calibration CLI (Layer 14): run a suite, save/diff a
+                baseline, `encrypt` a private suite; provider via llm.FromEnv()
 internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    Remember/Recall (thresholded; recall excludes assistant
                    turns), Forget(id), short-term ring buffer. Kinds: turn
@@ -87,6 +89,12 @@ internal/policy/   action guardrail: Policy.Evaluate(ctx,*Plan,PlanStep)→Decis
                    AllowAllPolicy; ToolGatePolicy (default — consults each tool's
                    Approvable/ApprovableFor, preserves pre-policy behaviour);
                    RuleEnginePolicy (YAML rules, TALUNOR_POLICY)
+internal/calibration/ LAYER 14: deterministic reliability canary for an llm.Provider.
+                   Suite/Scenario/Turn/Assert from YAML (source-agnostic Parse; 1–5
+                   clean-room turns). Matchers are DETERMINISTIC-only (no LLM judge):
+                   equals/contains/regex/number/json_valid/any_of. Run → pass-rate
+                   (≈0.5=flaky) + latency mean±stddev; Baseline+Diff = drift detection;
+                   optional AES-256-GCM (CALIBRATION_KEY) for a private suite
 internal/tools/    action layer: Tool interface + Registry; builtins Calculator
                    (AST-safe), Clock, RecallMemory (searches the store), Bash
                    (sandboxed shell; opt-in TALUNOR_BASH), WebFetch (SSRF-guarded
@@ -198,6 +206,7 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_OPENROUTER_URL` | OpenRouter base URL | `https://openrouter.ai/api/v1` |
 | `TALUNOR_DB` | database file | `$XDG_DATA_HOME/talunor/talunor.db` → `~/.local/share/talunor/talunor.db` |
 | `TALUNOR_VECTOR_EXT` / `TALUNOR_AI_EXT` / `TALUNOR_EMBED_MODEL` | ext/model paths | under `ext/` |
+| `CALIBRATION_KEY` | passphrase to decrypt / `calibrate encrypt` a private calibration suite (Layer 14) | — |
 
 Dev machine has Ollama running; `qwen3:latest` is a **thinking model** (see
 gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
@@ -388,6 +397,16 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   The course's meta-lesson: a hands-on verification exercise (falsify five claims from a
   real, anonymised AI review against the repo's own gotchas). Model-agnostic; course now
   00–15.
+- **Layer 14 (done): v0.14.0** = **model calibration**, a preliminary layer before
+  Iteration 4 (motivated by the Lesson 15 review episode: measure a model before you
+  let an agent *learn* from it). `internal/calibration` (deterministic-only harness:
+  YAML suite, source-agnostic Parse, matchers with no LLM judge, Run→pass-rate +
+  latency stddev, Baseline+Diff drift detection, optional AES-256-GCM/`CALIBRATION_KEY`)
+  + `cmd/calibrate` (run / save-baseline / diff → exit 1 on regression; `encrypt`
+  subcommand) + `docs/calibration.seed.yaml` (public example, threat-model header).
+  Also: Lesson 15 gained a model-agnostic "naming the defects" aside (EN/FR).
+  **Deferred:** wiring calibration into the policy (route a low-calibration model away
+  from high-risk steps).
 - **Next — Iteration 4 (learning):** memory consolidation, salience/decay, async
   reflection (it runs synchronously in the loop today), and learning from executed
-  plans. Then continue the per-layer checkpoint rhythm.
+  plans (informed by calibration). Then continue the per-layer checkpoint rhythm.

@@ -25,6 +25,22 @@ That is not a story about one bad model. It is the defining literacy skill for
 working with *any* AI on code: **an AI's output is a claim, never evidence.** This
 lesson teaches you the one method that reliably separates the two.
 
+### Aside — naming the defects
+
+We lump everything under "hallucination", but these are five distinct problems, each
+needing a different countermeasure:
+
+| Defect | What we saw | The real difficulty |
+|---|---|---|
+| **Confabulation** | a fluent report, invented code | *worse* in more capable models (structured lies, harder to feel) |
+| **Provenance dishonesty** | "yes, I read your code" = false | the claim of having verified is itself to be verified |
+| **Sycophancy / framing echo** | a lucid "apology" that echoes your own truth back | agreement is not confirmation |
+| **Quality variance** | a newer model sometimes *worse* than the older | non-stationary: version, a "flash" variant, the day, the load |
+| **Error compounding** | the risk of agent "swarms" | 95% reliable × 10 unverified steps ≈ 60% |
+
+The falsifiability method below answers the first defect; the broader posture
+(deterministic ground truth, verifiable provenance, a drift *canary*) answers the rest.
+
 ## Learning objectives
 
 By the end you can:

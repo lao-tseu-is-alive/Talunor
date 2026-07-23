@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.13.4` (course Lesson 15 — don't trust the review)
+- **Version:** `v0.14.0` (Layer 14 — model calibration, a deterministic reliability canary)
 - **Generated:** 2026-07-22
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -52,7 +52,9 @@ Talunor/
 │   │                         #     Wires providers, tools (bash/web_fetch opt-in), prompt history, debug
 │   │                         #     trace, and the startup embedding-provenance warning.
 │   ├── chat/main.go          #   One-shot LLM streaming smoke test (verify a provider streams).
-│   └── doctor/main.go        #   Memory-substrate smoke test: print ext versions → embed a corpus → store → KNN recall.
+│   ├── doctor/main.go        #   Memory-substrate smoke test: print ext versions → embed a corpus → store → KNN recall.
+│   └── calibrate/main.go     #   LAYER 14: model-calibration CLI — run a suite, save/diff a baseline
+│                             #     (exit 1 on regression), `encrypt` a private suite (CALIBRATION_KEY).
 │
 ├── internal/                 # Private packages — one per teaching layer.
 │   │
@@ -105,6 +107,20 @@ Talunor/
 │   │   ├── toolgate_test.go  #     Tool-gate risk/approval tests with fake tools.
 │   │   └── ruleengine_test.go #    YAML parse/evaluate, wildcard, deny, invalid-action, file-load tests.
 │   │
+│   ├── calibration/          # LAYER 14: deterministic reliability canary for an llm.Provider.
+│   │   ├── scenario.go       #     Suite/Scenario/Turn types + Validate + source-agnostic Parse/Load (YAML).
+│   │   ├── assert.go         #     Deterministic matchers (equals/contains/regex/number/json_valid/any_of); no LLM judge.
+│   │   ├── runner.go         #     Run: replay each scenario N times clean-room → aggregate a Report.
+│   │   ├── metrics.go        #     Stats (mean/stddev) — the continuous metric where a stddev is meaningful.
+│   │   ├── report.go         #     Report / ScenarioResult / CategoryResult + human String().
+│   │   ├── baseline.go       #     Baseline (pinned JSON) + Diff → drift/regression detection.
+│   │   ├── crypt.go          #     Optional AES-256-GCM envelope (CALIBRATION_KEY); source-agnostic decrypt.
+│   │   ├── assert_test.go    #     Matcher + validate tests.
+│   │   ├── scenario_test.go  #     Parse/validate/load tests.
+│   │   ├── runner_test.go    #     Run tests (all-pass, flaky 0.5, multi-turn, error, category agg) via a fake provider.
+│   │   ├── baseline_test.go  #     Baseline round-trip + drift-detection tests.
+│   │   └── crypt_test.go     #     Encrypt/decrypt round-trip, wrong-key, plaintext-passthrough tests.
+│   │
 │   ├── tui/                  # LAYER 5: Bubble Tea + Glamour terminal UI (default front-end).
 │   │   ├── tui.go            #     Model/Update loop, stream→UI bridge, ↑/↓ history recall, approval prompt.
 │   │   └── tui_test.go       #     Headless tests: feed synthetic tea.Msgs, assert on View().
@@ -151,6 +167,7 @@ Talunor/
 ├── docs/                  # Documentation.
 │   ├── atlas.md           #   THIS FILE — the repository map.
 │   ├── policy.sample.yaml #   Commented example TALUNOR_POLICY rule file (allow / prompt / deny per tool).
+│   ├── calibration.seed.yaml #  LAYER 14: public example calibration suite (deterministic, threat-model header).
 │   ├── ollama-networking.md # Reaching a loopback Ollama from inside the container, securely.
 │   └── lessons/           #   Hands-on course: a guided path through the tag-by-tag history.
 │       │                  #     Each lesson is fully bilingual: README.md (EN, canonical) + README.fr.md (FR).
@@ -197,4 +214,5 @@ each one a tagged release (see `CHANGELOG.md`):
 | 10 | `internal/webfetch` | reach the network safely (application-layer SSRF guard) |
 | 12 | `internal/policy` (+ `internal/plan`) | the action guardrail: allow / prompt / deny before each tool call |
 | 13 | `agent/planner.go` + `agent/execute.go` | plan before acting: an approved plan, then ReAct execution capped to it |
+| 14 | `internal/calibration` + `cmd/calibrate` | measure a model's reliability deterministically; detect silent drift |
 | — | `internal/history`, `internal/version`, `internal/config`, `internal/render` | supporting infrastructure |

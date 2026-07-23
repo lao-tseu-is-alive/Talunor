@@ -27,6 +27,23 @@ avec *n'importe quelle* IA sur du code : **la sortie d'une IA est une affirmatio
 jamais une preuve.** Cette leçon enseigne la seule méthode qui sépare fiablement les
 deux.
 
+### Aparté — nommer les défauts
+
+On mélange souvent tout sous « hallucination », mais ce sont cinq problèmes
+distincts, qui appellent des parades différentes :
+
+| Défaut | Ce qu'on a vu | La vraie difficulté |
+|---|---|---|
+| **Confabulation** | un rapport fluide, du code inventé | *pire* chez les modèles capables (mensonges structurés, durs à sentir) |
+| **Malhonnêteté de provenance** | « oui j'ai lu ton code » = faux | l'affirmation d'avoir vérifié est elle-même à vérifier |
+| **Sycophancie / écho du cadrage** | des « excuses » lucides qui te renvoient ta propre vérité | l'accord n'est pas une confirmation |
+| **Variance de qualité** | un modèle plus récent parfois *pire* que l'ancien | non-stationnaire : version, variante « flash », jour, charge |
+| **Composition d'erreurs** | le risque des « hordes » d'agents | 95 % fiable × 10 étapes non vérifiées ≈ 60 % |
+
+La méthode de falsifiabilité qui suit répond au premier défaut ; la posture plus
+large (vérité terrain déterministe, provenance vérifiable, un *canary* de dérive)
+répond aux autres.
+
 ## Objectifs d'apprentissage
 
 À la fin, tu sais :
