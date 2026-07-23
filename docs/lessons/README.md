@@ -11,7 +11,7 @@ This directory turns that idea into a guided path. Each lesson has a clear goal,
 short reading list, a hands-on experiment, and a checklist so you know when you're
 done.
 
-> **Status: complete.** All fifteen lessons (00–14) are ready.
+> **Status: complete.** All sixteen lessons (00–15) are ready.
 
 ## Who this is for
 
@@ -61,6 +61,7 @@ make doctor   # your first win — the memory substrate, running offline
 | [12](12-the-open-bar/) | The open bar: why an agent needs a policy | 3 · **advanced** | 75 min | `v0.12.0` → `main` | ✅ ready |
 | [13](13-plan-before-you-act/) | Plan before you act: from ReAct to a plan you can read | 3 · **advanced** | 90 min | `v0.13.0` → `main` | ✅ ready |
 | [14](14-the-approval-that-didnt-bind/) | The approval that didn't bind: a plan-mode security post-mortem | 3 · **advanced** | 60 min | `v0.13.1` → `main` | ✅ ready |
+| [15](15-dont-trust-the-review/) | Don't trust the review: verifying what an AI claims about your code | 2 · meta | 60 min | `main` | ✅ ready |
 
 ## Two kinds of lesson — don't mix them up
 

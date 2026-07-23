@@ -18,6 +18,42 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.13.4] - 2026-07-23 — Course: Lesson 15 (don't trust the review), bilingual
+
+A docs-only release, and the course's meta-lesson. During Talunor's own development
+several LLMs reviewed the codebase; most were grounded, but one produced a fluent,
+confident, and largely *fabricated* report — wrong driver, a search engine the project
+doesn't have, the SSRF guard described backwards — and claimed to have "analysed the
+exact source" while offering invented code as proof. A single falsifiable question
+("paste the line from `go.mod`") collapsed it. That episode becomes a lesson.
+
+### Added
+
+- **Lesson 15 — "Don't trust the review: verifying what an AI claims about your code"**
+  (`docs/lessons/15-dont-trust-the-review/`, bilingual EN/FR). A ~60-min Level-2 🔍
+  verification *exercise* (not an essay): the reader is handed five claims from a real
+  AI review — four false (including a self-contradicting "CGO-free" claim and an SSRF
+  mechanism described inverted) and one true — and must falsify each with a concrete
+  command, cross-checked against the repo's own `AGENTS.md` gotchas. It teaches the
+  model-agnostic method — demand the verbatim citation; the repo's docs are ground
+  truth; verify each claim independently; fluency and "I read your code" are not
+  evidence — and the twist that even a model's articulate apology is a claim to verify.
+  Deliberately names no vendor (it's about the method, and models date fast). Course
+  now 00–15.
+
+### Lessons learned
+
+1. **The capstone of a trust-and-verify course is verifying the reviewer.** Every
+   prior lesson taught distrust of a specific thing (a silent recall, an untrusted
+   memory, an over-promising approval); generalising it to "an AI's output is a claim,
+   never evidence" is the natural close — and the most transferable skill of all.
+2. **A verification lesson must make the reader do the verifying.** The lesson isn't
+   "LLMs hallucinate"; it's a set of `grep`/read commands the reader runs to watch four
+   plausible claims fall. Doing the falsification is what installs the instinct.
+3. **Teach the method, not the anecdote.** Naming the model would date the lesson and
+   turn a durable skill into vendor gossip. The claims are anonymised; the ground truth
+   (this repo) is permanent.
+
 ## [0.13.3] - 2026-07-23 — Convergent review batch: privacy, integrity, honesty, CI
 
 Six small, low-risk fixes that a round of independent cross-model reviews of `v0.13.1`

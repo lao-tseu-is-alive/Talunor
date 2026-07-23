@@ -383,6 +383,11 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   stale "deferred to executor" comment is corrected; **CI runs `make release-check` +
   `go test -race`** (`fetch-depth: 0`). Still open: the `lastPlan`/`screenDebug`
   cross-goroutine access (narrow, untested by the suite).
+- **v0.13.4 (docs)** = course **Lesson 15** — "Don't trust the review: verifying what
+  an AI claims about your code" (`docs/lessons/15-dont-trust-the-review/`, bilingual).
+  The course's meta-lesson: a hands-on verification exercise (falsify five claims from a
+  real, anonymised AI review against the repo's own gotchas). Model-agnostic; course now
+  00–15.
 - **Next — Iteration 4 (learning):** memory consolidation, salience/decay, async
   reflection (it runs synchronously in the loop today), and learning from executed
   plans. Then continue the per-layer checkpoint rhythm.

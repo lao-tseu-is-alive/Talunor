@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.13.3` (convergent review batch: privacy, integrity, honesty, CI)
+- **Version:** `v0.13.4` (course Lesson 15 — don't trust the review)
 - **Generated:** 2026-07-22
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -169,7 +169,8 @@ Talunor/
 │       ├── 11-when-memory-forgets/README.md     # 🔍 Embedding provenance + /debug, from a real bug (v0.11.0).
 │       ├── 12-the-open-bar/README.md            # 🔍 Why an agent needs a policy: the open-bar risk (v0.12.0).
 │       ├── 13-plan-before-you-act/README.md     # 🔍 Emergent ReAct vs deliberate planning; capped execution (v0.13.0).
-│       └── 14-the-approval-that-didnt-bind/README.md  # 🔍 Post-mortem: plan-mode approval bound names not args (v0.13.1→fix).
+│       ├── 14-the-approval-that-didnt-bind/README.md  # 🔍 Post-mortem: plan-mode approval bound names not args (v0.13.1→fix).
+│       └── 15-dont-trust-the-review/README.md    # 🔍 Meta: falsify an AI code review's claims against ground truth.
 │
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.
