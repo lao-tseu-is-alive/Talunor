@@ -103,6 +103,10 @@ func run(plain bool, list int, reembed bool) error {
 	}
 
 	ag := agent.New(store, provider, cfg)
+	// Drain the background reflection worker before the store closes — the worker
+	// writes learned facts to the store while draining. Deferred after store.Close
+	// so it runs first (LIFO).
+	defer ag.Close()
 	n, _ := store.Count(ctx)
 
 	// If the embedding stack changed since these memories were written, recall of

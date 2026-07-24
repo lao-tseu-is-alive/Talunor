@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
@@ -359,9 +360,10 @@ func TestReflectionStoresAndRecallsFact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("turn: %v", err)
 	}
-	if _, err := drain(out); err != nil { // draining waits for reflection to finish.
+	if _, err := drain(out); err != nil {
 		t.Fatalf("drain: %v", err)
 	}
+	quiesce(t, ag) // reflection is async (Layer 18); wait for it before inspecting.
 
 	// A fact memory must now exist (user turn + assistant turn + 1 fact = 3).
 	facts := factContents(t, ctx, store)
@@ -403,6 +405,7 @@ func TestReflectionDeduplicates(t *testing.T) {
 		if _, err := drain(out); err != nil {
 			t.Fatalf("drain %d: %v", i, err)
 		}
+		quiesce(t, ag) // let async reflection settle before the next restatement.
 	}
 	if facts := factContents(t, ctx, store); len(facts) != 1 {
 		t.Errorf("dedup failed: %d fact rows, want 1: %v", len(facts), facts)
@@ -443,6 +446,7 @@ func TestReflectionConsolidatesRestatement(t *testing.T) {
 		if _, err := drain(out); err != nil {
 			t.Fatalf("drain %d: %v", i, err)
 		}
+		quiesce(t, ag) // async reflection: wait before inspecting the fact.
 	}
 
 	runTurn(0)
@@ -467,6 +471,38 @@ func TestReflectionConsolidatesRestatement(t *testing.T) {
 	}
 	if after.Confidence > 1.0 {
 		t.Errorf("confidence exceeded 1.0: %v", after.Confidence)
+	}
+}
+
+// TestCloseDrainsPendingReflection proves the shutdown guarantee: a reflection
+// enqueued by a turn but not yet processed is still completed when the agent is
+// Closed, so learning in flight at exit is not lost. After drain(out) the job is
+// enqueued (enqueueReflect runs before the stream closes); Close drains it.
+func TestCloseDrainsPendingReflection(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+
+	cfg := DefaultConfig()
+	cfg.Extractor = fakeExtractor{facts: []string{"User's cat is named Ada."}}
+	ag := New(store, &fakeProvider{reply: "ok"}, cfg)
+
+	out, err := ag.Turn(ctx, "my cat is Ada")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	if _, err := drain(out); err != nil { // returns as soon as the reply streams.
+		t.Fatalf("drain: %v", err)
+	}
+	// Close (not Quiesce) must still drain the queued reflection before returning.
+	if err := ag.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if facts := factContents(t, ctx, store); len(facts) != 1 {
+		t.Errorf("Close did not drain pending reflection: %d fact rows, want 1", len(facts))
+	}
+	// Close is idempotent.
+	if err := ag.Close(); err != nil {
+		t.Errorf("second Close: %v", err)
 	}
 }
 
@@ -558,6 +594,7 @@ func TestDebugTraceEmitsEvents(t *testing.T) {
 	if _, err := drain(out); err != nil {
 		t.Fatalf("drain: %v", err)
 	}
+	quiesce(t, ag) // the reflect trace is emitted by the async worker.
 
 	trace := buf.String()
 	for _, want := range []string{"msg=recall", "msg=reflect"} {
@@ -829,4 +866,16 @@ func drain(ch <-chan llm.Chunk) (string, error) {
 		sb.WriteString(c.Content)
 	}
 	return sb.String(), nil
+}
+
+// quiesce waits for the agent's background reflection worker to finish every
+// enqueued job, so a test can inspect the store deterministically after a turn
+// (reflection is async since Layer 18).
+func quiesce(t *testing.T, ag *Agent) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := ag.Quiesce(ctx); err != nil {
+		t.Fatalf("quiesce: %v", err)
+	}
 }

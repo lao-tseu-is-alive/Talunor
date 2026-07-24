@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.17.1` (course Lesson 18 — the memory of the gesture)
+- **Version:** `v0.18.0` (Layer 18 — async reflection)
 - **Generated:** 2026-07-22
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -87,6 +87,7 @@ Talunor/
 │   │
 │   ├── agent/                # LAYER 4: the cognitive loop (orchestrator).
 │   │   ├── agent.go          #     Turn = perceive → recall → reason (reactLoop) → store → reflect.
+│   │   │                     #       Async reflect worker (L18): enqueueReflect / Close(drain) / Quiesce.
 │   │   │                     #       Tool loop with MaxToolIters cap (errors, never silently); each call
 │   │   │                     #       consults Config.Policy (deny fails closed, risk≥medium prompts).
 │   │   ├── planner.go        #     LAYER 13: Planner — LLM emits a validated plan.Plan (retry on bad JSON,

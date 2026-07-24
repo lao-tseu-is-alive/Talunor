@@ -7,11 +7,12 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.17.1** — Iterations 1–3 complete (Layers 1–13), plus Layer 14
+> Current version: **v0.18.0** — Iterations 1–3 complete (Layers 1–13), plus Layer 14
 > (**model calibration** — a deterministic reliability canary, `cmd/calibrate`), and
-> Iteration 4 (**learning**) through Layer 17 (schema migrations; per-fact **provenance
+> Iteration 4 (**learning**) through Layer 18 (schema migrations; per-fact **provenance
 > & confidence**, calibration-scaled; **salience, decay & consolidation** — memories that
-> matter are reinforced on recall and strengthened by restatement, neglected ones fade).
+> matter are reinforced on recall and strengthened by restatement, neglected ones fade;
+> **async reflection** — learning runs on a background worker, off the turn's critical path).
 > The agent talks to local **Ollama** or hosted
 > **OpenRouter** models (via `.env`) and *acts* —
 > a ReAct tool loop (calculator, clock, memory search) gated by a first-class
@@ -162,7 +163,7 @@ silent drift when it degrades.
 | 15 | **Schema versioning & migrations** — an ordered, append-only migration runner (`internal/memory`), so the memory schema can evolve safely as learning adds columns; zero behaviour change | ✅ done (v0.15.0) |
 | 16 | **Fact provenance & confidence** — every memory records its source + a confidence; a learned fact's confidence is scaled by the model's calibration (`TALUNOR_MODEL_CONFIDENCE`), so hallucinations don't gain established authority | ✅ done (v0.16.0) |
 | 17 | **Salience / decay / consolidation** — recalled facts are reinforced, a restatement consolidates (and, from independent sources, strengthens confidence) instead of duplicating, and neglected facts decay and soft-fade from recall | ✅ done (v0.17.0) |
-| 18 | **Async reflection** — move learning off the turn's critical path (a background worker owning the single store connection) | ⏳ planned |
+| 18 | **Async reflection** — learning (the second LLM call) runs on a single background worker off the turn's critical path; `Agent.Close()` drains it on shutdown so in-flight learning isn't lost | ✅ done (v0.18.0) |
 
 Learning is **informed by calibration** (Layer 14): a fact from an unreliable or
 uncalibrated model should not silently gain the authority of an established one.

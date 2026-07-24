@@ -117,7 +117,8 @@ func (a *Agent) finishAnswer(ctx context.Context, out chan<- llm.Chunk, input, a
 			a.sendDebug(ctx, out, "store: assistant turn not persisted: %v", err)
 		}
 	}
-	a.reflect(ctx, out, input)
+	// Learn off the critical path (Layer 18) — see reactLoop.
+	a.enqueueReflect(input)
 }
 
 // LastPlan returns the most recent plan produced this session, or nil if planning

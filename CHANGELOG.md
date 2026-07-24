@@ -11,10 +11,63 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Iteration 4, continued** — async reflection (Layer 18): move the second (learning)
-  model call off the turn's critical path onto a background worker that owns the single
-  store connection. The executed plan becomes an input to learning (deferred from
-  Layer 13). Deferred: let a policy consult calibration/confidence for high-risk steps.
+- **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
+  from Layer 13); let a policy consult calibration/confidence for high-risk steps; and
+  the `lastPlan`/`screenDebug` cross-goroutine access still wants an `atomic.*` fix.
+
+## [0.18.0] - 2026-07-24 — Layer 18: async reflection (learning off the critical path)
+
+Reflection — the *second* LLM call each turn, which distils durable facts — has run
+**synchronously** since Layer 05, at the tail of the turn's goroutine, holding the reply
+channel open until it finished. So every turn paid the fact-extraction latency before it
+read as "done". Layer 18 moves learning onto a **single background worker**: the reply
+streams, the turn ends, and learning catches up behind it. It closes Iteration 4's
+learning arc (schema → trust → retention → *when*).
+
+### Changed
+
+- **Reflection is asynchronous.** `agent.reflect` no longer runs inline; `reactLoop` and
+  `runPlanned` now call `enqueueReflect`, which hands the user's message to a bounded
+  queue (`reflectCh`, cap 8) and returns at once. A single worker goroutine
+  (`reflectWorker`, started in `New`) processes jobs **in order**. One worker means
+  reflection's store writes are serialised with each other, and `database/sql` serialises
+  them against a turn's own reads on the pinned single connection (`SetMaxOpenConns(1)`)
+  — so async learning needs **no extra locking** around the store.
+- **`reflect` lost its stream parameter.** Because it now runs after the turn's channel
+  has closed, it can no longer emit inline `/debug` notes; its decisions go to the
+  structured trace (`a.trace` → `TALUNOR_DEBUG` file/stderr) instead. The recall trace
+  (`emitRecallDebug`) is still inline and synchronous — only the *reflection* half of the
+  screen `/debug` view moved to the log.
+
+### Added
+
+- **`Agent.Close()`** — stops accepting new jobs and **drains** those already queued
+  before returning, so learning in flight at shutdown is not lost, then cancels the
+  background context. Idempotent. `cmd/talunor` defers it *before* `store.Close()` (LIFO)
+  because the worker writes to the store while draining.
+- **`Agent.Quiesce(ctx)`** — blocks until every enqueued reflection has been processed
+  (or ctx is cancelled), without stopping the worker. Tests use it to stay deterministic
+  now that a turn returns before its reflection completes; it is also a clean "all caught
+  up" checkpoint. New tests cover both the drain-on-`Close` guarantee and `Quiesce`.
+
+### Lessons learned
+
+1. **The single connection was already the lock.** The instinct was that concurrent
+   reflection would need a mutex around the store. It doesn't: `SetMaxOpenConns(1)` makes
+   `database/sql` hand out the one connection to a single caller at a time, so a
+   background writer and a foreground reader are serialised *for free*. The worker exists
+   for **backpressure, ordering, and a clean drain on shutdown** — not for safety. Naming
+   the real reason kept the design honest (and `go test -race` clean).
+2. **Async work can't narrate into a turn that already ended.** Moving reflection off the
+   critical path silently broke its inline `/debug` notes — the channel they streamed to
+   was already closed. Rather than contort the lifecycle to preserve them, the honest fix
+   is to route deferred work's observability to the *log*, and say so. A feature that
+   moves in time has to move its telemetry with it.
+3. **"Fire and forget" loses learning at exit; "enqueue and drain" doesn't.** A bare
+   `go reflect()` would drop any reflection still running when the process exits. A worker
+   with an explicit `Close` that drains the queue turns "best-effort background work" into
+   "background work with a shutdown contract" — the difference between an agent that
+   forgets what you told it right before you quit and one that doesn't.
 
 ## [0.17.1] - 2026-07-24 — Course: Lesson 18 (the memory of the gesture), bilingual
 

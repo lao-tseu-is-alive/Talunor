@@ -94,11 +94,14 @@ internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/obs
                    FactExtractor (LLM distils facts into KindFact;
                    DisableReflection()). LAYER 17: reflect CONSOLIDATES a restated
                    fact (knownFact → store.ReinforceFact) instead of skipping; Turn
-                   reinforces recalled memories' salience (reinforceRecalled).
-                   Optional Config.Debug (slog) traces
+                   reinforces recalled memories' salience (reinforceRecalled). LAYER
+                   18: reflect is ASYNC — enqueueReflect → bounded reflectCh → a single
+                   reflectWorker goroutine (started in New); Agent.Close() drains it,
+                   Agent.Quiesce(ctx) waits (tests). One worker + single conn ⇒ no
+                   extra locking. Optional Config.Debug (slog) traces
                    recall/tools/reflection. debug.go: the /debug runtime toggle
-                   (screenDebug) streams recall rankings + reflection inline as
-                   dimmed Reasoning notes. Slash-command helpers too.
+                   (screenDebug) streams recall rankings inline as dimmed Reasoning
+                   notes (reflection notes now go to the log, being async). Slash-command helpers too.
 internal/plan/     plan vocabulary shared by policy + (future) planner: Plan{Goal,
                    Steps, Confidence}, PlanStep{ID, Type tool|think|final, Tool,
                    Arguments, Rationale, DependsOn} with Validate(); RiskLevel;
@@ -143,7 +146,11 @@ recent turns → build prompt → **act/observe loop**: `Provider.Chat` with too
 while it returns tool calls, run them and append observations, then call again
 (cap `MaxToolIters`); the final answer streams live, tool activity shows dimmed →
 `Store.Remember` user + final answer → **reflect** (extractor distils durable
-facts into `KindFact`, deduped). Learning runs before the stream closes. Before
+facts into `KindFact`; a restatement consolidates onto the existing row). Since
+LAYER 18 reflection is **async**: the turn `enqueueReflect`s the user message and the
+stream closes immediately; a single background worker (`reflectWorker`, started in
+`New`) distils and stores off the critical path. `Agent.Close()` drains the queue on
+shutdown; `Agent.Quiesce(ctx)` waits for it (tests). Before
 each tool runs, `runTool` wraps it as a one-step `plan.Plan` and asks
 `Config.Policy`: a **deny** becomes an observation (fail closed); an allowed but
 risky step (`RiskLevel ≥ medium`) pauses the loop — the agent emits an
@@ -474,6 +481,17 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   axis, LAZY decay as the design that respects `SetMaxOpenConns(1)`, soft forgetting, and
   consolidation + the independence rule (confidence only on independent evidence). Framed
   through the `/compact` parallel (working- vs long-term-memory consolidation). Course now 00–18.
-- **Next — Iteration 4 Layer 18:** **async reflection** (a background worker owning the
-  single store connection — off the turn's critical path). Then the executed plan as a
-  learning input (deferred from Layer 13). Same per-layer checkpoint rhythm.
+- **Layer 18 (done): v0.18.0** = **async reflection** (learning off the turn's critical
+  path). `agent.reflect` no longer runs inline; `reactLoop`/`runPlanned` call
+  `enqueueReflect` → a bounded `reflectCh` (cap 8) → a single `reflectWorker` goroutine
+  started in `New`, processing jobs in order. **Key insight:** one worker + the pinned
+  single connection means `database/sql` serialises reflection's writes against a turn's
+  reads for free — no extra locking (`go test -race` clean). `Agent.Close()` drains the
+  queue on shutdown (deferred before `store.Close()`); `Agent.Quiesce(ctx)` waits for it
+  (tests). `reflect` lost its stream param — its `/debug` notes now go to the log (async
+  work can't narrate a closed turn); the recall trace stays inline. Closes Iteration 4's
+  arc (schema → trust → retention → *when*).
+- **Next:** course **Lesson 19** (the Layer 18 lesson: async learning, the single-conn-as-lock
+  insight, the shutdown-drain contract; pattern code vX.Y.0 → lesson vX.Y.1). Then, open
+  threads: the executed plan as a learning input (deferred from Layer 13); calibration→policy
+  wiring; the `lastPlan`/`screenDebug` cross-goroutine access (`atomic.*`). Same rhythm.

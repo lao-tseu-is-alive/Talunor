@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
@@ -165,7 +166,29 @@ type Agent struct {
 	// /debug command); distinct from Config.Debug, which logs to a file/stderr.
 	// Single-user: flip it between turns, not during one.
 	screenDebug bool
+
+	// Async reflection (Layer 18): the learning step (a second LLM call) runs on a
+	// single background worker so it is off the turn's critical path — the reply
+	// streams and the turn ends immediately, learning catches up behind it. Turn
+	// enqueues a job on reflectCh; one worker processes them in order. reflectWG
+	// counts outstanding jobs (Quiesce waits on it); workerWG tracks the worker
+	// goroutine (Close waits on it after draining). bgCtx scopes background
+	// reflection so it outlives the turn's context but is cancelled on Close.
+	reflectCh chan reflectJob
+	reflectWG sync.WaitGroup
+	workerWG  sync.WaitGroup
+	bgCtx     context.Context
+	bgCancel  context.CancelFunc
+	closeOnce sync.Once
 }
+
+// reflectJob is one unit of deferred learning: reflect on this user message.
+type reflectJob struct{ input string }
+
+// reflectQueueCap bounds the reflection backlog. A human converses far slower
+// than reflection completes, so it rarely fills; if it does, Turn blocks briefly
+// (backpressure) rather than dropping learning or spawning unbounded goroutines.
+const reflectQueueCap = 8
 
 // New builds an Agent. Zero-valued config fields fall back to DefaultConfig,
 // with one deliberate exception: RecallMaxDistance is left as-is because 0 is a
@@ -216,7 +239,7 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 	default:
 		cfg.ApprovalMode = ApprovalPlan
 	}
-	return &Agent{
+	a := &Agent{
 		store:     store,
 		short:     memory.NewShortTerm(cfg.ShortTermCap),
 		provider:  provider,
@@ -226,6 +249,13 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 		planner:   cfg.Planner,
 		cfg:       cfg,
 	}
+	// Start the async reflection worker (Layer 18). It owns the deferred learning
+	// step; callers should Close the agent to drain it on shutdown.
+	a.reflectCh = make(chan reflectJob, reflectQueueCap)
+	a.bgCtx, a.bgCancel = context.WithCancel(context.Background())
+	a.workerWG.Add(1)
+	go a.reflectWorker()
+	return a
 }
 
 // Turn runs one cognitive turn for input and returns a stream of the assistant's
@@ -378,7 +408,9 @@ func (a *Agent) reactLoop(ctx context.Context, msgs []llm.Message, input string,
 			a.sendDebug(ctx, out, "store: assistant turn not persisted: %v", err)
 		}
 	}
-	a.reflect(ctx, out, input)
+	// Learn off the critical path: hand the user's message to the background worker
+	// and let this turn end. The reply has already streamed; the channel closes now.
+	a.enqueueReflect(input)
 }
 
 // runTool runs one tool call after consulting the policy. It wraps the call as a
@@ -459,18 +491,20 @@ func (a *Agent) toolSpecs(allow map[string]bool) []llm.ToolSpec {
 // reflect is the agent's learning step: it asks the extractor for durable facts
 // in the user's message and stores each new one as semantic memory
 // (memory.KindFact). It is best-effort — an extraction or storage failure must
-// never disturb the reply the caller already received — and it deduplicates
-// against existing facts so restating something does not accumulate copies.
-func (a *Agent) reflect(ctx context.Context, out chan<- llm.Chunk, input string) {
+// never disturb the reply the caller already received — and it consolidates a
+// restated fact onto the existing row instead of accumulating copies (Layer 17).
+// It runs on the background worker (Layer 18), so it no longer streams inline
+// notes to a transcript that has already closed; its decisions go to the debug
+// trace (a.trace → TALUNOR_DEBUG file/stderr) instead.
+func (a *Agent) reflect(ctx context.Context, input string) {
 	if a.extractor == nil {
 		return
 	}
 	facts, err := a.extractor.Extract(ctx, input)
 	if err != nil {
-		// Reflection is best-effort (see runLoop), but a debug trace explains a
-		// later "why didn't it remember that?" without changing behaviour.
+		// Reflection is best-effort, but a debug trace explains a later "why didn't
+		// it remember that?" without changing behaviour.
 		a.trace("reflect.error", "err", err)
-		a.sendDebug(ctx, out, "reflect: error: %v", err)
 		return
 	}
 	// Facts distilled from the user's message are user-stated; scale the base
@@ -491,17 +525,72 @@ func (a *Agent) reflect(ctx context.Context, out chan<- llm.Chunk, input string)
 			// evidence (gain>0). Repetition strengthens memory.
 			if err := a.store.ReinforceFact(ctx, existing.ID, gain); err == nil {
 				consolidated++
-				a.sendDebug(ctx, out, "reflect: ~fact #%d reinforced %q (gain %.2f)", existing.ID, oneLine(f, 40), gain)
 			}
 			continue
 		}
 		if _, err := a.store.RememberFact(ctx, f, prov, conf); err == nil {
 			stored++
-			a.sendDebug(ctx, out, "reflect: +fact %q (conf %.2f)", oneLine(f, 50), conf)
 		}
 	}
 	a.trace("reflect", "extracted", len(facts), "stored", stored, "consolidated", consolidated, "confidence", conf, "gain", gain)
-	a.sendDebug(ctx, out, "reflect: extracted %d, stored %d, consolidated %d", len(facts), stored, consolidated)
+}
+
+// reflectWorker is the single goroutine that owns deferred learning. It processes
+// reflection jobs in order until the channel is closed (by Close), draining any
+// still queued. One worker means store writes from reflection are serialised with
+// each other — and database/sql serialises them against a turn's own reads on the
+// pinned single connection.
+func (a *Agent) reflectWorker() {
+	defer a.workerWG.Done()
+	for job := range a.reflectCh {
+		a.reflect(a.bgCtx, job.input)
+		a.reflectWG.Done()
+	}
+}
+
+// enqueueReflect hands a user message to the background worker and returns at
+// once, so reflection stays off the turn's critical path. If the queue is full it
+// blocks briefly (backpressure) rather than dropping the learning. With no worker
+// (should not happen after New) it falls back to reflecting inline.
+func (a *Agent) enqueueReflect(input string) {
+	if a.reflectCh == nil {
+		a.reflect(context.Background(), input)
+		return
+	}
+	a.reflectWG.Add(1)
+	a.reflectCh <- reflectJob{input: input}
+}
+
+// Quiesce blocks until every enqueued reflection job has been processed (or ctx is
+// cancelled). It does not stop the worker — more turns may follow. Tests use it to
+// wait for async learning before inspecting the store; it is also a clean way to
+// checkpoint "all caught up".
+func (a *Agent) Quiesce(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() { a.reflectWG.Wait(); close(done) }()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// Close shuts the agent down cleanly: it stops accepting new reflection jobs and
+// drains those already queued (so learning in flight is not lost), then releases
+// the background context. It is idempotent. Call it before closing the store —
+// the worker writes to the store while draining. No Turn may run after Close.
+func (a *Agent) Close() error {
+	a.closeOnce.Do(func() {
+		if a.reflectCh != nil {
+			close(a.reflectCh) // worker finishes the queue, then exits
+		}
+		a.workerWG.Wait() // block until the queue is fully drained
+		if a.bgCancel != nil {
+			a.bgCancel()
+		}
+	})
+	return nil
 }
 
 // trace emits a structured debug event when Config.Debug is set; it is a no-op
