@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.17.0` (Layer 17 — salience, decay & consolidation)
+- **Version:** `v0.17.1` (course Lesson 18 — the memory of the gesture)
 - **Generated:** 2026-07-22
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -197,7 +197,8 @@ Talunor/
 │       ├── 14-the-approval-that-didnt-bind/README.md  # 🔍 Post-mortem: plan-mode approval bound names not args (v0.13.1→fix).
 │       ├── 15-dont-trust-the-review/README.md    # 🔍 Meta: falsify an AI code review's claims against ground truth.
 │       ├── 16-measure-the-model/README.md        # 🔍 Build a deterministic reliability canary; drift over absolute (Layer 14).
-│       └── 17-learning-with-humility/README.md   # 🔍 Provenance + confidence; source-not-self-report; the calibration link (Layer 16).
+│       ├── 17-learning-with-humility/README.md   # 🔍 Provenance + confidence; source-not-self-report; the calibration link (Layer 16).
+│       └── 18-the-memory-of-the-gesture/README.md # 🔍 Salience, lazy decay, consolidation & the independence rule (Layer 17).
 │
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.

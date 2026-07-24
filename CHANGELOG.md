@@ -16,6 +16,37 @@ changed but the *lessons learned* while getting there.
   store connection. The executed plan becomes an input to learning (deferred from
   Layer 13). Deferred: let a policy consult calibration/confidence for high-risk steps.
 
+## [0.17.1] - 2026-07-24 — Course: Lesson 18 (the memory of the gesture), bilingual
+
+A docs-only release. Layer 17's retention behaviour gets its lesson, and the course
+completes its first Iteration-4 movement (trust → retention).
+
+### Added
+
+- **Lesson 18 — "The memory of the gesture: salience, decay & consolidation"**
+  (`docs/lessons/18-the-memory-of-the-gesture/`, bilingual EN/FR). A ~75-min Level-3 🔍
+  exploration + hands-on, pinned to `v0.17.0` (reference docs on `main`). It reads
+  `internal/memory/salience.go`, `Recall`, and `agent.reflect` to teach: why an
+  undifferentiated store degrades recall (salience as a third axis beside relevance and
+  confidence); **lazy decay** as the design that respects `SetMaxOpenConns(1)` (compute
+  decay at read time so recall never becomes a write); **soft forgetting** (drop from
+  recall, keep the row, revive on restatement); and **consolidation** with the
+  **independence rule** — repetition raises salience always but confidence only on
+  independent evidence, keeping Lesson 17's honesty rule intact. Opens and closes on the
+  `/compact` parallel: forced, lossy consolidation of *working* memory vs continuous,
+  graceful consolidation of *long-term* memory. Course now 00–18.
+
+### Lessons learned
+
+1. **The best hook was the user's own.** The lesson frames retention through the
+   `/compact` command the reader already uses — working memory compacted under pressure
+   vs long-term memory decaying gracefully. A concept lands faster when it is anchored to
+   a mechanism the learner has personally felt, not a fresh abstraction.
+2. **A lesson can double as the security argument for its own feature.** Rather than
+   presenting consolidation as a pure efficiency win, Lesson 18 makes the independence
+   rule (confidence only from independent evidence) the emotional centre — so the reader
+   learns *why* the honest version is harder, and carries the echo-chamber instinct forward.
+
 ## [0.17.0] - 2026-07-24 — Layer 17: salience, decay & consolidation (the retention half)
 
 Layer 16 gave a memory a *trust*; Layer 17 gives it a *life*. Every memory now carries a

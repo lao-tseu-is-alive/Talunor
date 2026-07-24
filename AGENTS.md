@@ -468,6 +468,12 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   evidence (`EvidenceCredibility`: user/tool=1, model_inferred=0 — the echo-chamber guard);
   gain also folds in `ModelConfidence`. Knobs: `TALUNOR_SALIENCE_HALFLIFE` (30d),
   `TALUNOR_FORGET_FLOOR` (0.05). `/debug` + `/list` show salience/score; doctor → schema 3.
+- **v0.17.1 (docs)** = course **Lesson 18** — "The memory of the gesture: salience, decay &
+  consolidation" (`docs/lessons/18-the-memory-of-the-gesture/`, bilingual). Pinned to
+  `v0.17.0`; reads `salience.go` + `Recall` + `agent.reflect` to teach salience as a third
+  axis, LAZY decay as the design that respects `SetMaxOpenConns(1)`, soft forgetting, and
+  consolidation + the independence rule (confidence only on independent evidence). Framed
+  through the `/compact` parallel (working- vs long-term-memory consolidation). Course now 00–18.
 - **Next — Iteration 4 Layer 18:** **async reflection** (a background worker owning the
   single store connection — off the turn's critical path). Then the executed plan as a
   learning input (deferred from Layer 13). Same per-layer checkpoint rhythm.

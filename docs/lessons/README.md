@@ -11,7 +11,7 @@ This directory turns that idea into a guided path. Each lesson has a clear goal,
 short reading list, a hands-on experiment, and a checklist so you know when you're
 done.
 
-> **Status: complete.** All eighteen lessons (00–17) are ready.
+> **Status: complete.** All nineteen lessons (00–18) are ready.
 
 ## Who this is for
 
@@ -64,6 +64,7 @@ make doctor   # your first win — the memory substrate, running offline
 | [15](15-dont-trust-the-review/) | Don't trust the review: verifying what an AI claims about your code | 2 · meta | 60 min | `main` | ✅ ready |
 | [16](16-measure-the-model/) | Measure the model: building a reliability canary | 3 · **advanced** | 75 min | `main` | ✅ ready |
 | [17](17-learning-with-humility/) | Learning with humility: what a memory is worth | 3 · **advanced** | 75 min | `main` | ✅ ready |
+| [18](18-the-memory-of-the-gesture/) | The memory of the gesture: salience, decay & consolidation | 3 · **advanced** | 75 min | `v0.17.0` → `main` | ✅ ready |
 
 ## Two kinds of lesson — don't mix them up
 

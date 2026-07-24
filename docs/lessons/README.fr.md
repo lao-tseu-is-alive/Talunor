@@ -11,7 +11,7 @@ Ce répertoire transforme cette idée en un parcours guidé. Chaque leçon a un 
 clair, une courte liste de lecture, une expérience pratique et une checklist pour
 savoir quand tu as terminé.
 
-> **Statut : complet.** Les dix-huit leçons (00–17) sont prêtes, **entièrement en
+> **Statut : complet.** Les dix-neuf leçons (00–18) sont prêtes, **entièrement en
 > anglais et en français** (utilise le sélecteur de langue en haut de chaque page).
 
 ## Pour qui
@@ -67,6 +67,7 @@ make doctor   # ta première victoire — le substrat mémoire, en local, hors-l
 | [15](15-dont-trust-the-review/) | Ne fais pas confiance à la revue : vérifier ce qu'une IA affirme sur ton code | 2 · méta | 60 min | `main` | ✅ prête |
 | [16](16-measure-the-model/) | Mesurer le modèle : construire un canary de fiabilité | 3 · **avancé** | 75 min | `main` | ✅ prête |
 | [17](17-learning-with-humility/) | Apprendre avec humilité : ce que vaut un souvenir | 3 · **avancé** | 75 min | `main` | ✅ prête |
+| [18](18-the-memory-of-the-gesture/) | La mémoire du geste : saillance, décroissance & consolidation | 3 · **avancé** | 75 min | `v0.17.0` → `main` | ✅ prête |
 
 ## Deux types de leçon — à ne pas confondre
 
