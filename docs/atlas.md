@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.16.0` (Layer 16 — fact provenance & confidence, calibration-scaled)
+- **Version:** `v0.16.1` (course Lesson 17 — learning with humility)
 - **Generated:** 2026-07-22
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -191,7 +191,8 @@ Talunor/
 │       ├── 13-plan-before-you-act/README.md     # 🔍 Emergent ReAct vs deliberate planning; capped execution (v0.13.0).
 │       ├── 14-the-approval-that-didnt-bind/README.md  # 🔍 Post-mortem: plan-mode approval bound names not args (v0.13.1→fix).
 │       ├── 15-dont-trust-the-review/README.md    # 🔍 Meta: falsify an AI code review's claims against ground truth.
-│       └── 16-measure-the-model/README.md        # 🔍 Build a deterministic reliability canary; drift over absolute (Layer 14).
+│       ├── 16-measure-the-model/README.md        # 🔍 Build a deterministic reliability canary; drift over absolute (Layer 14).
+│       └── 17-learning-with-humility/README.md   # 🔍 Provenance + confidence; source-not-self-report; the calibration link (Layer 16).
 │
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.

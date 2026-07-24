@@ -7,7 +7,7 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.16.0** — Iterations 1–3 complete (Layers 1–13), plus Layer 14
+> Current version: **v0.16.1** — Iterations 1–3 complete (Layers 1–13), plus Layer 14
 > (**model calibration** — a deterministic reliability canary, `cmd/calibrate`), and
 > Iteration 4 (**learning**) through Layer 16 (schema migrations; per-fact **provenance
 > & confidence**, calibration-scaled). The agent talks to local **Ollama** or hosted
@@ -22,7 +22,7 @@ reads as a guided tour of how to build a full cognitive-loop agent
 > network opt-in). See [CHANGELOG.md](CHANGELOG.md) for the version-by-version
 > build log and lessons.
 >
-> 📚 **New:** a complete **[17-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
+> 📚 **New:** a complete **[18-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
 > French) turns the tag-by-tag history into a guided path for Go beginners — start at
 > [Lesson 00](docs/lessons/).
 

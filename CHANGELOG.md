@@ -16,6 +16,36 @@ changed but the *lessons learned* while getting there.
   Layer 13). Deferred: wire a fact's confidence into recall weighting more deeply, and
   let a policy consult calibration/confidence for high-risk steps.
 
+## [0.16.1] - 2026-07-24 — Course: Lesson 17 (learning with humility), bilingual
+
+A docs-only release. Iteration 4's first learning behaviour (Layers 15–16) gets its
+lesson — the first *learning* lesson in the course, and it leads with humility.
+
+### Added
+
+- **Lesson 17 — "Learning with humility: what a memory is worth"**
+  (`docs/lessons/17-learning-with-humility/`, bilingual EN/FR). A ~75-min Level-3 🔍
+  exploration + hands-on on `main`: it reads `internal/memory` and `agent.reflect` to
+  teach why a memory needs provenance + confidence (not just text), the load-bearing
+  rule that **confidence comes from the source, never the model's self-report** (the
+  sycophancy trap, turned inward), and the **calibration link** — how a learned fact's
+  confidence is scaled by `TALUNOR_MODEL_CONFIDENCE`, wired as a decoupled scalar. It
+  also covers, via migration 2, how a column reaches the schema (Layer 15's runner in
+  action), and has the reader learn a fact at reduced confidence and watch recall guard
+  on it. Closes the 11 → 16 → 17 measure-then-spend arc; bridges to Layer 17's salience
+  & decay. Model-agnostic. Course now 00–17.
+
+### Lessons learned
+
+1. **The first learning lesson should teach restraint, not power.** It would be easy to
+   sell Iteration 4 as "the agent gets smarter". Leading instead with *how much it is
+   allowed to believe* — provenance, confidence, and never self-graded — sets the honest
+   frame the rest of learning is built on.
+2. **A "how it's built" lesson can quietly retire a coverage gap.** Layer 15 (schema
+   migrations) had shipped without its own lesson; Lesson 17 folds it in naturally by
+   reading migration 2 as the concrete way the provenance/confidence columns arrived —
+   the migration machinery taught by *use*, not in the abstract.
+
 ## [0.16.0] - 2026-07-24 — Layer 16: fact provenance & confidence (the honesty mechanism)
 
 Now that the schema can evolve (Layer 15), Iteration 4's first learning behaviour:

@@ -436,6 +436,10 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   number. `Config.RecallMinConfidence` (`TALUNOR_RECALL_MIN_CONFIDENCE`) filters recall.
   Confidence is system-assigned from the source, NEVER model-self-reported (sycophancy
   trap). `/list` shows a fact's provenance/confidence; `/debug` recall trace too.
+- **v0.16.1 (docs)** = course **Lesson 17** — "Learning with humility: what a memory is
+  worth" (`docs/lessons/17-learning-with-humility/`, bilingual). The first *learning*
+  lesson: provenance + confidence, confidence-from-source-not-self-report, the calibration
+  link; reads migration 2 (folds in the un-lessoned Layer 15). Course now 00–17.
 - **Next — Iteration 4 layers 17–18:** **salience/decay/consolidation** (reinforce a fact
   on recall, consolidate a restatement instead of skipping it, fade low-salience), then
   **async reflection** (a background worker owning the single store connection — off the
