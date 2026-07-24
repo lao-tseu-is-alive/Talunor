@@ -26,6 +26,61 @@ func TestMigrateFreshStampsLatest(t *testing.T) {
 	}
 }
 
+func TestFactProvenanceAndConfidence(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(provConfig(t))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer s.Close()
+
+	// A fact stored with an explicit provenance and a (calibration-scaled) confidence.
+	if _, err := s.RememberFact(ctx, "User's name is Carlos", ProvenanceUserStated, 0.63); err != nil {
+		t.Fatalf("remember fact: %v", err)
+	}
+	hits, err := s.Recall(ctx, "what is my name?", 5, 0)
+	if err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	var found bool
+	for _, h := range hits {
+		if h.Kind == KindFact {
+			found = true
+			if h.Provenance != ProvenanceUserStated {
+				t.Errorf("provenance = %q, want %q", h.Provenance, ProvenanceUserStated)
+			}
+			if h.Confidence != 0.63 {
+				t.Errorf("confidence = %v, want 0.63", h.Confidence)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("stored fact was not recalled")
+	}
+
+	// A turn derives its provenance from the role.
+	if _, err := s.Remember(ctx, KindTurn, "user", "hi there"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Remember(ctx, KindTurn, "assistant", "hello back"); err != nil {
+		t.Fatal(err)
+	}
+	mems, err := s.List(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prov := map[string]Provenance{}
+	for _, m := range mems {
+		prov[m.Content] = m.Provenance
+	}
+	if prov["hi there"] != ProvenanceUserStated {
+		t.Errorf("user turn provenance = %q, want user_stated", prov["hi there"])
+	}
+	if prov["hello back"] != ProvenanceModelInferred {
+		t.Errorf("assistant turn provenance = %q, want model_inferred", prov["hello back"])
+	}
+}
+
 func TestMigrateIdempotentAcrossReopen(t *testing.T) {
 	ctx := context.Background()
 	cfg := provConfig(t)
@@ -68,9 +123,17 @@ func TestMigrateBaselinesLegacy(t *testing.T) {
 	if _, err := s.Remember(ctx, KindFact, "", "User likes SQLite"); err != nil {
 		t.Fatalf("remember: %v", err)
 	}
-	// Strip the version stamp to look like a legacy DB.
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM meta WHERE key = ?`, metaSchemaVersion); err != nil {
-		t.Fatalf("strip version: %v", err)
+	// Look like a truly pre-versioning DB: the baseline schema, no version stamp and
+	// none of the columns later migrations add. Reopening must migrate it forward
+	// (baseline via migration 1's no-op, then migration 2's ADD COLUMNs) losing nothing.
+	for _, stmt := range []string{
+		`ALTER TABLE memories DROP COLUMN provenance`,
+		`ALTER TABLE memories DROP COLUMN confidence`,
+		`DELETE FROM meta WHERE key = '` + metaSchemaVersion + `'`,
+	} {
+		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("simulate legacy (%s): %v", stmt, err)
+		}
 	}
 	s.Close()
 

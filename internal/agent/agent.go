@@ -85,6 +85,17 @@ type Config struct {
 	// not pile up near-duplicate facts. Small = "only skip near-identical facts".
 	DedupMaxDistance float64
 
+	// ModelConfidence scales the confidence of every fact the agent *learns* (via
+	// reflection), in [0,1]. It is the calibration link: set it from a `calibrate`
+	// run's overall pass-rate so a fact learned from an unreliable model does not
+	// silently gain the authority of an established one. 0 (unset) → 1.0 (no scaling).
+	// cmd/talunor wires it from TALUNOR_MODEL_CONFIDENCE.
+	ModelConfidence float64
+	// RecallMinConfidence drops recalled long-term memories whose confidence is below
+	// it (0 = off). A guardrail against feeding low-confidence "facts" back into the
+	// prompt as if established. cmd/talunor wires it from TALUNOR_RECALL_MIN_CONFIDENCE.
+	RecallMinConfidence float64
+
 	// Tools, when set, are offered to the model each turn; the agent runs an
 	// act→observe loop, executing any tool calls and feeding results back until
 	// the model answers. Nil = a plain conversational turn (no tools).
@@ -174,6 +185,12 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 	if cfg.DedupMaxDistance <= 0 {
 		cfg.DedupMaxDistance = def.DedupMaxDistance
 	}
+	// ModelConfidence defaults to 1.0 (no scaling); both knobs are clamped to [0,1].
+	if cfg.ModelConfidence <= 0 {
+		cfg.ModelConfidence = 1.0
+	}
+	cfg.ModelConfidence = clamp01(cfg.ModelConfidence)
+	cfg.RecallMinConfidence = clamp01(cfg.RecallMinConfidence)
 	if cfg.MaxToolIters <= 0 {
 		cfg.MaxToolIters = def.MaxToolIters
 	}
@@ -222,6 +239,7 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 	if err != nil {
 		return nil, err
 	}
+	hits = a.filterByConfidence(hits)
 	a.traceRecall(input, hits)
 
 	// Reason: build the prompt from prior context.
@@ -451,18 +469,22 @@ func (a *Agent) reflect(ctx context.Context, out chan<- llm.Chunk, input string)
 		a.sendDebug(ctx, out, "reflect: error: %v", err)
 		return
 	}
+	// Facts distilled from the user's message are user-stated; scale the base
+	// confidence by the model's calibration, so what an unreliable extraction model
+	// "learns" carries less authority (the calibration link, Config.ModelConfidence).
+	conf := clamp01(memory.BaseConfidence(memory.ProvenanceUserStated) * a.cfg.ModelConfidence)
 	stored, skipped := 0, 0
 	for _, f := range facts {
 		if a.factKnown(ctx, f) {
 			skipped++
 			continue
 		}
-		if _, err := a.store.Remember(ctx, memory.KindFact, "", f); err == nil {
+		if _, err := a.store.RememberFact(ctx, f, memory.ProvenanceUserStated, conf); err == nil {
 			stored++
-			a.sendDebug(ctx, out, "reflect: +fact %q", oneLine(f, 60))
+			a.sendDebug(ctx, out, "reflect: +fact %q (conf %.2f)", oneLine(f, 50), conf)
 		}
 	}
-	a.trace("reflect", "extracted", len(facts), "stored", stored, "skipped", skipped)
+	a.trace("reflect", "extracted", len(facts), "stored", stored, "skipped", skipped, "confidence", conf)
 	a.sendDebug(ctx, out, "reflect: extracted %d, stored %d, skipped %d", len(facts), stored, skipped)
 }
 
@@ -491,8 +513,37 @@ func (a *Agent) traceRecall(input string, hits []memory.Hit) {
 			"id", h.ID,
 			"distance", h.Distance,
 			"kind", string(h.Kind),
+			"provenance", string(h.Provenance),
+			"confidence", h.Confidence,
 			"snippet", oneLine(h.Content, 60))
 	}
+}
+
+// filterByConfidence drops recalled memories below Config.RecallMinConfidence
+// (0 = off), so a low-confidence "fact" is not fed back into the prompt as if it
+// were established. It preserves order.
+func (a *Agent) filterByConfidence(hits []memory.Hit) []memory.Hit {
+	if a.cfg.RecallMinConfidence <= 0 {
+		return hits
+	}
+	kept := hits[:0]
+	for _, h := range hits {
+		if h.Confidence >= a.cfg.RecallMinConfidence {
+			kept = append(kept, h)
+		}
+	}
+	return kept
+}
+
+// clamp01 constrains x to [0,1].
+func clamp01(x float64) float64 {
+	if x < 0 {
+		return 0
+	}
+	if x > 1 {
+		return 1
+	}
+	return x
 }
 
 // factKnown reports whether a fact semantically equivalent to the given one is
@@ -647,8 +698,14 @@ func FormatMemories(mems []memory.Memory) string {
 		if label == "" {
 			label = string(m.Kind)
 		}
-		fmt.Fprintf(&b, "  #%d [%s] %s  %s\n",
-			m.ID, label, m.CreatedAt.Format("2006-01-02 15:04"), oneLine(m.Content, 70))
+		// Facts carry a provenance + confidence (Layer 16); show it so the user can
+		// see how much the agent trusts a learned statement.
+		meta := ""
+		if m.Kind == memory.KindFact {
+			meta = fmt.Sprintf(" (%s %.0f%%)", m.Provenance, m.Confidence*100)
+		}
+		fmt.Fprintf(&b, "  #%d [%s]%s %s  %s\n",
+			m.ID, label, meta, m.CreatedAt.Format("2006-01-02 15:04"), oneLine(m.Content, 66))
 	}
 	return b.String()
 }

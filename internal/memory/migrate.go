@@ -42,8 +42,22 @@ var migrations = []migration{
 			return err
 		},
 	},
-	// Iteration 4 adds columns here, one migration per layer:
-	//   {2, "fact provenance + confidence", ...},
+	{
+		version: 2,
+		name:    "fact provenance + confidence",
+		apply: func(ctx context.Context, e execer) error {
+			// Existing rows default to 'unspecified' / 1.0 — don't retroactively
+			// distrust what's already stored; new rows get proper values.
+			if _, err := e.ExecContext(ctx,
+				`ALTER TABLE memories ADD COLUMN provenance TEXT NOT NULL DEFAULT 'unspecified'`); err != nil {
+				return err
+			}
+			_, err := e.ExecContext(ctx,
+				`ALTER TABLE memories ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0`)
+			return err
+		},
+	},
+	// Iteration 4 continues here, one migration per layer:
 	//   {3, "salience + decay bookkeeping", ...},
 }
 

@@ -11,11 +11,60 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Iteration 4, continued** — learning: fact provenance + confidence (Layer 16),
-  salience / decay / consolidation (Layer 17), and async reflection (Layer 18), each
-  built on the migration runner that Layer 15 just landed. Informed by calibration
-  (don't consolidate facts from an unreliable model). The executed plan becomes an
-  input to learning (deferred from Layer 13).
+- **Iteration 4, continued** — salience / decay / consolidation (Layer 17), then async
+  reflection (Layer 18). The executed plan becomes an input to learning (deferred from
+  Layer 13). Deferred: wire a fact's confidence into recall weighting more deeply, and
+  let a policy consult calibration/confidence for high-risk steps.
+
+## [0.16.0] - 2026-07-24 — Layer 16: fact provenance & confidence (the honesty mechanism)
+
+Now that the schema can evolve (Layer 15), Iteration 4's first learning behaviour:
+every remembered memory records **where it came from** and **how much to trust it**,
+and — the point — a fact the agent *learns* is only as trusted as the model that
+distilled it. This is the mechanism that keeps hallucinations from being baked into
+long-term memory with the authority of established fact.
+
+### Added
+
+- **Per-memory provenance + confidence** (migration 2 adds `provenance TEXT` and
+  `confidence REAL` to `memories`; existing rows default to `unspecified` / `1.0`, not
+  retroactively distrusted). `memory.Provenance` (`user_stated` / `model_inferred` /
+  `tool_observed` / `unspecified`) with `BaseConfidence(p)`. Confidence is assigned by
+  the **system from the source**, never self-reported by the model (a model's own
+  confidence is not calibrated — the whole point of the calibration lessons).
+- **`Store.RememberFact(content, provenance, confidence)`** for distilled facts;
+  `Remember` derives a turn's provenance from its role (user → user-stated, assistant →
+  model-inferred). `Recall`/`List`/`Hit`/`Memory` now carry provenance + confidence.
+- **The calibration link — `TALUNOR_MODEL_CONFIDENCE`** (`Config.ModelConfidence`, [0,1],
+  default 1.0). Reflection stores a learned fact with `confidence = BaseConfidence ×
+  ModelConfidence`, so a poorly-calibrated model's facts land low-confidence. Set it
+  from a `cmd/calibrate` run's overall pass-rate — decoupled: the agent consumes a
+  number, it does not run calibration.
+- **`TALUNOR_RECALL_MIN_CONFIDENCE`** (`Config.RecallMinConfidence`, default 0 = off):
+  drops recalled memories below the threshold, so a low-confidence "fact" is not fed
+  back into the prompt as if established.
+- `/list` (and `FormatMemories`) show a fact's `(provenance NN%)`; the `/debug` recall
+  trace includes provenance + confidence.
+
+### Lessons learned
+
+1. **Confidence must come from the source, never the model's self-report.** It is
+   tempting to ask the extraction model "how sure are you?" — but that is the sycophancy
+   trap the course has hammered: a model's stated confidence is uncalibrated. So
+   provenance is determined by *which pipeline* produced the memory (user message vs
+   model inference), and confidence is a system-assigned base — objective, not asked.
+2. **A calibration score is most useful as a scalar someone else computes.** Wiring the
+   agent to *run* calibration would couple two subsystems and slow every turn. Making
+   `ModelConfidence` a plain env number that an operator sets from a `calibrate` run
+   delivers the "learning informed by calibration" promise with zero coupling — the
+   agent just multiplies. The cheapest integration is often a number, not an API.
+3. **Ship the mechanism even before its inputs vary.** Today every learned fact is
+   user-stated, so confidence is fairly uniform; the provenance column looks
+   under-exercised. But putting the seam in now — the column, the API, the recall
+   filter — is what lets later sources (tool observations, plan-execution facts) and
+   the calibration scalar make it *bite* without another migration.
+
+## [0.15.0] - 2026-07-24 — Iteration 4 begins: schema versioning & migrations (Layer 15)
 
 ## [0.15.0] - 2026-07-24 — Iteration 4 begins: schema versioning & migrations (Layer 15)
 

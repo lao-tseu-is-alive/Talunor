@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.15.0` (Iteration 4 begins — schema versioning & migrations, Layer 15)
+- **Version:** `v0.16.0` (Layer 16 — fact provenance & confidence, calibration-scaled)
 - **Generated:** 2026-07-22
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -61,8 +61,8 @@ Talunor/
 │   ├── memory/               # LAYER 1–2: SQLite store — loadable extensions, in-DB embeddings, KNN.
 │   │   ├── store.go          #     Open the DB, load sqlite-vector + sqlite-ai, schema; one pinned conn
 │   │   │                     #       (extension state is per-connection). DB path resolution.
-│   │   ├── memory.go         #     Remember / Recall (KNN, thresholded, excludes assistant turns); Kinds
-│   │   │                     #       (turn / fact / doc_chunk); Hit type; Forget; ext version accessors.
+│   │   ├── memory.go         #     Remember / RememberFact / Recall (KNN, thresholded, excludes assistant
+│   │   │                     #       turns); Kinds; Provenance + confidence (Layer 16); Hit; Forget; versions.
 │   │   ├── provenance.go     #     LAYER 11: meta table fingerprints the embedding stack (canary vector);
 │   │   │                     #       Open flags OK/Stale/Unknown; ReEmbed re-vectorises all rows.
 │   │   ├── migrate.go        #     LAYER 15: ordered append-only migration runner; schema_version in meta;
@@ -220,4 +220,5 @@ each one a tagged release (see `CHANGELOG.md`):
 | 13 | `agent/planner.go` + `agent/execute.go` | plan before acting: an approved plan, then ReAct execution capped to it |
 | 14 | `internal/calibration` + `cmd/calibrate` | measure a model's reliability deterministically; detect silent drift |
 | 15 | `internal/memory/migrate.go` | evolve the memory schema safely (ordered migrations) — the seam Iteration 4 builds on |
+| 16 | `internal/memory` provenance/confidence + `agent` reflect | learn facts with a source + a calibration-scaled confidence; don't over-trust a model |
 | — | `internal/history`, `internal/version`, `internal/config`, `internal/render` | supporting infrastructure |

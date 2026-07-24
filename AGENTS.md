@@ -60,7 +60,11 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    flags OK/Stale/Unknown on Open; ReEmbed re-vectorises all rows.
                    migrate.go (LAYER 15): ordered append-only migration runner;
                    schema_version int in `meta`; migration 1 = baseline (memories);
-                   pre-versioning DBs are baselined automatically. SchemaVersion()
+                   pre-versioning DBs are baselined automatically. SchemaVersion().
+                   LAYER 16: each memory has provenance (user_stated/model_inferred/
+                   tool_observed/unspecified) + confidence (system-assigned, never
+                   model-self-reported). RememberFact(content,prov,conf); Remember
+                   derives a turn's provenance from role; Recall/List expose both
 internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenRouter),
                    FromEnv() provider selection, NewOpenRouter
 internal/config/   minimal dependency-free .env loader (real env wins)
@@ -192,6 +196,8 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_PROVIDER` | chat backend: `ollama` or `openrouter` | `ollama` |
 | `TALUNOR_MODEL` | model for the selected provider | provider default |
 | `TALUNOR_REFLECT` | `0` disables per-turn reflection (cost on paid APIs) | `1` |
+| `TALUNOR_MODEL_CONFIDENCE` | `[0,1]` calibration scaling for learned-fact confidence (Layer 16); `0`→`1.0` | `1.0` |
+| `TALUNOR_RECALL_MIN_CONFIDENCE` | drop recalled memories below this confidence (`0`=off) | `0` |
 | `TALUNOR_TOOLS` | `0` disables tools (model without tool-calling support) | `1` |
 | `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow/prompt/deny; `docs/policy.sample.yaml`); unset = default per-tool gate | — |
 | `TALUNOR_PLANNER` | `1` plans before acting (inspectable, approved plan → ReAct execution capped to the plan's tools) | `0` |
@@ -422,9 +428,15 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   a `schema version:` line in doctor. **Zero behaviour change** — the seam every later
   learning layer adds its columns through. Add a migration by APPENDING to `migrations`
   (never reorder/renumber/edit a shipped one).
-- **Next — Iteration 4 layers 16–18:** fact **provenance + confidence** (add columns via
-  migration 2; reflect records them; recall weights them — the honesty mechanism,
-  informed by calibration), then **salience/decay/consolidation** (reinforce on recall,
-  consolidate restatements, fade low-salience), then **async reflection** (a background
-  worker owning the single store connection — off the turn's critical path). Same
-  per-layer checkpoint rhythm.
+- **Layer 16 (done): v0.16.0** = fact **provenance + confidence** (migration 2 adds the
+  columns). `memory.Provenance` + `BaseConfidence`; `RememberFact(content,prov,conf)`;
+  `Remember` derives a turn's provenance from role; `Recall`/`List`/`Hit`/`Memory` carry
+  both. **Calibration link:** `Config.ModelConfidence` (`TALUNOR_MODEL_CONFIDENCE`, from a
+  `calibrate` run) scales a learned fact's confidence — decoupled, the agent consumes a
+  number. `Config.RecallMinConfidence` (`TALUNOR_RECALL_MIN_CONFIDENCE`) filters recall.
+  Confidence is system-assigned from the source, NEVER model-self-reported (sycophancy
+  trap). `/list` shows a fact's provenance/confidence; `/debug` recall trace too.
+- **Next — Iteration 4 layers 17–18:** **salience/decay/consolidation** (reinforce a fact
+  on recall, consolidate a restatement instead of skipping it, fade low-salience), then
+  **async reflection** (a background worker owning the single store connection — off the
+  turn's critical path). Same per-layer checkpoint rhythm.

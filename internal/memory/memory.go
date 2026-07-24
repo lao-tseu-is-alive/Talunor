@@ -22,6 +22,44 @@ const (
 	KindFact Kind = "fact"
 )
 
+// Provenance records where a stored memory came from — the basis for how much to
+// trust it. Confidence is assigned by the SYSTEM from the provenance (and, for
+// learned facts, scaled by the model's calibration), never self-reported by the
+// model: a model's own confidence is not calibrated (see the calibration lessons).
+type Provenance string
+
+const (
+	// ProvenanceUserStated: grounded in the user's own words (a user turn, or a
+	// fact distilled from what the user said).
+	ProvenanceUserStated Provenance = "user_stated"
+	// ProvenanceModelInferred: produced by the model (an assistant turn, or a fact
+	// the model inferred beyond what the user stated) — trust it less.
+	ProvenanceModelInferred Provenance = "model_inferred"
+	// ProvenanceToolObserved: from a verified tool result.
+	ProvenanceToolObserved Provenance = "tool_observed"
+	// ProvenanceUnspecified: legacy rows, or a source not otherwise classified.
+	// (Named to avoid colliding with the embedding-stack ProvenanceUnknown of
+	// provenance.go, which is a different concept — the embedding fingerprint.)
+	ProvenanceUnspecified Provenance = "unspecified"
+)
+
+// BaseConfidence is the confidence a provenance earns before any model-calibration
+// scaling. A fact grounded in the user's own words outranks one the model inferred;
+// a verified tool result outranks both. Unknown/legacy is left at 1.0 so existing
+// rows are not retroactively distrusted.
+func BaseConfidence(p Provenance) float64 {
+	switch p {
+	case ProvenanceToolObserved:
+		return 0.95
+	case ProvenanceUserStated:
+		return 0.9
+	case ProvenanceModelInferred:
+		return 0.5
+	default:
+		return 1.0
+	}
+}
+
 // sqliteTimeLayout is how SQLite's datetime('now') formats timestamps (UTC).
 const sqliteTimeLayout = "2006-01-02 15:04:05"
 
@@ -41,11 +79,13 @@ const recallCandidateFactor = 6
 
 // Memory is one persisted long-term memory row.
 type Memory struct {
-	ID        int64
-	Kind      Kind
-	Role      string // "user"/"assistant" for turns; "" for doc chunks.
-	Content   string
-	CreatedAt time.Time
+	ID         int64
+	Kind       Kind
+	Role       string // "user"/"assistant" for turns; "" for doc chunks.
+	Content    string
+	Provenance Provenance // where it came from (Layer 16)
+	Confidence float64    // [0,1], system-assigned from provenance (× model calibration)
+	CreatedAt  time.Time
 }
 
 // Hit is a memory returned by a similarity search, with its distance to the
@@ -55,9 +95,38 @@ type Hit struct {
 	Distance float64
 }
 
-// Remember embeds content in-DB and stores it as a long-term memory, returning
-// the persisted row (with its id and timestamp).
+// Remember stores a conversation turn (or doc chunk), deriving its provenance and
+// base confidence from the role (a user turn is user-stated; an assistant turn is
+// model-inferred). For a distilled fact, use RememberFact, which takes an explicit
+// provenance and a (calibration-scaled) confidence.
 func (s *Store) Remember(ctx context.Context, kind Kind, role, content string) (*Memory, error) {
+	prov := provenanceForTurn(kind, role)
+	return s.remember(ctx, kind, role, content, prov, BaseConfidence(prov))
+}
+
+// RememberFact stores a durable fact (KindFact) with an explicit provenance and
+// confidence. The caller assigns confidence — typically BaseConfidence(prov) scaled
+// by the model's calibration — so a fact learned from an unreliable model does not
+// silently gain the authority of an established one.
+func (s *Store) RememberFact(ctx context.Context, content string, prov Provenance, confidence float64) (*Memory, error) {
+	return s.remember(ctx, KindFact, "", content, prov, confidence)
+}
+
+// provenanceForTurn maps a stored turn to its provenance. A fact stored via the
+// generic Remember (rather than RememberFact) is Unspecified.
+func provenanceForTurn(kind Kind, role string) Provenance {
+	if kind == KindTurn {
+		if role == roleAssistant {
+			return ProvenanceModelInferred
+		}
+		return ProvenanceUserStated
+	}
+	return ProvenanceUnspecified
+}
+
+// remember embeds content and inserts one memory row with its provenance and
+// confidence, returning the persisted row.
+func (s *Store) remember(ctx context.Context, kind Kind, role, content string, prov Provenance, confidence float64) (*Memory, error) {
 	emb, err := s.Embed(ctx, content)
 	if err != nil {
 		return nil, err
@@ -68,10 +137,10 @@ func (s *Store) Remember(ctx context.Context, kind Kind, role, content string) (
 	)
 	// RETURNING gives us the generated id and timestamp in a single round trip.
 	err = s.db.QueryRowContext(ctx,
-		`INSERT INTO memories(kind, role, content, embedding)
-		 VALUES(?, ?, ?, ?)
+		`INSERT INTO memories(kind, role, content, embedding, provenance, confidence)
+		 VALUES(?, ?, ?, ?, ?, ?)
 		 RETURNING id, created_at`,
-		string(kind), role, content, emb).Scan(&id, &createdAt)
+		string(kind), role, content, emb, string(prov), confidence).Scan(&id, &createdAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert memory: %w", err)
 	}
@@ -79,7 +148,7 @@ func (s *Store) Remember(ctx context.Context, kind Kind, role, content string) (
 	if err != nil {
 		return nil, fmt.Errorf("parse created_at %q: %w", createdAt, err)
 	}
-	return &Memory{ID: id, Kind: kind, Role: role, Content: content, CreatedAt: ts}, nil
+	return &Memory{ID: id, Kind: kind, Role: role, Content: content, Provenance: prov, Confidence: confidence, CreatedAt: ts}, nil
 }
 
 // Recall returns up to k long-term memories most similar to query, nearest
@@ -96,7 +165,9 @@ func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance flo
 	// KNN limit must exceed k to still yield k user-relevant hits.
 	// see : https://docs.sqlitecloud.io/docs/sqlite-vector-api-reference
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT m.id, m.kind, COALESCE(m.role, ''), m.content, m.created_at, v.distance
+		SELECT m.id, m.kind, COALESCE(m.role, ''), m.content,
+		       COALESCE(m.provenance, 'unspecified'), COALESCE(m.confidence, 1.0),
+		       m.created_at, v.distance
 		FROM vector_full_scan('memories', 'embedding', ?, ?) AS v
 		JOIN memories m ON m.id = v.rowid
 		ORDER BY v.distance`, qvec, k*recallCandidateFactor)
@@ -110,9 +181,10 @@ func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance flo
 		var (
 			h         Hit
 			kind      string
+			prov      string
 			createdAt string
 		)
-		if err := rows.Scan(&h.ID, &kind, &h.Role, &h.Content, &createdAt, &h.Distance); err != nil {
+		if err := rows.Scan(&h.ID, &kind, &h.Role, &h.Content, &prov, &h.Confidence, &createdAt, &h.Distance); err != nil {
 			return nil, err
 		}
 		// Rows are ordered nearest-first, so the first over-threshold hit means
@@ -125,6 +197,7 @@ func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance flo
 			continue
 		}
 		h.Kind = Kind(kind)
+		h.Provenance = Provenance(prov)
 		if ts, err := time.Parse(sqliteTimeLayout, createdAt); err == nil {
 			h.CreatedAt = ts
 		}
@@ -168,7 +241,8 @@ func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
 		limit = 10
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, kind, COALESCE(role, ''), content, created_at
+		SELECT id, kind, COALESCE(role, ''), content,
+		       COALESCE(provenance, 'unspecified'), COALESCE(confidence, 1.0), created_at
 		FROM memories
 		ORDER BY id DESC
 		LIMIT ?`, limit)
@@ -182,12 +256,14 @@ func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
 		var (
 			m         Memory
 			kind      string
+			prov      string
 			createdAt string
 		)
-		if err := rows.Scan(&m.ID, &kind, &m.Role, &m.Content, &createdAt); err != nil {
+		if err := rows.Scan(&m.ID, &kind, &m.Role, &m.Content, &prov, &m.Confidence, &createdAt); err != nil {
 			return nil, err
 		}
 		m.Kind = Kind(kind)
+		m.Provenance = Provenance(prov)
 		if ts, err := time.Parse(sqliteTimeLayout, createdAt); err == nil {
 			m.CreatedAt = ts
 		}

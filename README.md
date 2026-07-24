@@ -7,10 +7,11 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.15.0** — Iterations 1–3 complete (Layers 1–13), plus Layer 14
+> Current version: **v0.16.0** — Iterations 1–3 complete (Layers 1–13), plus Layer 14
 > (**model calibration** — a deterministic reliability canary, `cmd/calibrate`), and
-> Iteration 4 (**learning**) begun at Layer 15 (schema versioning & migrations). The
-> agent talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and *acts* —
+> Iteration 4 (**learning**) through Layer 16 (schema migrations; per-fact **provenance
+> & confidence**, calibration-scaled). The agent talks to local **Ollama** or hosted
+> **OpenRouter** models (via `.env`) and *acts* —
 > a ReAct tool loop (calculator, clock, memory search) gated by a first-class
 > **policy engine** (auto-allow / approve / deny, YAML-configurable via
 > `TALUNOR_POLICY`), with an optional **planner** (`TALUNOR_PLANNER=1`) that lays out
@@ -157,7 +158,7 @@ silent drift when it degrades.
 | Layer | What | Status |
 |-------|------|--------|
 | 15 | **Schema versioning & migrations** — an ordered, append-only migration runner (`internal/memory`), so the memory schema can evolve safely as learning adds columns; zero behaviour change | ✅ done (v0.15.0) |
-| 16 | **Fact provenance & confidence** — record where a fact came from and how sure the agent is; don't consolidate hallucinations into the foundation | ⏳ next |
+| 16 | **Fact provenance & confidence** — every memory records its source + a confidence; a learned fact's confidence is scaled by the model's calibration (`TALUNOR_MODEL_CONFIDENCE`), so hallucinations don't gain established authority | ✅ done (v0.16.0) |
 | 17 | **Salience / decay / consolidation** — reinforce recalled facts, merge restatements, let low-salience facts fade | ⏳ planned |
 | 18 | **Async reflection** — move learning off the turn's critical path (a background worker owning the single store connection) | ⏳ planned |
 
@@ -373,6 +374,8 @@ lives in the same directory.
 | `TALUNOR_PROVIDER` | chat backend: `ollama` or `openrouter` | `ollama` |
 | `TALUNOR_MODEL` | model for the selected provider | provider default |
 | `TALUNOR_REFLECT` | set `0` to disable per-turn fact reflection | `1` |
+| `TALUNOR_MODEL_CONFIDENCE` | `[0,1]` scaling for learned-fact confidence (set from a `calibrate` run); `0` → `1.0` | `1.0` |
+| `TALUNOR_RECALL_MIN_CONFIDENCE` | drop recalled memories below this confidence (`0` = off) | `0` |
 | `TALUNOR_TOOLS` | set `0` to disable tools (model without tool support) | `1` |
 | `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow / prompt / deny); unset = default per-tool gate | — |
 | `TALUNOR_PLANNER` | set `1` to plan before acting (inspectable, approved plan, then capped ReAct execution) | `0` |

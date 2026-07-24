@@ -148,6 +148,12 @@ func buildAgentConfig(store *memory.Store, provider llm.Provider) (agent.Config,
 		cfg.Extractor = agent.DisableReflection()
 	}
 
+	// Learning knobs (Layer 16). ModelConfidence scales the confidence of learned
+	// facts by the model's calibration (set it from a `calibrate` run; 0 → 1.0);
+	// RecallMinConfidence drops low-confidence memories from recall (0 = off).
+	cfg.ModelConfidence = envFloat("TALUNOR_MODEL_CONFIDENCE", 0)
+	cfg.RecallMinConfidence = envFloat("TALUNOR_RECALL_MIN_CONFIDENCE", 0)
+
 	// TALUNOR_DEBUG turns on a structured trace of recall/tools/reflection. It
 	// logs to a file by default so the TUI's screen stays clean; the closer is
 	// returned so run can defer it until the program exits.
@@ -453,6 +459,16 @@ func splitList(v string) []string {
 		}
 	}
 	return out
+}
+
+// envFloat reads a float env var, returning def when unset or unparseable.
+func envFloat(key string, def float64) float64 {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
 }
 
 // envBool reads a boolean-ish env var; "0", "false", "no", "off" (any case) are
