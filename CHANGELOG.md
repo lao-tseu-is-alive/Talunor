@@ -15,6 +15,37 @@ changed but the *lessons learned* while getting there.
   from Layer 13); let a policy consult calibration/confidence for high-risk steps; and
   the `lastPlan`/`screenDebug` cross-goroutine access still wants an `atomic.*` fix.
 
+## [0.18.1] - 2026-07-24 — Course: Lesson 19 (off the critical path), bilingual
+
+A docs-only release. Layer 18's async reflection gets its lesson — the course's
+concurrency lesson — and closes the Iteration-4 arc in the course.
+
+### Added
+
+- **Lesson 19 — "Off the critical path: learning in the background"**
+  (`docs/lessons/19-off-the-critical-path/`, bilingual EN/FR). A ~70-min Level-3 🔍
+  exploration + hands-on, pinned to `v0.18.0`. It reads `internal/agent` to teach: what
+  "on the critical path" cost (the synchronous second model call held the reply channel
+  open); the load-bearing insight that **the single pinned connection is already the
+  lock** (`database/sql` serialises access, so a background writer needs no extra mutex —
+  the worker is for backpressure, ordering, and drain, not safety); the bounded
+  worker/queue shape and why reflection uses a background context, not the turn's; the
+  **shutdown-drain contract** (`Close` drains vs `go reflect()` losing learning at exit,
+  plus the deferred-LIFO ordering against `store.Close`); and why deferred work's `/debug`
+  notes had to move to the log ("async work can't narrate a closed turn"). Course now 00–19.
+
+### Lessons learned
+
+1. **The most instructive line was not code.** The lesson's spine is the realisation that
+   the constraint fought back in Lesson 02 (a single connection) is the very thing that
+   makes async reflection safe — "the wall is also the floor". A good systems lesson often
+   turns on re-reading a constraint, not on adding machinery.
+2. **A concurrency lesson should teach restraint.** Rather than showcase channels and
+   sync primitives, Lesson 19 makes the point that the *right* amount of concurrency here
+   is one worker, one bounded channel, one drain — and that naming the worker's real job
+   (scheduling/lifecycle, not safety) is what keeps a small design from growing a mutex it
+   doesn't need.
+
 ## [0.18.0] - 2026-07-24 — Layer 18: async reflection (learning off the critical path)
 
 Reflection — the *second* LLM call each turn, which distils durable facts — has run

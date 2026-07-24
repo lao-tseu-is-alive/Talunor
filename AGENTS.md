@@ -491,7 +491,14 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   (tests). `reflect` lost its stream param — its `/debug` notes now go to the log (async
   work can't narrate a closed turn); the recall trace stays inline. Closes Iteration 4's
   arc (schema → trust → retention → *when*).
-- **Next:** course **Lesson 19** (the Layer 18 lesson: async learning, the single-conn-as-lock
-  insight, the shutdown-drain contract; pattern code vX.Y.0 → lesson vX.Y.1). Then, open
-  threads: the executed plan as a learning input (deferred from Layer 13); calibration→policy
-  wiring; the `lastPlan`/`screenDebug` cross-goroutine access (`atomic.*`). Same rhythm.
+- **v0.18.1 (docs)** = course **Lesson 19** — "Off the critical path: learning in the
+  background" (`docs/lessons/19-off-the-critical-path/`, bilingual). Pinned to `v0.18.0`;
+  reads `internal/agent` to teach async learning, the **single-connection-as-lock** insight
+  (no extra mutex needed; the worker is for backpressure/ordering/drain, not safety), the
+  shutdown-drain contract (`Close` + deferred-LIFO vs `store.Close`), and "async work can't
+  narrate a closed turn" (why /debug reflection notes moved to the log). **Course now 00–19
+  (twenty lessons); closes the Iteration-4 arc in the course.**
+- **Next — open threads (documented, not started):** the executed plan as a learning input
+  (deferred from Layer 13; would populate `tool_observed`/`model_inferred` provenance — a
+  possible Iteration 5 seed); calibration→policy wiring; the `lastPlan`/`screenDebug`
+  cross-goroutine access (`atomic.*`). Same per-layer checkpoint rhythm.
