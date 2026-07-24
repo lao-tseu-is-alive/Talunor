@@ -2,7 +2,9 @@ package memory
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -85,14 +87,24 @@ type Memory struct {
 	Content    string
 	Provenance Provenance // where it came from (Layer 16)
 	Confidence float64    // [0,1], system-assigned from provenance (× model calibration)
-	CreatedAt  time.Time
+	// Retention bookkeeping (Layer 17). Salience is the stored value as of
+	// LastAccessed (or CreatedAt if never recalled); the effective salience at read
+	// time decays from there (see effectiveSalience). AccessCount is how many times
+	// it has been reinforced.
+	Salience     float64
+	LastAccessed time.Time // zero if never recalled
+	AccessCount  int64
+	CreatedAt    time.Time
 }
 
-// Hit is a memory returned by a similarity search, with its distance to the
-// query. Distance is cosine distance: smaller means more similar.
+// Hit is a memory returned by a similarity search, with its distance to the query
+// and the combined recall score it was ranked by. Distance is cosine distance
+// (smaller = more similar); Score folds similarity, confidence, and effective
+// (decayed) salience together (larger = ranked higher).
 type Hit struct {
 	Memory
 	Distance float64
+	Score    float64
 }
 
 // Remember stores a conversation turn (or doc chunk), deriving its provenance and
@@ -148,25 +160,34 @@ func (s *Store) remember(ctx context.Context, kind Kind, role, content string, p
 	if err != nil {
 		return nil, fmt.Errorf("parse created_at %q: %w", createdAt, err)
 	}
-	return &Memory{ID: id, Kind: kind, Role: role, Content: content, Provenance: prov, Confidence: confidence, CreatedAt: ts}, nil
+	// A fresh row starts fully salient and unaccessed (the column defaults).
+	return &Memory{ID: id, Kind: kind, Role: role, Content: content, Provenance: prov, Confidence: confidence, Salience: 1.0, CreatedAt: ts}, nil
 }
 
-// Recall returns up to k long-term memories most similar to query, nearest
-// first. Assistant turns are excluded (see roleAssistant). If maxDistance > 0,
-// memories farther than that cosine distance are dropped, so only genuinely
-// relevant ones are returned (a value of 0 keeps all k). This is the
+// Recall returns up to k long-term memories most relevant to query. Relevance is
+// gated by semantic similarity first (assistant turns are excluded — see
+// roleAssistant; if maxDistance > 0, memories farther than that cosine distance are
+// dropped), then, among the relevant neighbourhood, memories are RANKED by a
+// combined score = similarity × confidence × effective salience, so a trusted,
+// reinforced memory outranks a barely-relevant or long-faded one at a similar
+// distance. A memory whose salience has decayed below the store's ForgetFloor is
+// soft-forgotten (dropped here; the row survives and a restatement revives it).
+// Recall performs NO writes — decay is computed on the fly (see effectiveSalience),
+// which keeps it a pure read on the pinned single connection. This is the
 // semantic-retrieval step injected before each LLM call.
 func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance float64) ([]Hit, error) {
 	qvec, err := s.Embed(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	// Over-fetch neighbours: assistant turns are filtered out below, so the raw
-	// KNN limit must exceed k to still yield k user-relevant hits.
+	// Over-fetch neighbours: assistant turns and faded memories are filtered out
+	// below, and the survivors are re-ranked by score, so the raw KNN limit must
+	// exceed k to still yield k good hits.
 	// see : https://docs.sqlitecloud.io/docs/sqlite-vector-api-reference
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT m.id, m.kind, COALESCE(m.role, ''), m.content,
 		       COALESCE(m.provenance, 'unspecified'), COALESCE(m.confidence, 1.0),
+		       COALESCE(m.salience, 1.0), m.last_accessed, COALESCE(m.access_count, 0),
 		       m.created_at, v.distance
 		FROM vector_full_scan('memories', 'embedding', ?, ?) AS v
 		JOIN memories m ON m.id = v.rowid
@@ -176,19 +197,25 @@ func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance flo
 	}
 	defer rows.Close()
 
-	hits := make([]Hit, 0, k)
+	now := time.Now().UTC()
+	halfLife := s.resolvedHalfLife()
+	forgetFloor := s.resolvedForgetFloor()
+
+	candidates := make([]Hit, 0, k*recallCandidateFactor)
 	for rows.Next() {
 		var (
-			h         Hit
-			kind      string
-			prov      string
-			createdAt string
+			h            Hit
+			kind         string
+			prov         string
+			lastAccessed sql.NullString
+			createdAt    string
 		)
-		if err := rows.Scan(&h.ID, &kind, &h.Role, &h.Content, &prov, &h.Confidence, &createdAt, &h.Distance); err != nil {
+		if err := rows.Scan(&h.ID, &kind, &h.Role, &h.Content, &prov, &h.Confidence,
+			&h.Salience, &lastAccessed, &h.AccessCount, &createdAt, &h.Distance); err != nil {
 			return nil, err
 		}
 		// Rows are ordered nearest-first, so the first over-threshold hit means
-		// every remaining hit is too — stop here.
+		// every remaining hit is too — stop the relevance gate here.
 		if maxDistance > 0 && h.Distance > maxDistance {
 			break
 		}
@@ -201,12 +228,37 @@ func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance flo
 		if ts, err := time.Parse(sqliteTimeLayout, createdAt); err == nil {
 			h.CreatedAt = ts
 		}
-		hits = append(hits, h)
-		if len(hits) >= k {
-			break
+		if lastAccessed.Valid {
+			if ts, err := time.Parse(sqliteTimeLayout, lastAccessed.String); err == nil {
+				h.LastAccessed = ts
+			}
 		}
+		// Decay salience lazily from when the memory was last touched, then drop it
+		// if it has faded below the forget floor (soft forgetting).
+		ref := h.LastAccessed
+		if ref.IsZero() {
+			ref = h.CreatedAt
+		}
+		eff := effectiveSalience(h.Salience, ref, now, halfLife)
+		if eff < forgetFloor {
+			continue
+		}
+		// Combined recall score: relevance × trust × how-much-it-matters-now.
+		h.Score = (1 - h.Distance) * h.Confidence * eff
+		candidates = append(candidates, h)
 	}
-	return hits, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Rank by combined score (relevance was the gate; salience/confidence break
+	// ties within the relevant neighbourhood), then keep the top k.
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].Score > candidates[j].Score
+	})
+	if len(candidates) > k {
+		candidates = candidates[:k]
+	}
+	return candidates, nil
 }
 
 // Forget deletes the memory with the given id. It reports whether a row was
@@ -242,7 +294,8 @@ func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, kind, COALESCE(role, ''), content,
-		       COALESCE(provenance, 'unspecified'), COALESCE(confidence, 1.0), created_at
+		       COALESCE(provenance, 'unspecified'), COALESCE(confidence, 1.0),
+		       COALESCE(salience, 1.0), last_accessed, COALESCE(access_count, 0), created_at
 		FROM memories
 		ORDER BY id DESC
 		LIMIT ?`, limit)
@@ -254,18 +307,25 @@ func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
 	var out []Memory
 	for rows.Next() {
 		var (
-			m         Memory
-			kind      string
-			prov      string
-			createdAt string
+			m            Memory
+			kind         string
+			prov         string
+			lastAccessed sql.NullString
+			createdAt    string
 		)
-		if err := rows.Scan(&m.ID, &kind, &m.Role, &m.Content, &prov, &m.Confidence, &createdAt); err != nil {
+		if err := rows.Scan(&m.ID, &kind, &m.Role, &m.Content, &prov, &m.Confidence,
+			&m.Salience, &lastAccessed, &m.AccessCount, &createdAt); err != nil {
 			return nil, err
 		}
 		m.Kind = Kind(kind)
 		m.Provenance = Provenance(prov)
 		if ts, err := time.Parse(sqliteTimeLayout, createdAt); err == nil {
 			m.CreatedAt = ts
+		}
+		if lastAccessed.Valid {
+			if ts, err := time.Parse(sqliteTimeLayout, lastAccessed.String); err == nil {
+				m.LastAccessed = ts
+			}
 		}
 		out = append(out, m)
 	}

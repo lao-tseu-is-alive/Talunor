@@ -64,7 +64,17 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    LAYER 16: each memory has provenance (user_stated/model_inferred/
                    tool_observed/unspecified) + confidence (system-assigned, never
                    model-self-reported). RememberFact(content,prov,conf); Remember
-                   derives a turn's provenance from role; Recall/List expose both
+                   derives a turn's provenance from role; Recall/List expose both.
+                   salience.go (LAYER 17): each memory has salience/last_accessed/
+                   access_count (migration 3). Decay is LAZY — Recall computes
+                   effective salience = salience·2^(−age/half-life) at read time (NO
+                   writes: fits the single conn), ranks by similarity·confidence·
+                   eff-salience, and soft-forgets below ForgetFloor (row survives).
+                   Reinforce(ids) bumps salience (recall = it mattered);
+                   ReinforceFact(id,gain) also raises confidence toward a <1 ceiling
+                   with diminishing returns — but only on INDEPENDENT evidence
+                   (EvidenceCredibility: user/tool=1, model_inferred=0, the echo
+                   guard). Half-life/floor via TALUNOR_SALIENCE_HALFLIFE/_FORGET_FLOOR
 internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenRouter),
                    FromEnv() provider selection, NewOpenRouter
 internal/config/   minimal dependency-free .env loader (real env wins)
@@ -82,7 +92,10 @@ internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/obs
                    (Config.ApprovalMode plan|step|highrisk)→reactLoop capped to the
                    plan's tools→learn; /plan shows the last plan. reflect.go =
                    FactExtractor (LLM distils facts into KindFact;
-                   DisableReflection()). Optional Config.Debug (slog) traces
+                   DisableReflection()). LAYER 17: reflect CONSOLIDATES a restated
+                   fact (knownFact → store.ReinforceFact) instead of skipping; Turn
+                   reinforces recalled memories' salience (reinforceRecalled).
+                   Optional Config.Debug (slog) traces
                    recall/tools/reflection. debug.go: the /debug runtime toggle
                    (screenDebug) streams recall rankings + reflection inline as
                    dimmed Reasoning notes. Slash-command helpers too.
@@ -198,6 +211,8 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_REFLECT` | `0` disables per-turn reflection (cost on paid APIs) | `1` |
 | `TALUNOR_MODEL_CONFIDENCE` | `[0,1]` calibration scaling for learned-fact confidence (Layer 16); `0`→`1.0` | `1.0` |
 | `TALUNOR_RECALL_MIN_CONFIDENCE` | drop recalled memories below this confidence (`0`=off) | `0` |
+| `TALUNOR_SALIENCE_HALFLIFE` | Layer 17 decay half-life for un-recalled memories (Go duration) | `720h` (30d) |
+| `TALUNOR_FORGET_FLOOR` | effective salience below which a memory is soft-forgotten from recall | `0.05` |
 | `TALUNOR_TOOLS` | `0` disables tools (model without tool-calling support) | `1` |
 | `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow/prompt/deny; `docs/policy.sample.yaml`); unset = default per-tool gate | — |
 | `TALUNOR_PLANNER` | `1` plans before acting (inspectable, approved plan → ReAct execution capped to the plan's tools) | `0` |
@@ -440,7 +455,19 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   worth" (`docs/lessons/17-learning-with-humility/`, bilingual). The first *learning*
   lesson: provenance + confidence, confidence-from-source-not-self-report, the calibration
   link; reads migration 2 (folds in the un-lessoned Layer 15). Course now 00–17.
-- **Next — Iteration 4 layers 17–18:** **salience/decay/consolidation** (reinforce a fact
-  on recall, consolidate a restatement instead of skipping it, fade low-salience), then
-  **async reflection** (a background worker owning the single store connection — off the
-  turn's critical path). Same per-layer checkpoint rhythm.
+- **Layer 17 (done): v0.17.0** = **salience / decay / consolidation** (the retention half
+  of learning). Migration 3 adds `salience`/`last_accessed`/`access_count`. `salience.go`:
+  decay is LAZY — `Recall` computes effective salience `= salience·2^(−age/half-life)` at
+  read time (no writes → fits the pinned single conn), RANKS the relevant neighbourhood by
+  `similarity·confidence·eff-salience`, and SOFT-FORGETS below `ForgetFloor` (row survives,
+  a restatement revives it). Reinforcement is EXPLICIT: `Reinforce(ids)` (recall mattered →
+  salience only; `agent.reinforceRecalled` after each turn's recall); `ReinforceFact(id,gain)`
+  also raises confidence toward a <1 ceiling with diminishing returns. `reflect` now
+  CONSOLIDATES a restated fact (`knownFact`→`ReinforceFact`) instead of skipping it. The
+  honesty rule holds: salience rises on any repetition, confidence only on INDEPENDENT
+  evidence (`EvidenceCredibility`: user/tool=1, model_inferred=0 — the echo-chamber guard);
+  gain also folds in `ModelConfidence`. Knobs: `TALUNOR_SALIENCE_HALFLIFE` (30d),
+  `TALUNOR_FORGET_FLOOR` (0.05). `/debug` + `/list` show salience/score; doctor → schema 3.
+- **Next — Iteration 4 Layer 18:** **async reflection** (a background worker owning the
+  single store connection — off the turn's critical path). Then the executed plan as a
+  learning input (deferred from Layer 13). Same per-layer checkpoint rhythm.

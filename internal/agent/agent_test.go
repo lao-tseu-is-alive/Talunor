@@ -409,6 +409,67 @@ func TestReflectionDeduplicates(t *testing.T) {
 	}
 }
 
+// TestReflectionConsolidatesRestatement proves the Layer 17 upgrade to dedup:
+// restating a known fact does not just get skipped — it *reinforces* the existing
+// fact, so its salience and (because a user restating is independent evidence) its
+// confidence rise, while the row count stays at one.
+func TestReflectionConsolidatesRestatement(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+
+	cfg := DefaultConfig()
+	cfg.Extractor = fakeExtractor{facts: []string{"User's favourite language is Go."}}
+	ag := New(store, &fakeProvider{reply: "ok"}, cfg)
+
+	fact := func() memory.Memory {
+		mems, err := store.List(ctx, 100)
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		for _, m := range mems {
+			if m.Kind == memory.KindFact {
+				return m
+			}
+		}
+		t.Fatalf("no fact stored yet")
+		return memory.Memory{}
+	}
+
+	runTurn := func(i int) {
+		out, err := ag.Turn(ctx, "reminder that i love Go")
+		if err != nil {
+			t.Fatalf("turn %d: %v", i, err)
+		}
+		if _, err := drain(out); err != nil {
+			t.Fatalf("drain %d: %v", i, err)
+		}
+	}
+
+	runTurn(0)
+	first := fact()
+	if first.Confidence >= 0.98 { // memory.confidenceCeiling — below it, growth is observable.
+		t.Fatalf("fresh fact already at ceiling (%v); test can't observe growth", first.Confidence)
+	}
+
+	runTurn(1)
+	runTurn(2)
+
+	// Still exactly one fact row (consolidated, not duplicated).
+	if got := factContents(t, ctx, store); len(got) != 1 {
+		t.Fatalf("consolidation kept %d rows, want 1: %v", len(got), got)
+	}
+	after := fact()
+	if !(after.Confidence > first.Confidence) {
+		t.Errorf("confidence did not rise on restatement: %v -> %v", first.Confidence, after.Confidence)
+	}
+	if !(after.Salience > first.Salience) {
+		t.Errorf("salience did not rise on restatement: %v -> %v", first.Salience, after.Salience)
+	}
+	if after.Confidence > 1.0 {
+		t.Errorf("confidence exceeded 1.0: %v", after.Confidence)
+	}
+}
+
 // factContents returns the content of every stored KindFact memory.
 func factContents(t *testing.T, ctx context.Context, store *memory.Store) []string {
 	t.Helper()

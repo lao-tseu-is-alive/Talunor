@@ -241,6 +241,10 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 	}
 	hits = a.filterByConfidence(hits)
 	a.traceRecall(input, hits)
+	// Recall strengthens memory: the memories that shaped this turn's prompt are
+	// reinforced (salience up, decay clock reset), so what gets used stays salient
+	// and what goes unused fades (Layer 17).
+	a.reinforceRecalled(ctx, hits)
 
 	// Reason: build the prompt from prior context.
 	msgs := a.buildMessages(hits, input)
@@ -472,20 +476,32 @@ func (a *Agent) reflect(ctx context.Context, out chan<- llm.Chunk, input string)
 	// Facts distilled from the user's message are user-stated; scale the base
 	// confidence by the model's calibration, so what an unreliable extraction model
 	// "learns" carries less authority (the calibration link, Config.ModelConfidence).
-	conf := clamp01(memory.BaseConfidence(memory.ProvenanceUserStated) * a.cfg.ModelConfidence)
-	stored, skipped := 0, 0
+	prov := memory.ProvenanceUserStated
+	conf := clamp01(memory.BaseConfidence(prov) * a.cfg.ModelConfidence)
+	// Consolidation gain for a restated fact: a fraction of the way to the
+	// confidence ceiling, weighted by how much this restatement counts as
+	// INDEPENDENT evidence (a user restating = real corroboration; the model echoing
+	// its own inference = none) and by the model's calibration. See Layer 17.
+	gain := clamp01(consolidationGainBase * memory.EvidenceCredibility(prov) * a.cfg.ModelConfidence)
+	stored, consolidated := 0, 0
 	for _, f := range facts {
-		if a.factKnown(ctx, f) {
-			skipped++
+		if existing, ok := a.knownFact(ctx, f); ok {
+			// Restatement: reinforce the existing fact rather than pile up a
+			// near-duplicate — salience always rises, confidence only on independent
+			// evidence (gain>0). Repetition strengthens memory.
+			if err := a.store.ReinforceFact(ctx, existing.ID, gain); err == nil {
+				consolidated++
+				a.sendDebug(ctx, out, "reflect: ~fact #%d reinforced %q (gain %.2f)", existing.ID, oneLine(f, 40), gain)
+			}
 			continue
 		}
-		if _, err := a.store.RememberFact(ctx, f, memory.ProvenanceUserStated, conf); err == nil {
+		if _, err := a.store.RememberFact(ctx, f, prov, conf); err == nil {
 			stored++
 			a.sendDebug(ctx, out, "reflect: +fact %q (conf %.2f)", oneLine(f, 50), conf)
 		}
 	}
-	a.trace("reflect", "extracted", len(facts), "stored", stored, "skipped", skipped, "confidence", conf)
-	a.sendDebug(ctx, out, "reflect: extracted %d, stored %d, skipped %d", len(facts), stored, skipped)
+	a.trace("reflect", "extracted", len(facts), "stored", stored, "consolidated", consolidated, "confidence", conf, "gain", gain)
+	a.sendDebug(ctx, out, "reflect: extracted %d, stored %d, consolidated %d", len(facts), stored, consolidated)
 }
 
 // trace emits a structured debug event when Config.Debug is set; it is a no-op
@@ -512,9 +528,11 @@ func (a *Agent) traceRecall(input string, hits []memory.Hit) {
 		a.trace("recall.hit",
 			"id", h.ID,
 			"distance", h.Distance,
+			"score", h.Score,
 			"kind", string(h.Kind),
 			"provenance", string(h.Provenance),
 			"confidence", h.Confidence,
+			"salience", h.Salience,
 			"snippet", oneLine(h.Content, 60))
 	}
 }
@@ -546,21 +564,43 @@ func clamp01(x float64) float64 {
 	return x
 }
 
-// factKnown reports whether a fact semantically equivalent to the given one is
-// already stored, so reflect can skip near-duplicates. Only existing KindFact
-// rows count: a raw conversation turn that happens to sit nearby must not block
-// the *first* distillation of that turn into a fact.
-func (a *Agent) factKnown(ctx context.Context, fact string) bool {
+// consolidationGainBase is the base fraction of the way to the confidence ceiling
+// that one restatement of a fact earns (before credibility and calibration
+// weighting). Small, so trust grows gradually with repeated corroboration.
+const consolidationGainBase = 0.34
+
+// knownFact returns the nearest already-stored fact semantically equivalent to the
+// given one, so reflect can *consolidate* a restatement onto it instead of storing
+// a near-duplicate. Only existing KindFact rows count: a raw conversation turn that
+// happens to sit nearby must not block the first distillation of that turn.
+func (a *Agent) knownFact(ctx context.Context, fact string) (memory.Hit, bool) {
 	hits, err := a.store.Recall(ctx, fact, 3, a.cfg.DedupMaxDistance)
 	if err != nil {
-		return false
+		return memory.Hit{}, false
 	}
 	for _, h := range hits {
 		if h.Kind == memory.KindFact {
-			return true
+			return h, true
 		}
 	}
-	return false
+	return memory.Hit{}, false
+}
+
+// reinforceRecalled strengthens the memories that shaped this turn: being recalled
+// and injected into the prompt is a signal they matter, so bump their salience and
+// refresh their decay clock (Layer 17). Best-effort — a bookkeeping failure must
+// not disturb the reply.
+func (a *Agent) reinforceRecalled(ctx context.Context, hits []memory.Hit) {
+	if len(hits) == 0 {
+		return
+	}
+	ids := make([]int64, len(hits))
+	for i, h := range hits {
+		ids[i] = h.ID
+	}
+	if err := a.store.Reinforce(ctx, ids); err != nil {
+		a.trace("reinforce.error", "err", err)
+	}
 }
 
 // buildMessages assembles the prompt: system prompt, an optional block of
@@ -698,11 +738,12 @@ func FormatMemories(mems []memory.Memory) string {
 		if label == "" {
 			label = string(m.Kind)
 		}
-		// Facts carry a provenance + confidence (Layer 16); show it so the user can
-		// see how much the agent trusts a learned statement.
+		// Facts carry a provenance + confidence (Layer 16) and a salience that grows
+		// with reinforcement (Layer 17); show both so the user can see how much the
+		// agent trusts a learned statement and how much it currently matters.
 		meta := ""
 		if m.Kind == memory.KindFact {
-			meta = fmt.Sprintf(" (%s %.0f%%)", m.Provenance, m.Confidence*100)
+			meta = fmt.Sprintf(" (%s %.0f%%, sal %.1f×%d)", m.Provenance, m.Confidence*100, m.Salience, m.AccessCount)
 		}
 		fmt.Fprintf(&b, "  #%d [%s]%s %s  %s\n",
 			m.ID, label, meta, m.CreatedAt.Format("2006-01-02 15:04"), oneLine(m.Content, 66))

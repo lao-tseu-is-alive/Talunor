@@ -57,8 +57,27 @@ var migrations = []migration{
 			return err
 		},
 	},
-	// Iteration 4 continues here, one migration per layer:
-	//   {3, "salience + decay bookkeeping", ...},
+	{
+		version: 3,
+		name:    "salience + decay bookkeeping",
+		apply: func(ctx context.Context, e execer) error {
+			// Retention bookkeeping (Layer 17): salience is how much a memory
+			// "matters" (reinforced on recall, decayed lazily at read time);
+			// last_accessed anchors the decay clock; access_count is how many times
+			// it has been recalled. Existing rows start fully salient and unaccessed.
+			for _, ddl := range []string{
+				`ALTER TABLE memories ADD COLUMN salience REAL NOT NULL DEFAULT 1.0`,
+				`ALTER TABLE memories ADD COLUMN last_accessed TEXT`,
+				`ALTER TABLE memories ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0`,
+			} {
+				if _, err := e.ExecContext(ctx, ddl); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	},
+	// Iteration 4 continues here, one migration per layer.
 }
 
 // latestSchemaVersion is the version a fully-migrated store reports.

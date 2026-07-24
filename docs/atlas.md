@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.16.1` (course Lesson 17 — learning with humility)
+- **Version:** `v0.17.0` (Layer 17 — salience, decay & consolidation)
 - **Generated:** 2026-07-22
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -62,15 +62,20 @@ Talunor/
 │   │   ├── store.go          #     Open the DB, load sqlite-vector + sqlite-ai, schema; one pinned conn
 │   │   │                     #       (extension state is per-connection). DB path resolution.
 │   │   ├── memory.go         #     Remember / RememberFact / Recall (KNN, thresholded, excludes assistant
-│   │   │                     #       turns); Kinds; Provenance + confidence (Layer 16); Hit; Forget; versions.
+│   │   │                     #       turns; ranks by similarity·confidence·salience, soft-forgets faded);
+│   │   │                     #       Kinds; Provenance + confidence (L16); salience/access (L17); Hit; Forget.
 │   │   ├── provenance.go     #     LAYER 11: meta table fingerprints the embedding stack (canary vector);
 │   │   │                     #       Open flags OK/Stale/Unknown; ReEmbed re-vectorises all rows.
 │   │   ├── migrate.go        #     LAYER 15: ordered append-only migration runner; schema_version in meta;
-│   │   │                     #       migration 1 = baseline (memories); auto-baselines a pre-versioning DB.
+│   │   │                     #       migration 1 = baseline; 2 = provenance/confidence; 3 = salience (L17).
+│   │   ├── salience.go       #     LAYER 17: lazy decay (effective salience at read time), Reinforce /
+│   │   │                     #       ReinforceFact (confidence only on independent evidence), forget floor.
 │   │   ├── shortterm.go      #     Bounded ring buffer of the most recent turns (immediate context).
 │   │   ├── cgo_link.go       #     cgo glue: dlopen libm with RTLD_GLOBAL — vector.so needs it in scope.
 │   │   ├── provenance_test.go #    Tests (fresh=OK, canary mismatch=Stale→ReEmbed, legacy=Unknown, cosine).
 │   │   ├── migrate_test.go   #     Tests (fresh stamps latest, idempotent reopen, legacy baseline no data loss).
+│   │   ├── salience_internal_test.go # Pure-fn tests (decay, credibility, bounded confidence) — no DB/ext.
+│   │   ├── salience_db_test.go #    Tests (reinforce bumps salience; confidence only on evidence; soft-forget).
 │   │   └── memory_test.go    #     Tests (semantic recall, thresholding, assistant-turn exclusion).
 │   │
 │   ├── llm/                  # LAYER 3 / 6: LLM provider abstraction + OpenAI-compatible adapter.
@@ -222,4 +227,5 @@ each one a tagged release (see `CHANGELOG.md`):
 | 14 | `internal/calibration` + `cmd/calibrate` | measure a model's reliability deterministically; detect silent drift |
 | 15 | `internal/memory/migrate.go` | evolve the memory schema safely (ordered migrations) — the seam Iteration 4 builds on |
 | 16 | `internal/memory` provenance/confidence + `agent` reflect | learn facts with a source + a calibration-scaled confidence; don't over-trust a model |
+| 17 | `internal/memory/salience.go` + `agent` reflect/reinforce | give a memory a life: reinforce on recall, consolidate restatements, let the neglected fade |
 | — | `internal/history`, `internal/version`, `internal/config`, `internal/render` | supporting infrastructure |

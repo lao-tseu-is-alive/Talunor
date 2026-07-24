@@ -11,10 +11,67 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Iteration 4, continued** — salience / decay / consolidation (Layer 17), then async
-  reflection (Layer 18). The executed plan becomes an input to learning (deferred from
-  Layer 13). Deferred: wire a fact's confidence into recall weighting more deeply, and
-  let a policy consult calibration/confidence for high-risk steps.
+- **Iteration 4, continued** — async reflection (Layer 18): move the second (learning)
+  model call off the turn's critical path onto a background worker that owns the single
+  store connection. The executed plan becomes an input to learning (deferred from
+  Layer 13). Deferred: let a policy consult calibration/confidence for high-risk steps.
+
+## [0.17.0] - 2026-07-24 — Layer 17: salience, decay & consolidation (the retention half)
+
+Layer 16 gave a memory a *trust*; Layer 17 gives it a *life*. Every memory now carries a
+**salience** that grows when the memory is used and fades when it is not, so recall stops
+treating an undifferentiated pile as all-equal and surfaces what actually matters. And a
+restated fact is no longer merely de-duplicated — it is **consolidated**: the existing row
+is reinforced, so repetition strengthens memory the way it does for people. This is the
+"memory of the gesture" — the more a piece of knowledge is re-confirmed, the more it counts.
+
+### Added
+
+- **Migration 3** (`internal/memory/migrate.go`) adds three bookkeeping columns to
+  `memories`: `salience REAL DEFAULT 1.0`, `last_accessed TEXT`, `access_count INTEGER
+  DEFAULT 0`. Append-only, as ever; existing rows start fully salient and unaccessed, so
+  nothing already stored is retroactively demoted. `schema_version` → 3.
+- **Lazy decay + soft forgetting** (`internal/memory/salience.go`, new). The *effective*
+  salience is computed at read time — `salience × 2^(−age / half-life)` from
+  `last_accessed` (or `created_at`) — so **Recall performs no writes** and stays a pure read
+  on the pinned single connection. `Recall` now **ranks** the relevant neighbourhood by a
+  combined `score = similarity × confidence × effective-salience` (relevance is still the
+  gate), and **soft-forgets** any memory whose effective salience has faded below
+  `ForgetFloor` — dropped from recall, but the row survives and a restatement revives it.
+- **Explicit reinforcement** at well-defined moments (never as a Recall side effect):
+  `Store.Reinforce(ids)` bumps salience + `access_count` + resets the decay clock for the
+  memories a turn actually recalled (`agent.reinforceRecalled`); `Store.ReinforceFact(id,
+  gain)` additionally raises **confidence** toward a ceiling (< 1.0) with diminishing
+  returns. The agent's `reflect` now **consolidates** a restated fact via `ReinforceFact`
+  instead of skipping it (`factKnown` → `knownFact`, returning the row to reinforce).
+- **The independence rule** (`EvidenceCredibility`). Salience is bumped by *any*
+  restatement, but **confidence only rises on independent evidence** — a user restating
+  (or a tool re-observing) a fact corroborates it; the model re-inferring its own earlier
+  claim does not, and earns **zero** confidence gain. This keeps Layer 16's honesty
+  guarantee intact: repetition can't become a self-reinforcing echo chamber. The gain also
+  folds in `ModelConfidence` (the calibration link) as before.
+- **Two env knobs** (both optional, sane defaults): `TALUNOR_SALIENCE_HALFLIFE` (a Go
+  duration, default 30 days) and `TALUNOR_FORGET_FLOOR` (default 0.05), read by
+  `memory.DefaultConfig`. **Observability:** `/debug` recall traces and `/list` now show
+  salience/score alongside provenance/confidence; `doctor` reports `schema version: 3`.
+
+### Lessons learned
+
+1. **Lazy decay is the design that respects the constraint.** The store pins
+   `SetMaxOpenConns(1)`, so a background "decay sweeper" writing to every row would fight
+   the very connection reads use. Computing decay at read time instead means recall never
+   turns into a write — the elegant move is to *not* store the decayed value at all, only
+   the salience-as-of-last-touch, and decay it on the way out.
+2. **Consolidation is where the honesty rule earns its keep.** "The more a fact is
+   repeated, the more I trust it" is right — but only if the repetitions are *independent*.
+   Counting the model restating its own inference would let the agent talk itself into
+   certainty, re-importing the sycophancy trap through the back door. Splitting the two
+   effects — repetition always raises *salience* (it clearly matters), but raises
+   *confidence* only from independent sources — is what makes "memory of the gesture" safe.
+3. **Separate axes stay debuggable.** Keeping salience and confidence as distinct columns
+   (rather than folding them into one "weight") means `/list` and `/debug` can still say
+   *why* a memory ranks where it does — faded, or distrusted, or both — which is exactly
+   the visibility Layer 11 was built to protect.
 
 ## [0.16.1] - 2026-07-24 — Course: Lesson 17 (learning with humility), bilingual
 

@@ -75,6 +75,7 @@ func (a *Agent) emitRecallDebug(ctx context.Context, out chan<- llm.Chunk, input
 	a.sendDebug(ctx, out, "recall: q=%q k=%d max≤%.2f → %d hit(s)",
 		oneLine(input, 50), a.cfg.RecallK, a.cfg.RecallMaxDistance, len(hits))
 	for _, h := range hits {
-		a.sendDebug(ctx, out, "    #%d d=%.4f %s %q", h.ID, h.Distance, h.Kind, oneLine(h.Content, 50))
+		a.sendDebug(ctx, out, "    #%d d=%.4f score=%.3f sal=%.2f %s %q",
+			h.ID, h.Distance, h.Score, h.Salience, h.Kind, oneLine(h.Content, 50))
 	}
 }

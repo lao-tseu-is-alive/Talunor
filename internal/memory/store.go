@@ -17,7 +17,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
 )
@@ -38,6 +41,14 @@ type Config struct {
 	AIExtPath string
 	// EmbedModelPath is the GGUF embedding model loaded by sqlite-ai.
 	EmbedModelPath string
+
+	// SalienceHalfLife is how long an un-recalled memory takes to lose half its
+	// effective salience (Layer 17). 0 → a sensible package default. Recall decays
+	// salience by this; recall itself reinforces, so only neglected memories fade.
+	SalienceHalfLife time.Duration
+	// ForgetFloor is the effective salience below which a memory is dropped from
+	// recall (soft forgetting — the row survives). 0 → a sensible package default.
+	ForgetFloor float64
 }
 
 // DefaultConfig returns a Config pointing at the artifacts fetched by
@@ -55,6 +66,9 @@ func DefaultConfig() Config {
 		VectorExtPath:  envOr("TALUNOR_VECTOR_EXT", "ext/vector"),
 		AIExtPath:      envOr("TALUNOR_AI_EXT", "ext/ai"),
 		EmbedModelPath: envOr("TALUNOR_EMBED_MODEL", "ext/models/all-MiniLM-L6-v2.f16.gguf"),
+		// Retention knobs (Layer 17); 0 lets the store fall back to its defaults.
+		SalienceHalfLife: envDurationOr("TALUNOR_SALIENCE_HALFLIFE", 0),
+		ForgetFloor:      envFloatOr("TALUNOR_FORGET_FLOOR", 0),
 	}
 }
 
@@ -81,6 +95,27 @@ func DefaultDBPath() string {
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return def
+}
+
+// envFloatOr reads a float env var, returning def when unset or unparseable.
+func envFloatOr(key string, def float64) float64 {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
+}
+
+// envDurationOr reads a Go duration env var (e.g. "720h"), returning def when unset
+// or unparseable.
+func envDurationOr(key string, def time.Duration) time.Duration {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
 	}
 	return def
 }
