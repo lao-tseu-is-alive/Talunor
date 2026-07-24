@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.14.1` (course Lesson 16 — measure the model)
+- **Version:** `v0.15.0` (Iteration 4 begins — schema versioning & migrations, Layer 15)
 - **Generated:** 2026-07-22
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -65,9 +65,12 @@ Talunor/
 │   │   │                     #       (turn / fact / doc_chunk); Hit type; Forget; ext version accessors.
 │   │   ├── provenance.go     #     LAYER 11: meta table fingerprints the embedding stack (canary vector);
 │   │   │                     #       Open flags OK/Stale/Unknown; ReEmbed re-vectorises all rows.
+│   │   ├── migrate.go        #     LAYER 15: ordered append-only migration runner; schema_version in meta;
+│   │   │                     #       migration 1 = baseline (memories); auto-baselines a pre-versioning DB.
 │   │   ├── shortterm.go      #     Bounded ring buffer of the most recent turns (immediate context).
 │   │   ├── cgo_link.go       #     cgo glue: dlopen libm with RTLD_GLOBAL — vector.so needs it in scope.
 │   │   ├── provenance_test.go #    Tests (fresh=OK, canary mismatch=Stale→ReEmbed, legacy=Unknown, cosine).
+│   │   ├── migrate_test.go   #     Tests (fresh stamps latest, idempotent reopen, legacy baseline no data loss).
 │   │   └── memory_test.go    #     Tests (semantic recall, thresholding, assistant-turn exclusion).
 │   │
 │   ├── llm/                  # LAYER 3 / 6: LLM provider abstraction + OpenAI-compatible adapter.
@@ -216,4 +219,5 @@ each one a tagged release (see `CHANGELOG.md`):
 | 12 | `internal/policy` (+ `internal/plan`) | the action guardrail: allow / prompt / deny before each tool call |
 | 13 | `agent/planner.go` + `agent/execute.go` | plan before acting: an approved plan, then ReAct execution capped to it |
 | 14 | `internal/calibration` + `cmd/calibrate` | measure a model's reliability deterministically; detect silent drift |
+| 15 | `internal/memory/migrate.go` | evolve the memory schema safely (ordered migrations) — the seam Iteration 4 builds on |
 | — | `internal/history`, `internal/version`, `internal/config`, `internal/render` | supporting infrastructure |

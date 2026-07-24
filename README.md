@@ -7,8 +7,9 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.14.1** — Iterations 1–3 complete (Layers 1–13), plus Layer 14
-> (**model calibration** — a deterministic reliability canary, `cmd/calibrate`). The
+> Current version: **v0.15.0** — Iterations 1–3 complete (Layers 1–13), plus Layer 14
+> (**model calibration** — a deterministic reliability canary, `cmd/calibrate`), and
+> Iteration 4 (**learning**) begun at Layer 15 (schema versioning & migrations). The
 > agent talks to local **Ollama** or hosted **OpenRouter** models (via `.env`) and *acts* —
 > a ReAct tool loop (calculator, clock, memory search) gated by a first-class
 > **policy engine** (auto-allow / approve / deny, YAML-configurable via
@@ -151,11 +152,17 @@ Motivated by the review episode behind Lesson 15: before an agent *learns* from 
 model (Iteration 4), you must *measure* whether that model is reliable — and catch
 silent drift when it degrades.
 
-### Later iterations
+### Iteration 4 — learning
 
-| Iter | Theme | Adds |
-|------|-------|------|
-| 4 | Learning | memory consolidation, salience/decay, async reflection, learning from executed plans (informed by calibration) |
+| Layer | What | Status |
+|-------|------|--------|
+| 15 | **Schema versioning & migrations** — an ordered, append-only migration runner (`internal/memory`), so the memory schema can evolve safely as learning adds columns; zero behaviour change | ✅ done (v0.15.0) |
+| 16 | **Fact provenance & confidence** — record where a fact came from and how sure the agent is; don't consolidate hallucinations into the foundation | ⏳ next |
+| 17 | **Salience / decay / consolidation** — reinforce recalled facts, merge restatements, let low-salience facts fade | ⏳ planned |
+| 18 | **Async reflection** — move learning off the turn's critical path (a background worker owning the single store connection) | ⏳ planned |
+
+Learning is **informed by calibration** (Layer 14): a fact from an unreliable or
+uncalibrated model should not silently gain the authority of an established one.
 
 ## Requirements
 

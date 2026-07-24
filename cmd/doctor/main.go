@@ -63,6 +63,9 @@ func run() error {
 		return err
 	}
 	fmt.Println("• vector version:", versionVector)
+	if v, err := store.SchemaVersion(ctx); err == nil {
+		fmt.Println("• schema version:", v)
+	}
 	fmt.Printf("• embedding model: %s (dim %d), provenance: %s\n",
 		store.EmbedModelName(), store.Dim(), store.Provenance())
 

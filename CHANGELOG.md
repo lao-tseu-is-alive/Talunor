@@ -11,9 +11,55 @@ changed but the *lessons learned* while getting there.
 
 ## [Unreleased]
 
-- **Iteration 4, next** — learning: memory consolidation, salience/decay, and
-  making reflection asynchronous (it runs synchronously in the loop today). The
-  executed plan becomes an input to learning (was deferred from Layer 13).
+- **Iteration 4, continued** — learning: fact provenance + confidence (Layer 16),
+  salience / decay / consolidation (Layer 17), and async reflection (Layer 18), each
+  built on the migration runner that Layer 15 just landed. Informed by calibration
+  (don't consolidate facts from an unreliable model). The executed plan becomes an
+  input to learning (deferred from Layer 13).
+
+## [0.15.0] - 2026-07-24 — Iteration 4 begins: schema versioning & migrations (Layer 15)
+
+Iteration 4 (learning) needs to *evolve* the memory schema — add per-fact provenance,
+confidence, salience, decay. This layer lays the groundwork with zero behaviour change:
+a tiny migration runner, so every later learning layer adds its columns as an ordered,
+in-place migration instead of an ad-hoc `CREATE TABLE`. Done now, deliberately, while
+the schema is still one flat table and the cost of getting migrations right is low.
+
+### Added
+
+- **`internal/memory/migrate.go`** — an append-only, ordered list of `migration`s and
+  a `runMigrations` runner. The applied version is a single integer in the existing
+  `meta` table (`schema_version`), read on every `Open`; migrations newer than the
+  recorded version are applied, each in its own transaction **with** its version stamp
+  (all-or-nothing, crash-safe). Migration 1 is the baseline (the `memories` table).
+- **Automatic baselining.** A database that predates versioning (a `memories` table,
+  no `schema_version`) starts at version 0; migration 1's `CREATE TABLE IF NOT EXISTS`
+  is a harmless no-op on it, then the version is stamped — no data loss, no manual step.
+- **`Store.SchemaVersion`** + a `schema version:` line in `make doctor`.
+
+### Changed
+
+- `bootstrap` now creates the `meta` table first (it holds the version), then runs the
+  migrations (which create `memories`), then `vector_init` + the provenance check.
+- The stale `memories.kind` comment (`'turn' | 'doc_chunk'`) now includes `'fact'`.
+
+### Lessons learned
+
+1. **Add the migration seam before you need it, not after.** The right time to
+   introduce schema versioning is while the schema is trivial — one table, one baseline
+   migration, no risk. Waiting until the first painful `ALTER` under real data is how
+   projects end up with hand-run SQL and drift. The cheapest migration to write is the
+   one that changes nothing.
+2. **Baseline an existing schema, don't demand a clean slate.** Real users have
+   databases already. Making migration 1 idempotent (`IF NOT EXISTS`) and treating an
+   unstamped DB as version 0 means the machinery adopts a legacy database silently and
+   safely — the test that matters is "reopen a pre-versioning DB and lose nothing".
+3. **Append-only is the whole discipline.** A migration list is a shipped history:
+   users have run those exact statements. The single rule — never reorder, renumber, or
+   edit a released migration; fix mistakes with a *new* one — is what keeps every
+   database in the fleet reaching the same state.
+
+## [0.14.1] - 2026-07-23 — Course: Lesson 16 (measure the model), bilingual
 - **Planner follow-ups (deferred from Layer 13):** `/edit-plan` (hand-edit a plan
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.

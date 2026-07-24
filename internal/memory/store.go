@@ -156,20 +156,21 @@ func Open(cfg Config) (*Store, error) {
 	return s, nil
 }
 
-// schemaSQL is the Layer 1 schema: a single flat table of memories. Each row is
-// a piece of remembered text with its embedding stored as a FLOAT32 BLOB.
+// schemaSQL is the baseline schema — a single flat table of memories, each a piece
+// of remembered text with its embedding as a FLOAT32 BLOB. It is applied by
+// migration 1 (see migrate.go); later layers add columns via further migrations.
 const schemaSQL = `
 CREATE TABLE IF NOT EXISTS memories (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    kind       TEXT NOT NULL,                              -- 'turn' | 'doc_chunk'
+    kind       TEXT NOT NULL,                              -- 'turn' | 'fact' | 'doc_chunk'
     role       TEXT,                                       -- 'user' | 'assistant' (turns only)
     content    TEXT NOT NULL,
     embedding  BLOB,                                       -- float32[dim] from sqlite-ai
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`
 
-// bootstrap loads the model, discovers the embedding dimension, applies the
-// schema, and initialises vector search on the embedding column.
+// bootstrap loads the model, discovers the embedding dimension, applies the schema
+// via the migration runner, and initialises vector search on the embedding column.
 func (s *Store) bootstrap(ctx context.Context) error {
 	// Load the embedding model. gpu_layers=0 → pure CPU inference.
 	if _, err := s.db.ExecContext(ctx,
@@ -187,12 +188,15 @@ func (s *Store) bootstrap(ctx context.Context) error {
 	if err := s.db.QueryRowContext(ctx, `SELECT llm_model_n_embd()`).Scan(&s.dim); err != nil {
 		return fmt.Errorf("llm_model_n_embd: %w", err)
 	}
-	// Apply schema (memories + the meta side-table for the embedding fingerprint).
-	if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
-		return fmt.Errorf("apply schema: %w", err)
-	}
+	// The meta side-table must exist first: it holds the schema_version the migration
+	// runner reads (and the embedding fingerprint).
 	if _, err := s.db.ExecContext(ctx, metaSchemaSQL); err != nil {
 		return fmt.Errorf("apply meta schema: %w", err)
+	}
+	// Evolve the schema through the ordered migrations (migration 1 = the memories
+	// table). An existing pre-versioning database is baselined automatically.
+	if err := s.runMigrations(ctx); err != nil {
+		return fmt.Errorf("migrate: %w", err)
 	}
 	// Initialise vector search on memories.embedding (per connection).
 	initSQL := fmt.Sprintf(

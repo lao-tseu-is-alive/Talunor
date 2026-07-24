@@ -57,7 +57,10 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    turns), Forget(id), short-term ring buffer. Kinds: turn
                    (episodic), fact (semantic), doc_chunk. provenance.go: a `meta`
                    table fingerprints the embedding stack (canary vector) and
-                   flags OK/Stale/Unknown on Open; ReEmbed re-vectorises all rows
+                   flags OK/Stale/Unknown on Open; ReEmbed re-vectorises all rows.
+                   migrate.go (LAYER 15): ordered append-only migration runner;
+                   schema_version int in `meta`; migration 1 = baseline (memories);
+                   pre-versioning DBs are baselined automatically. SchemaVersion()
 internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenRouter),
                    FromEnv() provider selection, NewOpenRouter
 internal/config/   minimal dependency-free .env loader (real env wins)
@@ -412,6 +415,16 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   to teach the three design decisions of a trustworthy LLM eval (deterministic verifier,
   accuracy vs consistency, drift over absolute); closes the 11→15→16 trust-and-verify arc.
   Course now 00–16.
-- **Next — Iteration 4 (learning):** memory consolidation, salience/decay, async
-  reflection (it runs synchronously in the loop today), and learning from executed
-  plans (informed by calibration). Then continue the per-layer checkpoint rhythm.
+- **Iteration 4 STARTED — Layer 15 (done): v0.15.0** = **schema versioning &
+  migrations** (`internal/memory/migrate.go`): an ordered append-only migration runner,
+  `schema_version` int in the `meta` table, migration 1 = baseline (the memories table),
+  pre-versioning DBs baselined automatically (no data loss). `Store.SchemaVersion()` +
+  a `schema version:` line in doctor. **Zero behaviour change** — the seam every later
+  learning layer adds its columns through. Add a migration by APPENDING to `migrations`
+  (never reorder/renumber/edit a shipped one).
+- **Next — Iteration 4 layers 16–18:** fact **provenance + confidence** (add columns via
+  migration 2; reflect records them; recall weights them — the honesty mechanism,
+  informed by calibration), then **salience/decay/consolidation** (reinforce on recall,
+  consolidate restatements, fade low-salience), then **async reflection** (a background
+  worker owning the single store connection — off the turn's critical path). Same
+  per-layer checkpoint rhythm.
