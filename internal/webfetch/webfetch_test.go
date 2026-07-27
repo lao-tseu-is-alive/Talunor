@@ -42,7 +42,15 @@ func TestBlockedIP(t *testing.T) {
 		{"100.64.0.1", true},          // CGNAT (RFC6598)
 		{"100.100.100.200", true},     // Alibaba metadata (in CGNAT)
 		{"0.0.0.0", true},             // unspecified
+		{"0.0.0.1", true},             // "this network" (0.0.0.0/8 routes to localhost on Linux)
+		{"0.1.2.3", true},             // "this network" (0.0.0.0/8)
 		{"::", true},                  // unspecified v6
+		{"64:ff9b::7f00:1", true},     // NAT64 of 127.0.0.1
+		{"64:ff9b::a00:1", true},      // NAT64 of 10.0.0.1 (private)
+		{"64:ff9b::808:808", false},   // NAT64 of 8.8.8.8 (public → allowed)
+		{"2002:a00:1::", true},        // 6to4 of 10.0.0.1 (private)
+		{"2002:808:808::", false},     // 6to4 of 8.8.8.8 (public → allowed)
+		{"2001::3f57:fefe", true},     // Teredo of 192.168.1.1 (private)
 		{"224.0.0.1", true},           // multicast
 		{"::ffff:127.0.0.1", true},    // IPv4-in-IPv6 loopback
 		{"::ffff:10.0.0.1", true},     // IPv4-in-IPv6 private

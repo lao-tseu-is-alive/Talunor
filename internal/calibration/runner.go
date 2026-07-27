@@ -79,7 +79,10 @@ func runScenario(ctx context.Context, p llm.Provider, sc *Scenario, opts Options
 	if sc.Temperature > 0 {
 		temp = sc.Temperature
 	}
-	llmOpts := llm.Options{Temperature: temp, Model: opts.Model}
+	// Send the temperature explicitly (Temp, not a bare field): a reliability
+	// canary must be able to pin temperature to 0 for determinism, which a
+	// float64+omitempty field silently dropped as if unset.
+	llmOpts := llm.Options{Temperature: llm.Temp(temp), Model: opts.Model}
 
 	nTurns := len(sc.Turns)
 	turnPass := make([]int, nTurns)

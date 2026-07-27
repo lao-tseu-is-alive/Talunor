@@ -25,7 +25,7 @@ rules:
   # Read-only, side-effect-free tools run freely.
   - tool: calculator
     action: allow
-  - tool: clock
+  - tool: current_time   # the clock tool's registered name is "current_time"
     action: allow
   - tool: recall_memory
     action: allow

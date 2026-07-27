@@ -219,11 +219,13 @@ func isTextual(contentType string) bool {
 }
 
 // blockedCIDRs holds ranges not already covered by the net.IP helper methods —
-// notably RFC6598 carrier-grade NAT (100.64.0.0/10), which some clouds use for
-// metadata (e.g. Alibaba's 100.100.100.200).
+// RFC6598 carrier-grade NAT (100.64.0.0/10), which some clouds use for metadata
+// (e.g. Alibaba's 100.100.100.200), and RFC1122 "this network" (0.0.0.0/8):
+// IsUnspecified() only matches 0.0.0.0 exactly, but on Linux the whole /8 routes
+// to the local host, so http://0.0.0.1/ would otherwise reach a local service.
 var blockedCIDRs = func() []*net.IPNet {
 	var out []*net.IPNet
-	for _, cidr := range []string{"100.64.0.0/10"} {
+	for _, cidr := range []string{"100.64.0.0/10", "0.0.0.0/8"} {
 		if _, n, err := net.ParseCIDR(cidr); err == nil {
 			out = append(out, n)
 		}
@@ -253,5 +255,44 @@ func blockedIP(ip net.IP) bool {
 			return true
 		}
 	}
+	// An IPv6 transition address can carry an IPv4 destination: decode and
+	// re-check it, so e.g. 64:ff9b::7f00:1 (NAT64 of 127.0.0.1) is blocked like
+	// 127.0.0.1 itself. Without this the checks above (which only see the IPv6
+	// form) would wave it through.
+	if v4 := embeddedV4(ip); v4 != nil {
+		return blockedIP(v4)
+	}
 	return false
+}
+
+// embeddedV4 extracts the IPv4 address embedded in an IPv6 transition address —
+// NAT64 (64:ff9b::/96), 6to4 (2002::/16) or Teredo (2001:0::/32) — or nil if ip
+// carries none. These formats let an IPv6 literal ultimately reach an IPv4 host,
+// so the SSRF guard must decode and re-check the embedded v4. Pure and
+// table-testable, like blockedIP.
+func embeddedV4(ip net.IP) net.IP {
+	ip16 := ip.To16()
+	if ip16 == nil || ip16.To4() != nil {
+		return nil // not IPv6 (or IPv4-mapped, already normalised by blockedIP).
+	}
+	switch {
+	case ip16[0] == 0x00 && ip16[1] == 0x64 && ip16[2] == 0xff && ip16[3] == 0x9b && allZero(ip16[4:12]):
+		return net.IPv4(ip16[12], ip16[13], ip16[14], ip16[15]) // NAT64 64:ff9b::/96
+	case ip16[0] == 0x20 && ip16[1] == 0x02:
+		return net.IPv4(ip16[2], ip16[3], ip16[4], ip16[5]) // 6to4 2002::/16
+	case ip16[0] == 0x20 && ip16[1] == 0x01 && ip16[2] == 0x00 && ip16[3] == 0x00:
+		// Teredo: the embedded IPv4 is the last 4 bytes, XOR 0xffffffff.
+		return net.IPv4(ip16[12]^0xff, ip16[13]^0xff, ip16[14]^0xff, ip16[15]^0xff)
+	}
+	return nil
+}
+
+// allZero reports whether every byte of b is zero.
+func allZero(b []byte) bool {
+	for _, x := range b {
+		if x != 0 {
+			return false
+		}
+	}
+	return true
 }

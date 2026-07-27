@@ -150,6 +150,43 @@ func TestRecallForgetFloorAndRevival(t *testing.T) {
 	}
 }
 
+// TestRecallForConsolidationSeesForgotten proves the M1 fix: a soft-forgotten
+// fact is hidden from the prompt path (Recall) but visible to the consolidation
+// path (RecallForConsolidation), so a restatement can revive the existing row
+// instead of inserting a duplicate the plain Recall would leave orphaned below
+// the floor forever.
+func TestRecallForConsolidationSeesForgotten(t *testing.T) {
+	ctx := context.Background()
+	cfg := testConfig(t)
+	cfg.ForgetFloor = 1.4 // above a fresh fact's salience of 1.0 → immediately "faded".
+
+	store, err := memory.Open(cfg)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	const fact = "User's cat is named Pixel."
+	if _, err := store.RememberFact(ctx, fact, memory.ProvenanceUserStated, 0.9); err != nil {
+		t.Fatalf("remember: %v", err)
+	}
+	const q = "what is the name of the user's cat?"
+
+	// Prompt path: soft-forgotten → not returned.
+	if recallContains(mustRecall(t, ctx, store, q), fact) {
+		t.Fatalf("faded fact must be hidden from the prompt-path Recall")
+	}
+	// Consolidation path: the same faded fact IS returned, so a restatement can
+	// find and revive it.
+	hits, err := store.RecallForConsolidation(ctx, q, 3, 0)
+	if err != nil {
+		t.Fatalf("recall for consolidation: %v", err)
+	}
+	if !recallContains(hits, fact) {
+		t.Errorf("RecallForConsolidation must see the soft-forgotten fact so it can be revived, not duplicated")
+	}
+}
+
 // TestReinforcementRaisesRecallScore checks that reinforcing a memory increases the
 // combined recall score it is ranked by (same query, same distance, more salient).
 func TestReinforcementRaisesRecallScore(t *testing.T) {

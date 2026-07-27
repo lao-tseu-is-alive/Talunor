@@ -145,9 +145,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// A pending tool approval captures y/n before anything else.
+		// A pending tool approval intercepts input — but a security prompt must let
+		// the user scroll back to inspect what they are approving before deciding.
+		// Only explicit decision keys resolve it; navigation keys fall through to the
+		// viewport so a stray PgUp/arrow can't silently deny the call.
 		if m.pending != nil {
-			return m.answerApproval(msg)
+			switch msg.Type {
+			case tea.KeyPgUp, tea.KeyPgDown, tea.KeyCtrlU, tea.KeyCtrlD, tea.KeyUp, tea.KeyDown:
+				var cmd tea.Cmd
+				m.vp, cmd = m.vp.Update(msg) // scroll the transcript, keep waiting.
+				return m, cmd
+			default:
+				return m.answerApproval(msg)
+			}
 		}
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
@@ -420,7 +430,7 @@ func (m *Model) conversation() string {
 		b.WriteString("\n")
 		b.WriteString(dimStyle.Render(m.wrap(m.pending.Args)))
 		b.WriteString("\n")
-		b.WriteString(warnStyle.Render("[y] allow    [any other key] deny"))
+		b.WriteString(warnStyle.Render("[y] allow    [any other key] deny    (PgUp/PgDn/↑↓ to scroll & read first)"))
 	}
 	return b.String()
 }
@@ -439,7 +449,7 @@ func (m *Model) status() string {
 		state = "thinking…"
 	}
 	if m.pending != nil {
-		state = "awaiting approval — press y to allow, any other key to deny"
+		state = "awaiting approval — y allow · other deny · PgUp/PgDn/↑↓ scroll"
 	}
 	return statusBar.Render(fmt.Sprintf("%s · %s · %d memories · %s · enter send · ↑↓ history · PgUp/PgDn scroll · ctrl+c quit",
 		m.providerName, m.modelName, m.memCount, state))

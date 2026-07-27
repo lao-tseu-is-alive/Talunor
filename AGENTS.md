@@ -70,6 +70,9 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    effective salience = salience·2^(−age/half-life) at read time (NO
                    writes: fits the single conn), ranks by similarity·confidence·
                    eff-salience, and soft-forgets below ForgetFloor (row survives).
+                   Recall hides soft-forgotten rows from the prompt;
+                   RecallForConsolidation (v0.18.2) shows them so reflection revives an
+                   old fact instead of duplicating it.
                    Reinforce(ids) bumps salience (recall = it mattered);
                    ReinforceFact(id,gain) also raises confidence toward a <1 ceiling
                    with diminishing returns — but only on INDEPENDENT evidence
@@ -498,7 +501,19 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   shutdown-drain contract (`Close` + deferred-LIFO vs `store.Close`), and "async work can't
   narrate a closed turn" (why /debug reflection notes moved to the log). **Course now 00–19
   (twenty lessons); closes the Iteration-4 arc in the course.**
+- **v0.18.2 (fixes)** = correctness & hardening patch from a five-model cross-review, each
+  finding verified against the code. `llm.Options.Temperature` is now `*float64` (+`llm.Temp`)
+  so an explicit `0` is actually sent — planner/reflection/calibration were silently getting
+  the provider default via `omitempty`. `Store.RecallForConsolidation` lets reflection see
+  soft-forgotten rows, so a restatement **revives** the old fact instead of duplicating it
+  (matches the Layer-17 promise). `Agent.Close()` bounds its drain (`closeDrainTimeout`, then
+  `bgCancel`) so an unresponsive provider can't wedge shutdown. TUI approval lets scroll keys
+  through (only explicit keys decide). OCI sandbox now passes `--cap-drop=ALL
+  --security-opt=no-new-privileges --user 65534:65534` (matches the doc's promised posture).
+  SSRF `blockedIP` blocks `0.0.0.0/8` and decodes NAT64/6to4/Teredo IPv6→IPv4. Debug log is
+  `0600`. `docs/policy.sample.yaml` `clock`→`current_time`. No schema/behaviour change beyond
+  these; regression tests added throughout.
 - **Next — open threads (documented, not started):** the executed plan as a learning input
   (deferred from Layer 13; would populate `tool_observed`/`model_inferred` provenance — a
   possible Iteration 5 seed); calibration→policy wiring; the `lastPlan`/`screenDebug`
-  cross-goroutine access (`atomic.*`). Same per-layer checkpoint rhythm.
+  cross-goroutine access (`atomic.*`, still open). Same per-layer checkpoint rhythm.

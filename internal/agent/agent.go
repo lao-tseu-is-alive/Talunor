@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
@@ -180,6 +181,9 @@ type Agent struct {
 	bgCtx     context.Context
 	bgCancel  context.CancelFunc
 	closeOnce sync.Once
+	// drainTimeout bounds Close's wait for queued reflection (defaults to
+	// closeDrainTimeout; overridable in tests to keep them fast).
+	drainTimeout time.Duration
 }
 
 // reflectJob is one unit of deferred learning: reflect on this user message.
@@ -240,14 +244,15 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 		cfg.ApprovalMode = ApprovalPlan
 	}
 	a := &Agent{
-		store:     store,
-		short:     memory.NewShortTerm(cfg.ShortTermCap),
-		provider:  provider,
-		extractor: cfg.Extractor,
-		tools:     cfg.Tools,
-		policy:    cfg.Policy,
-		planner:   cfg.Planner,
-		cfg:       cfg,
+		store:        store,
+		short:        memory.NewShortTerm(cfg.ShortTermCap),
+		provider:     provider,
+		extractor:    cfg.Extractor,
+		tools:        cfg.Tools,
+		policy:       cfg.Policy,
+		planner:      cfg.Planner,
+		cfg:          cfg,
+		drainTimeout: closeDrainTimeout,
 	}
 	// Start the async reflection worker (Layer 18). It owns the deferred learning
 	// step; callers should Close the agent to drain it on shutdown.
@@ -576,18 +581,42 @@ func (a *Agent) Quiesce(ctx context.Context) error {
 	}
 }
 
+// closeDrainTimeout bounds how long Close waits for queued reflection to finish
+// before it cancels the background context to force the worker out. A human
+// converses far slower than reflection completes, so the queue is normally short
+// and drains well within this; the timeout only matters when a reflection call
+// is stuck on an unresponsive provider.
+const closeDrainTimeout = 5 * time.Second
+
 // Close shuts the agent down cleanly: it stops accepting new reflection jobs and
 // drains those already queued (so learning in flight is not lost), then releases
 // the background context. It is idempotent. Call it before closing the store —
 // the worker writes to the store while draining. No Turn may run after Close.
+//
+// The drain is BOUNDED: bgCtx has no deadline of its own, so a reflection call
+// stuck on an unresponsive provider would otherwise make workerWG.Wait() (and
+// thus the whole process) hang forever. Close waits up to closeDrainTimeout, then
+// cancels bgCtx to unblock the in-flight LLM call so the worker can exit — the
+// still-in-flight learning is best-effort and is dropped rather than wedging
+// shutdown. This is why the cancel can precede the final wait: "cancel, then
+// wait" is the correct shutdown order once a drain deadline exists.
 func (a *Agent) Close() error {
 	a.closeOnce.Do(func() {
 		if a.reflectCh != nil {
 			close(a.reflectCh) // worker finishes the queue, then exits
 		}
-		a.workerWG.Wait() // block until the queue is fully drained
+		done := make(chan struct{})
+		go func() { a.workerWG.Wait(); close(done) }()
+		select {
+		case <-done: // drained within the deadline — nothing lost.
+		case <-time.After(a.drainTimeout):
+			if a.bgCancel != nil {
+				a.bgCancel() // unblock a stuck in-flight reflection…
+			}
+			<-done // …then finish waiting for the worker to return.
+		}
 		if a.bgCancel != nil {
-			a.bgCancel()
+			a.bgCancel() // idempotent; releases bgCtx in the fast path too.
 		}
 	})
 	return nil
@@ -663,7 +692,11 @@ const consolidationGainBase = 0.34
 // a near-duplicate. Only existing KindFact rows count: a raw conversation turn that
 // happens to sit nearby must not block the first distillation of that turn.
 func (a *Agent) knownFact(ctx context.Context, fact string) (memory.Hit, bool) {
-	hits, err := a.store.Recall(ctx, fact, 3, a.cfg.DedupMaxDistance)
+	// Use the consolidation-aware recall so a restatement of a long-neglected
+	// (soft-forgotten) fact still finds the old row and reinforces it, instead of
+	// silently inserting a near-duplicate the plain Recall would leave orphaned
+	// below the forget floor forever.
+	hits, err := a.store.RecallForConsolidation(ctx, fact, 3, a.cfg.DedupMaxDistance)
 	if err != nil {
 		return memory.Hit{}, false
 	}

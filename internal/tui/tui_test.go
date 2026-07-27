@@ -217,6 +217,17 @@ func TestTUIApprovalFlow(t *testing.T) {
 		t.Fatal("tool ran before approval")
 	}
 
+	// Scrolling while a decision is pending must NOT resolve the approval: the
+	// prompt stays up and the tool has not run (a stray navigation key must never
+	// silently deny — nor allow — a security prompt).
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	if !strings.Contains(m.View(), "Allow tool") {
+		t.Fatalf("PgUp during approval dismissed the prompt; view:\n%s", m.View())
+	}
+	if ran {
+		t.Fatal("scrolling during approval ran the tool")
+	}
+
 	// Approve with 'y' and pump to completion.
 	m, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
 	for cmd != nil {

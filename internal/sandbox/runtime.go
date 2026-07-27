@@ -18,8 +18,11 @@ import (
 const defaultImage = "alpine:3.20"
 
 // ociRuntime is the strong backend: it delegates isolation to an OCI runtime
-// (nerdctl or docker), which brings seccomp, cgroups, and capability dropping
-// for free. We only assemble flags that mirror our [Limits].
+// (nerdctl or docker), which brings a default seccomp profile and cgroups. We do
+// NOT rely on the runtime's default capability set, though: the flags below drop
+// ALL capabilities, forbid privilege escalation (no-new-privileges) and run as a
+// non-root uid, so the container matches the "capability dropping" the docs
+// promise rather than trusting the runtime's (root-with-default-caps) defaults.
 type ociRuntime struct {
 	bin   string // absolute path to nerdctl or docker
 	name  string // "nerdctl" or "docker"
@@ -58,9 +61,12 @@ func (r *ociRuntime) Run(ctx context.Context, script string, lim Limits) (string
 
 	args := []string{
 		"run", "--rm",
-		"--read-only", // rootfs is immutable; only the tmpfs below is writable
-		"--cpus=1",    // one CPU's worth of time
-		"--tmpfs", "/tmp:size=" + strconv.FormatInt(lim.FSBytes, 10) + ",exec",
+		"--read-only",                         // rootfs is immutable; only the tmpfs below is writable
+		"--cpus=1",                            // one CPU's worth of time
+		"--cap-drop=ALL",                      // drop every Linux capability (untrusted code)
+		"--security-opt", "no-new-privileges", // a setuid binary can't regain privilege
+		"--user", "65534:65534", // run as nobody, never root in the container
+		"--tmpfs", "/tmp:size=" + strconv.FormatInt(lim.FSBytes, 10) + ",exec,nosuid,nodev",
 	}
 	if !lim.Network {
 		args = append(args, "--network", "none")

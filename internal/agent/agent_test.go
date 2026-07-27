@@ -506,6 +506,49 @@ func TestCloseDrainsPendingReflection(t *testing.T) {
 	}
 }
 
+// blockingExtractor blocks in Extract until the context is cancelled, simulating
+// a reflection call stuck on an unresponsive provider.
+type blockingExtractor struct{}
+
+func (blockingExtractor) Extract(ctx context.Context, _ string) ([]string, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// TestCloseUnblocksStuckReflection proves the shutdown fix: if a queued
+// reflection is stuck (provider never responds, bgCtx has no deadline), Close
+// must still return — it waits the bounded drain, then cancels bgCtx to force the
+// worker out. Before the fix, Close waited on the worker before cancelling and
+// hung forever.
+func TestCloseUnblocksStuckReflection(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+
+	cfg := DefaultConfig()
+	cfg.Extractor = blockingExtractor{}
+	ag := New(store, &fakeProvider{reply: "ok"}, cfg)
+	ag.drainTimeout = 50 * time.Millisecond // keep the test fast.
+
+	out, err := ag.Turn(ctx, "remember something")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	if _, err := drain(out); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- ag.Close() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("close: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close hung on a stuck reflection instead of cancelling the drain")
+	}
+}
+
 // factContents returns the content of every stored KindFact memory.
 func factContents(t *testing.T, ctx context.Context, store *memory.Store) []string {
 	t.Helper()

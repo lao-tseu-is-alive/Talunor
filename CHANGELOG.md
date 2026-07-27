@@ -15,6 +15,89 @@ changed but the *lessons learned* while getting there.
   from Layer 13); let a policy consult calibration/confidence for high-risk steps; and
   the `lastPlan`/`screenDebug` cross-goroutine access still wants an `atomic.*` fix.
 
+## [0.18.2] - 2026-07-27 — Correctness & hardening patch
+
+A bugfix/polish release: nine findings from a five-model cross-review (Kimi 3,
+GPT-5.5, Gemini 3.6, Grok 4.5 and Claude Opus 4.8), each verified against the
+code before fixing. No new layer, no behaviour beyond the fixes, no schema change.
+
+### Fixed
+
+- **Determinism was silently lost to `omitempty`.** `llm.Options.Temperature` was a
+  `float64` with `json:"temperature,omitempty"`, so an explicit `0` was
+  indistinguishable from unset and dropped from the request. Every caller that pinned
+  temperature to 0 for reproducibility — the **planner**, the **reflection extractor**,
+  and the **calibration** canary — was actually getting the provider default. Changed
+  the field to `*float64` with a `llm.Temp(0)` helper: `nil` omits (provider default),
+  a non-nil pointer is sent verbatim, including `0`. The agent's conversational turn is
+  unaffected (still unset → provider default). *(Found by Kimi 3.)*
+- **A soft-forgotten fact was duplicated, not consolidated.** The reflection path finds
+  a near-duplicate via `Store.Recall`, which drops memories below the salience forget
+  floor — so a restatement of a long-neglected fact never found the old row and inserted
+  a near-duplicate instead, contradicting the documented "a restatement revives it"
+  (Layer 17). Added `Store.RecallForConsolidation` (the same query, but it *includes*
+  soft-forgotten rows); `agent.knownFact` uses it, so a restatement now reinforces and
+  revives the existing row. The prompt path still hides faded memories. *(Kimi 3.)*
+- **`Agent.Close()` could hang forever on shutdown.** It waited on the reflection worker
+  *before* cancelling the background context, but the worker's in-flight LLM call ran on
+  that same (deadline-less) context — an unresponsive provider at quit time wedged the
+  process. `Close` now waits a bounded `closeDrainTimeout` (5s), then cancels to unblock
+  the in-flight call so the worker exits; queued learning still drains in the fast path.
+  *(Kimi 3, Grok 4.5, Claude.)*
+- **The TUI approval prompt swallowed navigation keys.** While a tool call awaited y/N,
+  *every* keypress resolved it (only `y` allowed, everything else denied) — so PgUp/↑/↓
+  couldn't scroll to inspect the command, and a stray navigation key silently denied a
+  security prompt. Scroll keys now pass through to the viewport; only explicit keys
+  decide. *(Kimi 3.)*
+
+### Security
+
+- **OCI sandbox: capabilities are now dropped explicitly.** The docs described the
+  nerdctl/docker backend as "seccomp, cgroups, and dropped capabilities", but the code
+  passed no `--cap-drop`, so it relied on the runtime's default (root + default caps).
+  `docker/nerdctl run` now gets `--cap-drop=ALL --security-opt=no-new-privileges
+  --user 65534:65534` (and the tmpfs is `nosuid,nodev`), matching the promised posture.
+  *(GPT-5.5, Kimi 3.)*
+- **SSRF guard: two address-normalisation gaps closed.** `blockedIP` now blocks the whole
+  `0.0.0.0/8` "this-network" range (Linux routes it to localhost; only `0.0.0.0` exactly
+  was blocked before) *(Claude)*, and it decodes the IPv4 embedded in IPv6 transition
+  addresses — NAT64 `64:ff9b::/96`, 6to4 `2002::/16`, Teredo `2001:0::/32` — and re-checks
+  it, so `64:ff9b::7f00:1` is blocked like `127.0.0.1` *(Kimi 3)*.
+- **Debug log tightened to `0600`.** `TALUNOR_DEBUG`'s trace holds the same personal data
+  as the database (recalled-memory snippets, tool args/results) but was created `0644`,
+  re-opening the surface the DB's `0600` closed in v0.13.3. Now `0600`. *(GPT-5.5, Kimi 3.)*
+
+### Changed
+
+- **`docs/policy.sample.yaml`**: the example rule targeted `tool: clock`, but the clock
+  tool registers as `current_time`, so the rule never matched — a broken official
+  example in a teaching repo. Corrected to `current_time`. *(Kimi 3.)*
+
+### Lessons learned
+
+1. **`omitempty` on a numeric field is a determinism trap.** Go's zero value is
+   indistinguishable from "unset", so `float64 + omitempty` cannot express "send 0". Three
+   separate call sites believed they were deterministic and were not — the compiler was
+   perfectly happy, the tests never inspected the wire payload, and the comment
+   ("Temperature 0 keeps extraction deterministic") *documented the intent, not the
+   behaviour*. When 0 is a meaningful value, model the field as a pointer, and test the
+   serialised request, not the struct.
+2. **A filter written for one caller silently poisons another.** The forget-floor filter
+   was correct for the prompt path and wrong for the consolidation path that inherited it
+   through a shared `Recall`. "See below the floor" is a per-caller decision, not a global
+   property of the store — so the fix is an explicit second entry point, not a flag threaded
+   through the hot path.
+3. **Shutdown ordering is part of the concurrency contract.** "Drain, don't lose learning"
+   and "never hang" are in tension; resolving it means *bounding* the drain (wait, then
+   cancel), not choosing one. `cancel → wait` is only correct once a deadline exists.
+4. **Fail-closed is about the default, not the interaction.** An approval prompt that denies
+   on any key is safe but hostile: it pushes the user to answer `y` blind rather than read
+   first. A security control must let you inspect before you decide.
+5. **A promise the code doesn't enforce is worse than no promise.** "Dropped capabilities",
+   "a restatement revives it", a policy example targeting `clock` — each was written down and
+   verified nowhere. The drift guards (`atlas`/`readme`/`lessons-check`) catch structural
+   staleness but not prose that lies; the durable fix is a *test or a flag*, not a comment.
+
 ## [0.18.1] - 2026-07-24 — Course: Lesson 19 (off the critical path), bilingual
 
 A docs-only release. Layer 18's async reflection gets its lesson — the course's

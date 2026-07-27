@@ -190,6 +190,42 @@ func TestChatAssemblesStreamedToolCalls(t *testing.T) {
 	}
 }
 
+// TestTemperatureIsSentExplicitlyIncludingZero guards the omitempty trap: a nil
+// Options.Temperature must be omitted (provider default), but Temp(0) must be
+// sent as an explicit "temperature":0 — otherwise a caller pinning determinism
+// (planner, reflection extractor, calibration canary) silently gets the
+// provider default instead.
+func TestTemperatureIsSentExplicitlyIncludingZero(t *testing.T) {
+	capture := func(opts llm.Options) string {
+		var sentBody string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			b, _ := io.ReadAll(r.Body)
+			sentBody = string(b)
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, "data: [DONE]\n\n")
+		}))
+		defer srv.Close()
+		p := llm.NewOpenAICompatible("test", srv.URL, "", "m")
+		ch, err := p.Chat(context.Background(), []llm.Message{{Role: llm.RoleUser, Content: "hi"}}, opts)
+		if err != nil {
+			t.Fatalf("chat: %v", err)
+		}
+		for range ch { //nolint:revive // drain
+		}
+		return sentBody
+	}
+
+	if body := capture(llm.Options{}); strings.Contains(body, "temperature") {
+		t.Errorf("unset temperature must be omitted, got: %s", body)
+	}
+	if body := capture(llm.Options{Temperature: llm.Temp(0)}); !strings.Contains(body, `"temperature":0`) {
+		t.Errorf("Temp(0) must be sent explicitly, got: %s", body)
+	}
+	if body := capture(llm.Options{Temperature: llm.Temp(0.7)}); !strings.Contains(body, `"temperature":0.7`) {
+		t.Errorf("Temp(0.7) must be sent, got: %s", body)
+	}
+}
+
 // TestToolCallMarshalsToOpenAIShape checks the echo shape used in follow-ups.
 func TestToolCallMarshalsToOpenAIShape(t *testing.T) {
 	b, err := json.Marshal(llm.ToolCall{ID: "call_9", Name: "clock", Args: `{"timezone":"UTC"}`})

@@ -424,7 +424,10 @@ func debugLogger(dbPath string) (*slog.Logger, io.Closer, string, error) {
 		}
 		dest = filepath.Join(dir, "talunor-debug.log")
 	}
-	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	// 0600: the trace holds the same personal data as the DB (recalled-memory
+	// snippets, tool args/results), so it gets the same owner-only permission the
+	// database file does — a shared-path TALUNOR_DEBUG must not widen that surface.
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("open debug log %q: %w", dest, err)
 	}

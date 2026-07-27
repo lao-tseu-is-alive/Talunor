@@ -62,11 +62,23 @@ func (tc ToolCall) MarshalJSON() ([]byte, error) {
 
 // Options tunes a single chat call. Zero values mean "use the provider default".
 type Options struct {
-	Model       string     // overrides the provider's default model when set.
-	Temperature float64    // 0 → provider default.
+	Model string // overrides the provider's default model when set.
+	// Temperature is the sampling temperature. It is a pointer on purpose: a nil
+	// pointer means "unset — use the provider default", while a non-nil pointer is
+	// sent verbatim, INCLUDING an explicit 0. A plain float64 with `omitempty`
+	// cannot express "send 0": the zero value is indistinguishable from unset and
+	// is dropped, so callers that pin temperature to 0 for determinism (the
+	// planner, the reflection extractor, calibration) silently got the provider
+	// default instead. Use Temp(0) to force deterministic decoding.
+	Temperature *float64
 	MaxTokens   int        // 0 → provider default.
 	Tools       []ToolSpec // tools offered to the model (empty → none).
 }
+
+// Temp returns a pointer to t, for setting Options.Temperature. Temp(0) forces
+// deterministic decoding (temperature is sent as an explicit 0), which a bare
+// float64 field with `omitempty` could not express.
+func Temp(t float64) *float64 { return &t }
 
 // Chunk is one streamed piece of a completion. Thinking models (e.g. qwen3 via
 // Ollama) emit their chain-of-thought in Reasoning and the final answer in

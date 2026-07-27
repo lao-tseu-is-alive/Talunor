@@ -68,7 +68,7 @@ type llmPlanner struct {
 // MaxTokens uncapped (a thinking model spends budget reasoning first).
 func NewLLMPlanner(provider llm.Provider, base llm.Options) Planner {
 	opts := base
-	opts.Temperature = 0
+	opts.Temperature = llm.Temp(0) // a plan should be reproducible → deterministic decoding.
 	opts.MaxTokens = 0
 	return &llmPlanner{provider: provider, opts: opts}
 }

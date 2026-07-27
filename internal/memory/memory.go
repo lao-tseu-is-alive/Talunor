@@ -176,6 +176,26 @@ func (s *Store) remember(ctx context.Context, kind Kind, role, content string, p
 // which keeps it a pure read on the pinned single connection. This is the
 // semantic-retrieval step injected before each LLM call.
 func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance float64) ([]Hit, error) {
+	return s.recall(ctx, query, k, maxDistance, false)
+}
+
+// RecallForConsolidation is Recall for the reflection/consolidation path: it is
+// identical EXCEPT that it also returns soft-forgotten memories (those whose
+// effective salience has decayed below the forget floor). The turn's prompt path
+// must NOT see faded memories — that is the point of soft forgetting — but the
+// consolidation path must, otherwise a restatement of a long-neglected fact can
+// never find the old row and revives nothing: it would insert a near-duplicate
+// instead, contradicting the documented promise that "a restatement revives it".
+// Callers should reinforce whatever hit they get back (which resets the decay
+// clock and lifts the fact back above the floor).
+func (s *Store) RecallForConsolidation(ctx context.Context, query string, k int, maxDistance float64) ([]Hit, error) {
+	return s.recall(ctx, query, k, maxDistance, true)
+}
+
+// recall is the shared implementation of Recall and RecallForConsolidation.
+// includeForgotten decides whether memories below the forget floor are kept
+// (consolidation) or dropped (the prompt path — the default via Recall).
+func (s *Store) recall(ctx context.Context, query string, k int, maxDistance float64, includeForgotten bool) ([]Hit, error) {
 	qvec, err := s.Embed(ctx, query)
 	if err != nil {
 		return nil, err
@@ -240,8 +260,8 @@ func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance flo
 			ref = h.CreatedAt
 		}
 		eff := effectiveSalience(h.Salience, ref, now, halfLife)
-		if eff < forgetFloor {
-			continue
+		if eff < forgetFloor && !includeForgotten {
+			continue // soft-forgotten: hidden from the prompt path, kept for consolidation.
 		}
 		// Combined recall score: relevance × trust × how-much-it-matters-now.
 		h.Score = (1 - h.Distance) * h.Confidence * eff

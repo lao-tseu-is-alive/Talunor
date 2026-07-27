@@ -14,7 +14,7 @@ type fakeProvider struct {
 	replies  []string
 	call     int
 	errAt    int
-	lastTemp float64
+	lastTemp *float64
 }
 
 func newFake(replies ...string) *fakeProvider { return &fakeProvider{replies: replies, errAt: -1} }
@@ -108,7 +108,7 @@ func TestRunTemperatureOverride(t *testing.T) {
 		{ID: "x", Category: "c", Temperature: 0.9, Turns: []Turn{{User: "hi", Expect: Assert{Contains: sp("ok")}}}},
 	}}
 	Run(context.Background(), f, suite, Options{Temperature: 0.1})
-	if f.lastTemp != 0.9 {
+	if f.lastTemp == nil || *f.lastTemp != 0.9 {
 		t.Errorf("scenario temperature override not applied: got %v, want 0.9", f.lastTemp)
 	}
 }
