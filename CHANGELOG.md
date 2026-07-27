@@ -12,8 +12,38 @@ changed but the *lessons learned* while getting there.
 ## [Unreleased]
 
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
-  from Layer 13); let a policy consult calibration/confidence for high-risk steps; and
-  the `lastPlan`/`screenDebug` cross-goroutine access still wants an `atomic.*` fix.
+  from Layer 13); let a policy consult calibration/confidence for high-risk steps.
+
+## [0.18.3] - 2026-07-27 — Concurrency patch: the last documented data race
+
+A small follow-up to v0.18.2. Closes the one remaining known data race, which had
+sat in `[Unreleased]` as a documented open thread since Layer 13 and was
+re-surfaced by the same cross-review (all five models flagged it).
+
+### Fixed
+
+- **`lastPlan` / `screenDebug` are now atomic.** Both were plain fields written from
+  one goroutine and read from another — `lastPlan` written by the turn goroutine
+  (`runPlanned`) and read by `/plan` on the UI goroutine; `screenDebug` written by
+  `/debug` on the UI goroutine and read inside the turn. The front-ends normally drain
+  a turn before the next command, so the window was narrow, but nothing in the *type*
+  guaranteed the happens-before, and a future concurrent front-end would inherit the
+  race. `lastPlan` is now `atomic.Pointer[plan.Plan]` and `screenDebug` an
+  `atomic.Bool`; no lock, no API change. A new `TestConcurrentStateAccessIsRaceFree`
+  drives both fields from two goroutines and is clean under `-race` (it reported a race
+  before the change). *(Flagged by Gemini 3.6, Kimi 3, GPT-5.5, Grok 4.5.)*
+
+### Lessons learned
+
+1. **`go test -race` only finds what the tests actually exercise.** This race lived
+   through every green `-race` run because the suite was sequential — it drained each
+   turn before reading `lastPlan`, so the concurrent window never opened. A documented
+   "known race" with a green race detector is a contradiction that should prompt a
+   *concurrent* test, not reassurance. The fix shipped with exactly that test.
+2. **Prefer `atomic` to a mutex for single-word/pointer state.** `atomic.Bool` and
+   `atomic.Pointer[T]` express "one writer, many readers, no invariant across fields"
+   with zero locking and no critical sections — lighter than a `sync.RWMutex` when there
+   is nothing to hold a lock *across*.
 
 ## [0.18.2] - 2026-07-27 — Correctness & hardening patch
 

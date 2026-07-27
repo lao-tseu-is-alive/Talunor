@@ -38,7 +38,7 @@ func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string
 		a.reactLoop(ctx, msgs, input, out, execCtx{})
 		return
 	}
-	a.lastPlan = pl
+	a.lastPlan.Store(pl)
 	a.trace("plan", "goal", pl.Goal, "steps", len(pl.Steps), "confidence", pl.Confidence)
 	// Inspectability is the whole point of planning: always surface the plan.
 	a.send(ctx, out, llm.Chunk{Reasoning: "📋 Plan:\n" + FormatPlan(pl)})
@@ -123,18 +123,19 @@ func (a *Agent) finishAnswer(ctx context.Context, out chan<- llm.Chunk, input, a
 
 // LastPlan returns the most recent plan produced this session, or nil if planning
 // is off or no turn has planned yet. The /plan command renders it.
-func (a *Agent) LastPlan() *plan.Plan { return a.lastPlan }
+func (a *Agent) LastPlan() *plan.Plan { return a.lastPlan.Load() }
 
 // PlanCommand renders the most recent plan for the /plan slash command, or a hint
 // when there is nothing to show.
 func (a *Agent) PlanCommand() string {
-	if a.lastPlan == nil {
+	pl := a.lastPlan.Load()
+	if pl == nil {
 		if a.planner == nil {
 			return "planning is off — set TALUNOR_PLANNER=1 to enable it"
 		}
 		return "no plan yet — ask something that requires action"
 	}
-	return FormatPlan(a.lastPlan)
+	return FormatPlan(pl)
 }
 
 // FormatPlan renders a plan as a compact, human-readable block for approval

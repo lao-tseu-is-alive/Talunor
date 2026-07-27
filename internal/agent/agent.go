@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
@@ -158,15 +159,18 @@ type Agent struct {
 	policy    policy.Policy
 	planner   Planner
 	// lastPlan is the most recent plan produced this session, surfaced by the
-	// /plan command. Single-user: written once per planned turn, read between turns.
-	lastPlan *plan.Plan
+	// /plan command. It is written from the turn goroutine (runPlanned) and read
+	// from the UI goroutine (/plan), so it is atomic: even though the front-ends
+	// normally drain a turn before reading, nothing in the type guaranteed the
+	// happens-before, and a future concurrent front-end would inherit the race.
+	lastPlan atomic.Pointer[plan.Plan]
 	cfg      Config
 	// screenDebug, when true, streams the loop's otherwise-invisible decisions
 	// (recall rankings, reflection results) inline as dimmed notes, so the user
 	// can watch them in the transcript. Toggled at runtime via SetScreenDebug (the
 	// /debug command); distinct from Config.Debug, which logs to a file/stderr.
-	// Single-user: flip it between turns, not during one.
-	screenDebug bool
+	// Atomic: written from the UI goroutine (/debug), read from the turn goroutine.
+	screenDebug atomic.Bool
 
 	// Async reflection (Layer 18): the learning step (a second LLM call) runs on a
 	// single background worker so it is off the turn's critical path — the reply

@@ -21,14 +21,15 @@ import (
 // these notes never leak into the stored reply or the reflection input.
 
 // SetScreenDebug turns inline debug notes on or off and reports the new state.
-// Call it between turns (single-user; not safe to flip mid-turn).
-func (a *Agent) SetScreenDebug(on bool) bool { a.screenDebug = on; return a.screenDebug }
+// screenDebug is atomic, so this is safe to call from the UI goroutine while a
+// turn goroutine reads it.
+func (a *Agent) SetScreenDebug(on bool) bool { a.screenDebug.Store(on); return on }
 
 // ToggleScreenDebug flips inline debug notes and reports the new state.
-func (a *Agent) ToggleScreenDebug() bool { return a.SetScreenDebug(!a.screenDebug) }
+func (a *Agent) ToggleScreenDebug() bool { return a.SetScreenDebug(!a.screenDebug.Load()) }
 
 // ScreenDebug reports whether inline debug notes are on.
-func (a *Agent) ScreenDebug() bool { return a.screenDebug }
+func (a *Agent) ScreenDebug() bool { return a.screenDebug.Load() }
 
 // DebugCommand applies a /debug slash command (fields already split on
 // whitespace: "/debug", "/debug on", "/debug off") and returns a display-ready
@@ -46,7 +47,7 @@ func (a *Agent) DebugCommand(fields []string) string {
 	} else {
 		a.ToggleScreenDebug()
 	}
-	if a.screenDebug {
+	if a.screenDebug.Load() {
 		return "debug: ON — recall rankings & reflection now show inline (dimmed). /debug off to stop."
 	}
 	return "debug: off"
@@ -59,7 +60,7 @@ const debugPrefix = "· "
 // false only if the context was cancelled while sending (so callers can stop);
 // with screen debug off it is a no-op and returns true.
 func (a *Agent) sendDebug(ctx context.Context, out chan<- llm.Chunk, format string, args ...any) bool {
-	if !a.screenDebug {
+	if !a.screenDebug.Load() {
 		return true
 	}
 	return a.send(ctx, out, llm.Chunk{Reasoning: debugPrefix + fmt.Sprintf(format, args...) + "\n"})
@@ -69,7 +70,7 @@ func (a *Agent) sendDebug(ctx context.Context, out chan<- llm.Chunk, format stri
 // distance and kind) that shaped this turn's prompt. This is the view that was
 // missing when memory silently failed to recall a fact.
 func (a *Agent) emitRecallDebug(ctx context.Context, out chan<- llm.Chunk, input string, hits []memory.Hit) {
-	if !a.screenDebug {
+	if !a.screenDebug.Load() {
 		return
 	}
 	a.sendDebug(ctx, out, "recall: q=%q k=%d max≤%.2f → %d hit(s)",

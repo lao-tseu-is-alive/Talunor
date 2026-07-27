@@ -513,7 +513,12 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   SSRF `blockedIP` blocks `0.0.0.0/8` and decodes NAT64/6to4/Teredo IPv6→IPv4. Debug log is
   `0600`. `docs/policy.sample.yaml` `clock`→`current_time`. No schema/behaviour change beyond
   these; regression tests added throughout.
+- **v0.18.3 (fix)** = concurrency patch closing the **last documented data race**: `lastPlan`
+  → `atomic.Pointer[plan.Plan]`, `screenDebug` → `atomic.Bool` (written on the turn goroutine,
+  read on the UI goroutine, or vice-versa; no lock, no API change). `TestConcurrentStateAccessIsRaceFree`
+  drives both from two goroutines, clean under `-race`. **Lesson:** `-race` only finds what the
+  tests exercise — a green race detector over a documented race just means the suite is sequential.
 - **Next — open threads (documented, not started):** the executed plan as a learning input
   (deferred from Layer 13; would populate `tool_observed`/`model_inferred` provenance — a
-  possible Iteration 5 seed); calibration→policy wiring; the `lastPlan`/`screenDebug`
-  cross-goroutine access (`atomic.*`, still open). Same per-layer checkpoint rhythm.
+  possible Iteration 5 seed); calibration→policy wiring. (The `lastPlan`/`screenDebug` race is
+  fixed in v0.18.3.) Same per-layer checkpoint rhythm.

@@ -9,11 +9,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
+	"github.com/lao-tseu-is-alive/Talunor/internal/plan"
 	"github.com/lao-tseu-is-alive/Talunor/internal/policy"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 )
@@ -547,6 +549,57 @@ func TestCloseUnblocksStuckReflection(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Close hung on a stuck reflection instead of cancelling the drain")
 	}
+}
+
+// TestConcurrentStateAccessIsRaceFree exercises lastPlan and screenDebug from two
+// goroutines at once: a planned turn writes lastPlan and reads screenDebug (turn
+// goroutine) while the "UI" goroutine toggles /debug and reads /plan. Both fields
+// are atomic, so `go test -race` stays clean — before that fix (plain bool +
+// *plan.Plan) this test reported a data race.
+func TestConcurrentStateAccessIsRaceFree(t *testing.T) {
+	store := testStore(t)
+	// A plan with no tool step: runPlanned stores it in lastPlan, needs no approval
+	// and no tools, so each turn is fast and deterministic.
+	noToolPlan := &plan.Plan{Goal: "answer", Steps: []plan.PlanStep{
+		{ID: "s1", Type: plan.StepFinal, Rationale: "just answer"},
+	}}
+	cfg := DefaultConfig()
+	cfg.Planner = fakePlanner{pl: noToolPlan}
+	cfg.Extractor = DisableReflection()
+	ag := New(store, &fakeProvider{reply: "ok"}, cfg)
+	defer ag.Close()
+
+	ctx := context.Background()
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() { // writer of lastPlan / reader of screenDebug (the turn path)
+		defer wg.Done()
+		for i := 0; i < 25; i++ {
+			out, err := ag.Turn(ctx, "hi")
+			if err != nil {
+				t.Errorf("turn: %v", err)
+				return
+			}
+			if _, err := drain(out); err != nil {
+				t.Errorf("drain: %v", err)
+				return
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() { // the UI goroutine: /debug toggles + /plan reads
+		defer wg.Done()
+		for i := 0; i < 500; i++ {
+			ag.SetScreenDebug(i%2 == 0)
+			_ = ag.ScreenDebug()
+			_ = ag.LastPlan()
+			_ = ag.PlanCommand()
+		}
+	}()
+
+	wg.Wait()
 }
 
 // factContents returns the content of every stored KindFact memory.
