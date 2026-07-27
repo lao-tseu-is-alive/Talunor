@@ -175,6 +175,8 @@ Talunor/
 │
 ├── docs/                  # Documentation.
 │   ├── atlas.md           #   THIS FILE — the repository map.
+│   ├── architecture.md    #   The mental model: one-turn flow + package DAG (Mermaid) + load-bearing decisions.
+│   ├── architecture.fr.md #   French translation of architecture.md (bilingual, EN canonical).
 │   ├── policy.sample.yaml #   Commented example TALUNOR_POLICY rule file (allow / prompt / deny per tool).
 │   ├── calibration.seed.yaml #  LAYER 14: public example calibration suite (deterministic, threat-model header).
 │   ├── ollama-networking.md # Reaching a loopback Ollama from inside the container, securely.

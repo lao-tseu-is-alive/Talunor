@@ -98,6 +98,10 @@ it); the container image needs nothing. Verify downloads against `SHA256.txt`.
 
 ## Architecture (target)
 
+> 🗺️ **New:** [`docs/architecture.md`](docs/architecture.md) ([🇫🇷 Français](docs/architecture.fr.md))
+> is the mental-model page — one turn of the loop and the package graph as Mermaid
+> diagrams, plus the load-bearing design decisions, each linked to its lesson.
+
 ```
 Perception ─► Memory recall (KNN) ─► Reasoning (LLM) ─► Action ─► Learning
                     ▲                                              │
