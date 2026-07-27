@@ -7,11 +7,13 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> Current version: **v0.18.3** — a small concurrency patch: the `lastPlan` /
-> `screenDebug` agent state is now `atomic` (closing the last documented data race),
-> on top of v0.18.2's correctness & hardening batch (deterministic temperature,
-> soft-forgotten-fact consolidation, a bounded async shutdown, an inspectable approval
-> prompt, OCI-sandbox capability drop, two SSRF gaps closed). Built on Iterations 1–3
+> Current version: **v0.18.4** — a docs release: a new [architecture page](docs/architecture.md)
+> (mental model — one-turn flow + package graph as Mermaid diagrams, and the load-bearing
+> design decisions) and a **competency matrix** in the [course index](docs/lessons/), both
+> bilingual. On top of v0.18.3 (last data race closed — `lastPlan`/`screenDebug` now `atomic`)
+> and v0.18.2's correctness & hardening batch (deterministic temperature, soft-forgotten-fact
+> consolidation, a bounded async shutdown, an inspectable approval prompt, OCI-sandbox
+> capability drop, two SSRF gaps closed). Built on Iterations 1–3
 > (Layers 1–13), plus Layer 14
 > (**model calibration** — a deterministic reliability canary, `cmd/calibrate`), and
 > Iteration 4 (**learning**) through Layer 18 (schema migrations; per-fact **provenance

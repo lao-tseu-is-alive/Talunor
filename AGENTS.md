@@ -518,6 +518,15 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   read on the UI goroutine, or vice-versa; no lock, no API change). `TestConcurrentStateAccessIsRaceFree`
   drives both from two goroutines, clean under `-race`. **Lesson:** `-race` only finds what the
   tests exercise — a green race detector over a documented race just means the suite is sequential.
+- **v0.18.4 (docs)** = the mental-model page + course competency matrix (the two most-requested
+  pedagogy items from the v0.18.x reviews). **`docs/architecture.md`** (bilingual EN/FR): a
+  one-turn-of-the-loop Mermaid diagram, the package DAG (from the real import graph), and the six
+  load-bearing decisions, each linked to its lesson — positioned as the mental model (atlas = file
+  map, lessons = the why). **Competency matrix** in `docs/lessons/README.md` (+ `.fr.md`), before
+  the route table: 8 competencies × lessons × level × how-to-prove-it. Also folds in the untagged
+  post-0.18.3 doc fixes: FR lesson links now point to `README.fr.md` (were resolving to EN),
+  README "18-lesson"→"20-lesson", and **`lessons-check` extended to guard language-suffixed links**
+  (`.md`/`.fr.md`/`.es.md` — the `.es.md` arm readies a future Spanish rollout). No code change.
 - **Next — open threads (documented, not started):** the executed plan as a learning input
   (deferred from Layer 13; would populate `tool_observed`/`model_inferred` provenance — a
   possible Iteration 5 seed); calibration→policy wiring. (The `lastPlan`/`screenDebug` race is

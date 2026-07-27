@@ -42,6 +42,23 @@ make deps
 make doctor   # your first win — the memory substrate, running offline
 ```
 
+## What you'll learn — competency matrix
+
+The course is a narrative, but here is the map of the *skills* underneath it: what
+each competency means, which lessons build it, the level you should reach, and where
+you prove it. Lesson numbers refer to [the route](#the-route) below.
+
+| Competency | Lessons | Expected level | Prove it |
+|---|---|---|---|
+| **Go interfaces & composition** | 04 · 06 · 07 | Design a one-method seam and swap the real implementation for a fake | Add a tool (06) and test it against a fake provider (07) |
+| **Context, cancellation & timeouts** | 04 · 16 · 19 | Explain context propagation, a bounded operation, and a clean shutdown | Read the `Close`/drain contract (19); reason about a hung provider (16) |
+| **Concurrency & the Go memory model** | 05 · 18 · 19 | Justify why shared state needs an atomic/lock, and why one connection can stand in for one | Run `go test -race`; read the single-connection-as-lock insight (19) |
+| **Persistence & retrieval (SQLite + embeddings)** | 02 · 03 | Explain how a text query becomes a ranked, thresholded recall | Tune the recall threshold and watch the results change (03) |
+| **Agentic memory: provenance · confidence · salience** | 11 · 16 · 17 · 18 | Separate embedding-provenance from fact-provenance; explain why confidence is system-assigned, never self-reported | Read migrations 2–3 and `salience.go` (17, 18) |
+| **The agent loop & tools (ReAct)** | 05 · 06 · 13 | Trace a tool call from the model's request to the observation fed back | Watch `/debug` follow a tool call end to end (05, 06) |
+| **Agent safety: injection · policy · sandbox · SSRF** | 09 · 10 · 12 · 14 | Name which layer stops which threat — and why fencing text is a mitigation, not a boundary | Read the policy gate (12) and the approval post-mortem (14) |
+| **Trustworthy evaluation & verification** | 15 · 16 | Build a deterministic check (no LLM judge) and falsify a claim against the code | Do the "verify the AI review" exercise (15); read the matchers (16) |
+
 ## The route
 
 | Lesson | Subject | Level | ~Time | Read at | Status |

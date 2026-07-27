@@ -45,6 +45,24 @@ make deps
 make doctor   # ta première victoire — le substrat mémoire, en local, hors-ligne
 ```
 
+## Ce que tu vas apprendre — matrice de compétences
+
+Le cours est un récit, mais voici la carte des *compétences* qui le sous-tendent : ce
+que signifie chaque compétence, quelles leçons la construisent, le niveau à atteindre,
+et où tu le prouves. Les numéros de leçon renvoient au [parcours](#le-parcours)
+ci-dessous.
+
+| Compétence | Leçons | Niveau attendu | Le prouver |
+|---|---|---|---|
+| **Interfaces & composition Go** | 04 · 06 · 07 | Concevoir une couture à une méthode et remplacer l'implémentation réelle par un fake | Ajouter un outil (06) et le tester avec un provider factice (07) |
+| **Context, annulation & timeouts** | 04 · 16 · 19 | Expliquer la propagation du context, une opération bornée, et un arrêt propre | Lire le contrat `Close`/drain (19) ; raisonner sur un provider figé (16) |
+| **Concurrence & modèle mémoire Go** | 05 · 18 · 19 | Justifier pourquoi un état partagé exige un atomic/verrou, et pourquoi une seule connexion peut en remplacer un | Lancer `go test -race` ; lire l'idée « connexion unique = verrou » (19) |
+| **Persistance & récupération (SQLite + embeddings)** | 02 · 03 | Expliquer comment une requête texte devient un rappel classé et seuillé | Régler le seuil de rappel et observer les résultats changer (03) |
+| **Mémoire agentique : provenance · confiance · saillance** | 11 · 16 · 17 · 18 | Distinguer provenance d'embedding et provenance de fait ; expliquer pourquoi la confiance est assignée par le système, jamais auto-évaluée | Lire les migrations 2–3 et `salience.go` (17, 18) |
+| **La boucle agent & les outils (ReAct)** | 05 · 06 · 13 | Tracer un appel d'outil depuis la demande du modèle jusqu'à l'observation réinjectée | Suivre un appel d'outil de bout en bout avec `/debug` (05, 06) |
+| **Sécurité de l'agent : injection · policy · sandbox · SSRF** | 09 · 10 · 12 · 14 | Nommer quelle couche arrête quelle menace — et pourquoi clôturer du texte est une mitigation, pas une frontière | Lire la barrière policy (12) et le post-mortem d'approbation (14) |
+| **Évaluation & vérification dignes de confiance** | 15 · 16 | Construire une vérification déterministe (sans juge LLM) et falsifier une affirmation face au code | Faire l'exercice « vérifier la revue IA » (15) ; lire les matchers (16) |
+
 ## Le parcours
 
 | Leçon | Sujet | Niveau | ~Durée | À lire à | Statut |

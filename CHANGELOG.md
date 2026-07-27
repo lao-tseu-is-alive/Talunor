@@ -14,6 +14,58 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.18.4] - 2026-07-27 — Docs: architecture page + competency matrix
+
+A documentation release — no code behaviour change. It adds the two pedagogy
+deliverables the v0.18.x reviews asked for most, and folds in the doc-drift fixes
+that shipped untagged after v0.18.3.
+
+### Added
+
+- **`docs/architecture.md` — the mental-model page** (bilingual EN + `architecture.fr.md`,
+  language switcher). The data-flow previously lived only as prose in `AGENTS.md`; this is
+  one page with **Mermaid diagrams**: a "one turn of the loop"
+  (perceive→recall→reason→act[policy/approval]→store→reflect) and the **package dependency
+  DAG** (derived from the real import graph), plus the six **load-bearing decisions**
+  (single-connection-as-lock, confidence-from-source, lazy decay, fail-closed gate, opt-in
+  bounded danger, off-critical-path learning), each linked to the lesson that teaches it.
+  Positioned as the mental model — the atlas is the file map, the lessons are the why.
+  Linked from the README and listed in `docs/atlas.md`.
+- **Competency matrix in the course index** (`docs/lessons/README.md` + `.fr.md`, before the
+  route table). Eight competencies × {lessons, expected level, how to prove it} — Go
+  interfaces, context/cancellation, concurrency & the Go memory model, persistence &
+  retrieval, agentic memory (provenance/confidence/salience), the agent loop & tools,
+  agent safety, and trustworthy evaluation. Makes "what you actually learn" explicit and
+  lets a teacher use the repo as courseware. (From the gpt-5.5 pedagogic eval, priority #1.)
+
+### Fixed
+
+- **French lesson links now point to the French version.** Every cross-lesson link in the
+  FR course used a directory target (e.g. `[Leçon 02](../02-persistent-memory/)`), which
+  GitHub resolves to the default `README.md` = English — so a French reader navigating the
+  index, "Suivant", or "Retour à l'index" silently landed in English. All FR links now carry
+  the explicit `README.fr.md` suffix (index + 20 lessons). English links are unchanged.
+- **README course count** "18-lesson" → "20-lesson (00–19)".
+
+### Changed
+
+- **`lessons-check` now guards language-suffixed links.** It validated directory links but
+  not `README.fr.md` / `README.es.md` ones, so the language links were unguarded. It now
+  verifies each resolves to an existing file (the `.es.md` arm is ready for a future Spanish
+  rollout); confirmed by a negative test.
+
+### Lessons learned
+
+1. **Excellent docs make doc-only analysis look competent — and hide where the docs promise
+   more than the code delivers.** The reason all five reviews asked for one architecture page
+   is that the mental model was *derivable* from AGENTS.md but never *stated*; a diagram forces
+   the shape to be explicit (and correct — the package DAG here is generated from the real
+   import graph, not drawn from memory).
+2. **A guard that only checks one link shape silently stops guarding when you change the shape.**
+   Fixing the FR links to `README.fr.md` moved them out of `lessons-check`'s directory-link
+   regex; the links would have become unguarded exactly when they started mattering. The fix and
+   the guard-extension had to ship together — the drift guard must evolve with the thing it guards.
+
 ## [0.18.3] - 2026-07-27 — Concurrency patch: the last documented data race
 
 A small follow-up to v0.18.2. Closes the one remaining known data race, which had
