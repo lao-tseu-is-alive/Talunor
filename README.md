@@ -28,9 +28,9 @@ reads as a guided tour of how to build a full cognitive-loop agent
 > network opt-in). See [CHANGELOG.md](CHANGELOG.md) for the version-by-version
 > build log and lessons.
 >
-> 📚 **New:** a complete **[18-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
-> French) turns the tag-by-tag history into a guided path for Go beginners — start at
-> [Lesson 00](docs/lessons/).
+> 📚 a complete **[20-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
+> French, lessons 00–19) turns the tag-by-tag history into a guided path for Go
+> beginners — start at [Lesson 00](docs/lessons/).
 
 ## Run without building
 
