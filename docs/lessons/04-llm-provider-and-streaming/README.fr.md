@@ -154,6 +154,6 @@ git switch main
       vrai provider pour son appelant.
 - [ ] Je suis revenu à `main`.
 
-**Suivant :** [Leçon 05 — Suivre la boucle de l'agent](../05-follow-the-agent-loop/) —
+**Suivant :** [Leçon 05 — Suivre la boucle de l'agent](../05-follow-the-agent-loop/README.fr.md) —
 maintenant que tu as rencontré la mémoire *et* le modèle, regarde-les se combiner en un
 seul tour.

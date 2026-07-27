@@ -137,5 +137,5 @@ la leçon.)
 - [ ] Je peux nommer deux choses qui ne doivent jamais apparaître dans un log.
 - [ ] Je peux expliquer, en une phrase, « non-bloquant ≠ invisible ».
 
-**Suivant :** [Leçon 09 — Récupération web sécurisée (SSRF)](../09-secure-web-fetching/),
+**Suivant :** [Leçon 09 — Récupération web sécurisée (SSRF)](../09-secure-web-fetching/README.fr.md),
 une leçon de sécurité **avancée**.

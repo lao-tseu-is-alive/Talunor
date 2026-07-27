@@ -291,4 +291,4 @@ sur le chemin critique du tour (tu le ressens comme de la latence). La déplacer
 worker de fond — un worker qui devra posséder la connexion unique que tu viens de passer
 deux leçons à respecter — c'est le Layer 18.
 
-Retour à l'[index du cours](../).
+Retour à l'[index du cours](../README.fr.md).

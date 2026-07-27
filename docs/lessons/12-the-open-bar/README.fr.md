@@ -323,4 +323,4 @@ pour faire mal — reflète la façon dont mûrissent les vrais systèmes d'agen
 le planner de la Couche 13 fera réfléchir l'agent avant qu'il n'agisse ; parce que la
 policy parle déjà `Plan`, elle sera prête à juger ces plans en bloc.
 
-Retour à l'[index du cours](../).
+Retour à l'[index du cours](../README.fr.md).

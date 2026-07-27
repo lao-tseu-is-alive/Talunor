@@ -285,4 +285,4 @@ une étape surprend. Ces points — plus te laisser éditer un plan à la main a
 attente. Ensuite vient l'Itération 4 : l'apprentissage — consolider la mémoire, et
 apprendre des plans que l'agent a exécutés.
 
-Retour à l'[index du cours](../).
+Retour à l'[index du cours](../README.fr.md).

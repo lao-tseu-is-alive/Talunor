@@ -209,4 +209,4 @@ décroissance** — non pas « à quel point faire confiance à un souvenir » m
 souvenirs garder, renforcer, ou laisser s'estomper ». La confiance d'abord ; la rétention
 ensuite.
 
-Retour à l'[index du cours](../).
+Retour à l'[index du cours](../README.fr.md).

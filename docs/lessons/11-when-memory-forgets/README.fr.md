@@ -247,4 +247,4 @@ comment un système de récupération en production échoue *en silence*, et com
 l'attraper. Cet instinct — *« rien n'a levé d'erreur, donc méfie-toi de tout »* —
 vaut plus que n'importe quelle fonctionnalité isolée.
 
-Retour à l'[index du cours](../).
+Retour à l'[index du cours](../README.fr.md).

@@ -195,4 +195,4 @@ Garde cette image ; les prochaines leçons zooment sur chaque case.
 - [ ] *(optionnel)* J'ai ajouté une méthode `StoreVersion` et vu ma ligne
       `• SQLite version:` apparaître dans `make doctor`.
 
-**Suivant :** [Leçon 02 — Mémoire persistante avec SQLite](../02-persistent-memory/).
+**Suivant :** [Leçon 02 — Mémoire persistante avec SQLite](../02-persistent-memory/README.fr.md).

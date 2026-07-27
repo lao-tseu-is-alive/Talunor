@@ -256,4 +256,4 @@ cours sur la construction d'une IA *digne de confiance* se termine en t'apprenan
 *vérifier* l'IA — y compris l'IA qui relit l'IA digne de confiance. Garde la phrase :
 **vérifie l'affirmation ; la confiance n'est pas la preuve.**
 
-Retour à l'[index du cours](../).
+Retour à l'[index du cours](../README.fr.md).

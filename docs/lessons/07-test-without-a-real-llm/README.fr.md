@@ -115,4 +115,4 @@ go test ./internal/agent/ -run UnitConvert -v
 - [ ] Mon test vérifie que l'observation a atteint le modèle (comportement, pas libellé).
 - [ ] Le test passe et n'a pas besoin de réseau.
 
-**Suivant :** [Leçon 08 — Observabilité & gestion d'erreurs](../08-observability-and-errors/).
+**Suivant :** [Leçon 08 — Observabilité & gestion d'erreurs](../08-observability-and-errors/README.fr.md).

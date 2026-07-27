@@ -178,5 +178,5 @@ git switch main
       une phrase, ce qu'a ajouté `runLoop`.
 - [ ] Je suis revenu à `main`.
 
-**Suivant :** [Leçon 06 — Construire ton premier outil](../06-build-your-first-tool/)
+**Suivant :** [Leçon 06 — Construire ton premier outil](../06-build-your-first-tool/README.fr.md)
 (ta première contribution 🛠️ sur `main`).

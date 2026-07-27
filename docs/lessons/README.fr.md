@@ -49,26 +49,26 @@ make doctor   # ta première victoire — le substrat mémoire, en local, hors-l
 
 | Leçon | Sujet | Niveau | ~Durée | À lire à | Statut |
 |-------|-------|--------|--------|----------|--------|
-| [00](00-how-to-use-this-course/) | Comment utiliser ce cours | 0 · orientation | 15 min | — | ✅ prête |
-| [01](01-first-contact/) | Premier contact & première victoire | 1 · débutant | 30 min | `v0.1.0` → `main` | ✅ prête |
-| [02](02-persistent-memory/) | Mémoire persistante avec SQLite | 1 · débutant | 45 min | `v0.2.0` | ✅ prête |
-| [03](03-semantic-recall/) | Rappel sémantique & embeddings | 2 · **avancé** | 60 min | `v0.2.0` | ✅ prête |
-| [04](04-llm-provider-and-streaming/) | Provider LLM & streaming | 2 | 60 min | `v0.3.0` | ✅ prête |
-| [05](05-follow-the-agent-loop/) | Suivre la boucle de l'agent | 2 | 60 min | `v0.4.0` → `v0.7.0` | ✅ prête |
-| [06](06-build-your-first-tool/) | Construire ton premier outil | 2 · 🛠️ contribution | 90 min | `main` | ✅ prête |
-| [07](07-test-without-a-real-llm/) | Tester sans vrai LLM | 2–3 · 🛠️ | 75 min | `main` | ✅ prête |
-| [08](08-observability-and-errors/) | Observabilité & gestion d'erreurs | 2 · 🛠️ | 45 min | `main` | ✅ prête |
-| [09](09-secure-web-fetching/) | Récupération web sécurisée (SSRF) | 3 · **avancé** | 75 min | `v0.10.0` | ✅ prête |
-| [10](10-understand-the-sandbox/) | Comprendre le sandbox | 4 · **avancé** | 90 min | `v0.9.0` | ✅ prête |
-| [11](11-when-memory-forgets/) | Quand la mémoire oublie en silence : provenance & observabilité | 3 · **avancé** | 75 min | `v0.11.0` → `main` | ✅ prête |
-| [12](12-the-open-bar/) | L'open bar : pourquoi un agent a besoin d'une policy | 3 · **avancé** | 75 min | `v0.12.0` → `main` | ✅ prête |
-| [13](13-plan-before-you-act/) | Planifier avant d'agir : du ReAct à un plan qu'on peut lire | 3 · **avancé** | 90 min | `v0.13.0` → `main` | ✅ prête |
-| [14](14-the-approval-that-didnt-bind/) | L'approbation qui ne liait rien : post-mortem sécurité du mode plan | 3 · **avancé** | 60 min | `v0.13.1` → `main` | ✅ prête |
-| [15](15-dont-trust-the-review/) | Ne fais pas confiance à la revue : vérifier ce qu'une IA affirme sur ton code | 2 · méta | 60 min | `main` | ✅ prête |
-| [16](16-measure-the-model/) | Mesurer le modèle : construire un canary de fiabilité | 3 · **avancé** | 75 min | `main` | ✅ prête |
-| [17](17-learning-with-humility/) | Apprendre avec humilité : ce que vaut un souvenir | 3 · **avancé** | 75 min | `main` | ✅ prête |
-| [18](18-the-memory-of-the-gesture/) | La mémoire du geste : saillance, décroissance & consolidation | 3 · **avancé** | 75 min | `v0.17.0` → `main` | ✅ prête |
-| [19](19-off-the-critical-path/) | Hors du chemin critique : apprendre en arrière-plan | 3 · **avancé** | 70 min | `v0.18.0` → `main` | ✅ prête |
+| [00](00-how-to-use-this-course/README.fr.md) | Comment utiliser ce cours | 0 · orientation | 15 min | — | ✅ prête |
+| [01](01-first-contact/README.fr.md) | Premier contact & première victoire | 1 · débutant | 30 min | `v0.1.0` → `main` | ✅ prête |
+| [02](02-persistent-memory/README.fr.md) | Mémoire persistante avec SQLite | 1 · débutant | 45 min | `v0.2.0` | ✅ prête |
+| [03](03-semantic-recall/README.fr.md) | Rappel sémantique & embeddings | 2 · **avancé** | 60 min | `v0.2.0` | ✅ prête |
+| [04](04-llm-provider-and-streaming/README.fr.md) | Provider LLM & streaming | 2 | 60 min | `v0.3.0` | ✅ prête |
+| [05](05-follow-the-agent-loop/README.fr.md) | Suivre la boucle de l'agent | 2 | 60 min | `v0.4.0` → `v0.7.0` | ✅ prête |
+| [06](06-build-your-first-tool/README.fr.md) | Construire ton premier outil | 2 · 🛠️ contribution | 90 min | `main` | ✅ prête |
+| [07](07-test-without-a-real-llm/README.fr.md) | Tester sans vrai LLM | 2–3 · 🛠️ | 75 min | `main` | ✅ prête |
+| [08](08-observability-and-errors/README.fr.md) | Observabilité & gestion d'erreurs | 2 · 🛠️ | 45 min | `main` | ✅ prête |
+| [09](09-secure-web-fetching/README.fr.md) | Récupération web sécurisée (SSRF) | 3 · **avancé** | 75 min | `v0.10.0` | ✅ prête |
+| [10](10-understand-the-sandbox/README.fr.md) | Comprendre le sandbox | 4 · **avancé** | 90 min | `v0.9.0` | ✅ prête |
+| [11](11-when-memory-forgets/README.fr.md) | Quand la mémoire oublie en silence : provenance & observabilité | 3 · **avancé** | 75 min | `v0.11.0` → `main` | ✅ prête |
+| [12](12-the-open-bar/README.fr.md) | L'open bar : pourquoi un agent a besoin d'une policy | 3 · **avancé** | 75 min | `v0.12.0` → `main` | ✅ prête |
+| [13](13-plan-before-you-act/README.fr.md) | Planifier avant d'agir : du ReAct à un plan qu'on peut lire | 3 · **avancé** | 90 min | `v0.13.0` → `main` | ✅ prête |
+| [14](14-the-approval-that-didnt-bind/README.fr.md) | L'approbation qui ne liait rien : post-mortem sécurité du mode plan | 3 · **avancé** | 60 min | `v0.13.1` → `main` | ✅ prête |
+| [15](15-dont-trust-the-review/README.fr.md) | Ne fais pas confiance à la revue : vérifier ce qu'une IA affirme sur ton code | 2 · méta | 60 min | `main` | ✅ prête |
+| [16](16-measure-the-model/README.fr.md) | Mesurer le modèle : construire un canary de fiabilité | 3 · **avancé** | 75 min | `main` | ✅ prête |
+| [17](17-learning-with-humility/README.fr.md) | Apprendre avec humilité : ce que vaut un souvenir | 3 · **avancé** | 75 min | `main` | ✅ prête |
+| [18](18-the-memory-of-the-gesture/README.fr.md) | La mémoire du geste : saillance, décroissance & consolidation | 3 · **avancé** | 75 min | `v0.17.0` → `main` | ✅ prête |
+| [19](19-off-the-critical-path/README.fr.md) | Hors du chemin critique : apprendre en arrière-plan | 3 · **avancé** | 70 min | `v0.18.0` → `main` | ✅ prête |
 
 ## Deux types de leçon — à ne pas confondre
 

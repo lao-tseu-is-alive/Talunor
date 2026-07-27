@@ -136,5 +136,5 @@ d'un code pour ajouter une règle et la prouver.
 - [ ] J'ai lancé les tests webfetch et compris le test de redirection.
 - [ ] Je suis revenu à `main`.
 
-**Suivant :** [Leçon 10 — Comprendre le sandbox](../10-understand-the-sandbox/) — le
+**Suivant :** [Leçon 10 — Comprendre le sandbox](../10-understand-the-sandbox/README.fr.md) — le
 point d'orgue du cours.

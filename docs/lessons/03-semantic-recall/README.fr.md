@@ -145,4 +145,4 @@ git switch main
       deux correspondaient.
 - [ ] Je suis revenu à `main`.
 
-**Suivant :** [Leçon 04 — Provider LLM & streaming](../04-llm-provider-and-streaming/).
+**Suivant :** [Leçon 04 — Provider LLM & streaming](../04-llm-provider-and-streaming/README.fr.md).

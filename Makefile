@@ -163,6 +163,15 @@ lessons-check:
 	for d in $$(grep -rhoE '\((\.\./)?[0-9][0-9]-[a-z0-9-]+/\)' docs/lessons | grep -oE '[0-9][0-9]-[a-z0-9-]+' | sort -u); do \
 	  test -d "docs/lessons/$$d" || { echo "lessons: broken link to $$d/"; fail=1; }; \
 	done; \
+	for m in $$(grep -rhoE '\((\.\./)?[0-9][0-9]-[a-z0-9-]+/README(\.(fr|es))?\.md\)' docs/lessons); do \
+	  slug=$$(echo "$$m" | grep -oE '[0-9][0-9]-[a-z0-9-]+'); \
+	  file=$$(echo "$$m" | grep -oE 'README(\.(fr|es))?\.md'); \
+	  test -f "docs/lessons/$$slug/$$file" || { echo "lessons: broken language link $$m"; fail=1; }; \
+	done; \
+	for m in $$(grep -rhoE '\(\.\./README(\.(fr|es))?\.md\)' docs/lessons); do \
+	  file=$$(echo "$$m" | grep -oE 'README(\.(fr|es))?\.md'); \
+	  test -f "docs/lessons/$$file" || { echo "lessons: broken index link $$m"; fail=1; }; \
+	done; \
 	tmp=$$(mktemp); grep -rhoE 'git diff v[0-9.]+ v[0-9.]+ -- [A-Za-z0-9_./-]+' docs/lessons | sort -u > "$$tmp"; \
 	while read -r _ _ ta tb _ p; do \
 	  git cat-file -e "$$ta:$$p" 2>/dev/null || { echo "lessons: $$p missing at $$ta"; fail=1; }; \

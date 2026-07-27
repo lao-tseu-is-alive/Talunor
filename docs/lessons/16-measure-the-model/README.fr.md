@@ -243,4 +243,4 @@ consolidant ses sorties dans la mémoire long terme — mieux vaut mesurer si ce
 fiable, sinon tu cuis ses hallucinations dans les fondations. Mesure d'abord ; apprends
 ensuite.
 
-Retour à l'[index du cours](../).
+Retour à l'[index du cours](../README.fr.md).

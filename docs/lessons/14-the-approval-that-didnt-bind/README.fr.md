@@ -243,4 +243,4 @@ comment le correctif restaure le principe. Si tu intériorises une seule phrase 
 l'arc sécurité (Leçons 09, 10, 12, 14), que ce soit celle-ci : *ne fais pas confiance
 à la promesse — vérifie le lien.*
 
-Retour à l'[index du cours](../).
+Retour à l'[index du cours](../README.fr.md).

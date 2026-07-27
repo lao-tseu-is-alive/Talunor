@@ -126,4 +126,4 @@ tag » pour que tu ne sois jamais perdu.
       historique* et une *contribution actuelle*.
 - [ ] Je sais à quoi sert chacun des quatre documents de référence.
 
-**Suivant :** [Leçon 01 — Premier contact & première victoire](../01-first-contact/).
+**Suivant :** [Leçon 01 — Premier contact & première victoire](../01-first-contact/README.fr.md).

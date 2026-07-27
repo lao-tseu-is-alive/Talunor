@@ -169,4 +169,4 @@ TALUNOR_TOOLS=1 go run ./cmd/talunor --plain
 - [ ] Je peux expliquer pourquoi ça n'a pas nécessité de changer la boucle de l'agent.
 - [ ] Mon travail est sur une branche `learning/…`, pas directement sur `main`.
 
-**Suivant :** [Leçon 07 — Tester sans vrai LLM](../07-test-without-a-real-llm/).
+**Suivant :** [Leçon 07 — Tester sans vrai LLM](../07-test-without-a-real-llm/README.fr.md).

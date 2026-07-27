@@ -132,4 +132,4 @@ git switch main
 - [ ] J'ai lancé `make doctor` et associé un appel `Remember`/`Recall` à sa sortie.
 - [ ] Je suis revenu à `main`.
 
-**Suivant :** [Leçon 03 — Rappel sémantique & embeddings](../03-semantic-recall/).
+**Suivant :** [Leçon 03 — Rappel sémantique & embeddings](../03-semantic-recall/README.fr.md).

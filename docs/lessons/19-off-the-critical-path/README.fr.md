@@ -265,4 +265,4 @@ layer n'est pas du code du tout : c'est la prise de conscience que la contrainte
 laquelle tu te battais en Leçon 02 (une connexion unique) s'est révélée être précisément ce
 qui a rendu ceci sûr. Relis tes contraintes deux fois — parfois le mur est aussi le sol.
 
-Retour à l'[index du cours](../).
+Retour à l'[index du cours](../README.fr.md).
