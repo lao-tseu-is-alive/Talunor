@@ -11,8 +11,9 @@ Ce répertoire transforme cette idée en un parcours guidé. Chaque leçon a un 
 clair, une courte liste de lecture, une expérience pratique et une checklist pour
 savoir quand tu as terminé.
 
-> **Statut : complet.** Les vingt leçons (00–19) sont prêtes, **entièrement en
-> anglais et en français** (utilise le sélecteur de langue en haut de chaque page).
+> **Statut : en cours.** Les leçons 00–20 sont prêtes, **entièrement en
+> anglais et en français** (utilise le sélecteur de langue en haut de chaque page) ;
+> l'Itération 5 est en construction.
 
 ## Pour qui
 
@@ -58,7 +59,7 @@ ci-dessous.
 | **Context, annulation & timeouts** | 04 · 16 · 19 | Expliquer la propagation du context, une opération bornée, et un arrêt propre | Lire le contrat `Close`/drain (19) ; raisonner sur un provider figé (16) |
 | **Concurrence & modèle mémoire Go** | 05 · 18 · 19 | Justifier pourquoi un état partagé exige un atomic/verrou, et pourquoi une seule connexion peut en remplacer un | Lancer `go test -race` ; lire l'idée « connexion unique = verrou » (19) |
 | **Persistance & récupération (SQLite + embeddings)** | 02 · 03 | Expliquer comment une requête texte devient un rappel classé et seuillé | Régler le seuil de rappel et observer les résultats changer (03) |
-| **Mémoire agentique : provenance · confiance · saillance** | 11 · 16 · 17 · 18 | Distinguer provenance d'embedding et provenance de fait ; expliquer pourquoi la confiance est assignée par le système, jamais auto-évaluée | Lire les migrations 2–3 et `salience.go` (17, 18) |
+| **Mémoire agentique : provenance · confiance · saillance** | 11 · 16 · 17 · 18 · 20 | Distinguer provenance d'embedding et provenance de fait ; expliquer pourquoi la confiance est assignée par le système, jamais auto-évaluée ; apprendre de l'action sans sur-affirmer | Lire les migrations 2–3 et `salience.go` (17, 18) ; tracer un fait jusqu'à son évidence avec `/why` (20) |
 | **La boucle agent & les outils (ReAct)** | 05 · 06 · 13 | Tracer un appel d'outil depuis la demande du modèle jusqu'à l'observation réinjectée | Suivre un appel d'outil de bout en bout avec `/debug` (05, 06) |
 | **Sécurité de l'agent : injection · policy · sandbox · SSRF** | 09 · 10 · 12 · 14 | Nommer quelle couche arrête quelle menace — et pourquoi clôturer du texte est une mitigation, pas une frontière | Lire la barrière policy (12) et le post-mortem d'approbation (14) |
 | **Évaluation & vérification dignes de confiance** | 15 · 16 | Construire une vérification déterministe (sans juge LLM) et falsifier une affirmation face au code | Faire l'exercice « vérifier la revue IA » (15) ; lire les matchers (16) |
@@ -87,6 +88,7 @@ ci-dessous.
 | [17](17-learning-with-humility/README.fr.md) | Apprendre avec humilité : ce que vaut un souvenir | 3 · **avancé** | 75 min | `main` | ✅ prête |
 | [18](18-the-memory-of-the-gesture/README.fr.md) | La mémoire du geste : saillance, décroissance & consolidation | 3 · **avancé** | 75 min | `v0.17.0` → `main` | ✅ prête |
 | [19](19-off-the-critical-path/README.fr.md) | Hors du chemin critique : apprendre en arrière-plan | 3 · **avancé** | 70 min | `v0.18.0` → `main` | ✅ prête |
+| [20](20-learn-from-action/README.fr.md) | Apprendre de l'action : le « savoir des outils » est surtout interprété par le modèle | 3 · **avancé** | 65 min | `v0.19.0` → `main` | ✅ prête |
 
 ## Deux types de leçon — à ne pas confondre
 

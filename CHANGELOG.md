@@ -14,6 +14,31 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.19.1] - 2026-07-28 — Course: Lesson 20 (learn from action), bilingual
+
+A docs-only release: Layer 20 gets its lesson — the one that opens Iteration 5 in
+the course.
+
+### Added
+
+- **Lesson 20 — "Learn from action: most 'tool knowledge' is model-*interpreted*"**
+  (`docs/lessons/20-learn-from-action/`, bilingual EN/FR). A ~65-min Level-3 🔍
+  exploration + hands-on, pinned to `v0.19.0`. It reads `internal/agent`,
+  `internal/memory`, and `internal/tools` to teach the load-bearing honesty of Layer 20:
+  why a fact distilled from a tool's text is `model_inferred` (interpretation is
+  inference) and `tool_observed` is the narrow `tools.Verified` exception; why keeping
+  confidence system-assigned *forces* per-source extraction (the cheap combined call
+  hands provenance back to the model); the evidence trail and `/why`; and why a capability
+  no builtin uses is still worth shipping as a "tested seam that resists a bad default".
+  The competency matrix gains lesson 20; course now 00–20 (21 lessons).
+
+### Lessons learned
+
+1. **The lesson wrote itself out of the honesty decisions.** The most teachable thing in
+   Layer 20 was not a data structure — it was the chain "confidence is system-assigned →
+   so is provenance → so sources must be extracted separately." A layer whose *design* is
+   an argument makes the best lesson: you teach the constraint, and the code falls out.
+
 ## [0.19.0] - 2026-07-28 — Layer 20: learn from action + the evidence trail (Iteration 5 begins)
 
 Iteration 5 ("truthful memory") opens. Until now, **every** learned fact was

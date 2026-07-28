@@ -552,6 +552,11 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   it. Trivial/empty observations skipped + size-capped; rides the single `TALUNOR_REFLECT` toggle +
   the async worker. Append-only, no re-embed, zero change to existing facts. Decision recorded in
   **ADR 0002**. Deferred to later Iteration-5 layers: contradiction/supersession (21), hybrid recall (22).
+- **v0.19.1 (docs)** = course **Lesson 20** — "Learn from action: most 'tool knowledge' is
+  model-interpreted" (`docs/lessons/20-learn-from-action/`, bilingual). Pinned to `v0.19.0`; reads
+  `internal/agent`/`memory`/`tools` to teach the honesty chain (confidence system-assigned → so is
+  provenance → per-source extraction), the `model_inferred`-by-default rule + the `tools.Verified`
+  seam, the evidence trail + `/why`. Competency matrix gains lesson 20; course now 00–20 (21 lessons).
 - **Next — open threads (documented, not started):** Layer 21 (contradiction & supersession — a
   new fact supersedes an old one, gated so only independent higher-provenance evidence does),
   Layer 22 (hybrid recall, vector ∪ FTS5); calibration→policy wiring. Same per-layer checkpoint rhythm.

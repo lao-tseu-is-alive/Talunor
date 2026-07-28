@@ -13,11 +13,12 @@ reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
 
-> Current version: **v0.19.0** — **Iteration 5 begins** (Layer 20, "learn from action"):
-> reflection now also learns from what the agent **observes** (tool results) — tagged
-> `model_inferred`, or `tool_observed` only from a `Verified` tool (honest by default,
-> see [ADR 0002](docs/decisions/0002-provenance-from-source.md)) — and records an
-> auditable **evidence trail** (`/why <id>` shows which turns/sources support a fact).
+> Current version: **v0.19.1** — **Iteration 5 begins** (Layer 20, "learn from action",
+> + its [Lesson 20](docs/lessons/20-learn-from-action/)): reflection now also learns from
+> what the agent **observes** (tool results) — tagged `model_inferred`, or `tool_observed`
+> only from a `Verified` tool (honest by default, see
+> [ADR 0002](docs/decisions/0002-provenance-from-source.md)) — and records an auditable
+> **evidence trail** (`/why <id>` shows which turns/sources support a fact).
 > On top of the v0.18.x docs + hardening line (architecture page, competency matrix,
 > last data race closed, correctness batch, OCI-sandbox capability drop, two SSRF gaps).
 > Built on Iterations 1–3 (Layers 1–13), plus Layer 14
@@ -38,8 +39,8 @@ reads as a guided tour of how to build a full cognitive-loop agent
 > network opt-in). See [CHANGELOG.md](CHANGELOG.md) for the version-by-version
 > build log and lessons.
 >
-> 📚 a complete **[20-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
-> French, lessons 00–19) turns the tag-by-tag history into a guided path for Go
+> 📚 a **[21-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
+> French, lessons 00–20) turns the tag-by-tag history into a guided path for Go
 > beginners — start at [Lesson 00](docs/lessons/).
 
 ## Run without building
