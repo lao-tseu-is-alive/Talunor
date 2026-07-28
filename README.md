@@ -1,4 +1,9 @@
 # Talunor
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=lao-tseu-is-alive_Talunor&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=lao-tseu-is-alive_Talunor)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=lao-tseu-is-alive_Talunor&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=lao-tseu-is-alive_Talunor)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=lao-tseu-is-alive_Talunor&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=lao-tseu-is-alive_Talunor)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=lao-tseu-is-alive_Talunor&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=lao-tseu-is-alive_Talunor)
+[![cve-trivy-scan](https://github.com/lao-tseu-is-alive/Talunor/actions/workflows/cve-trivy-scan.yml/badge.svg)](https://github.com/lao-tseu-is-alive/Talunor/actions/workflows/cve-trivy-scan.yml)
 <img  align="left" src="images/Talunor.jpg" alt="Talunor — terminal AI agent with long-term memory" hspace="14" vspace="4" width="180" />
 
 **Talunor** is a terminal-based, autonomous decision-making AI agent built in Go,
@@ -6,6 +11,7 @@ with a multi-tier memory backed by SQLite. It is developed **step by step as a
 pedagogical project**: each layer is small, runnable, and documented, so the repo
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
+
 
 > Current version: **v0.18.4** — a docs release: a new [architecture page](docs/architecture.md)
 > (mental model — one-turn flow + package graph as Mermaid diagrams, and the load-bearing
