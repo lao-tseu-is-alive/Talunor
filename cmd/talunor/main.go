@@ -157,6 +157,11 @@ func buildAgentConfig(store *memory.Store, provider llm.Provider) (agent.Config,
 	// RecallMinConfidence drops low-confidence memories from recall (0 = off).
 	cfg.ModelConfidence = envFloat("TALUNOR_MODEL_CONFIDENCE", 0)
 	cfg.RecallMinConfidence = envFloat("TALUNOR_RECALL_MIN_CONFIDENCE", 0)
+	// Layer 21: how wide the arbiter looks for a contradiction candidate (cosine
+	// distance). Unset → the agent's default (0.35); wider than dedup on purpose.
+	if v := envFloat("TALUNOR_SUPERSEDE_MAX_DISTANCE", 0); v > 0 {
+		cfg.SupersedeMaxDistance = v
+	}
 
 	// TALUNOR_DEBUG turns on a structured trace of recall/tools/reflection. It
 	// logs to a file by default so the TUI's screen stays clean; the closer is

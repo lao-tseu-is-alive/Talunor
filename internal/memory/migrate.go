@@ -102,6 +102,19 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		version: 5,
+		name:    "supersession pointer",
+		apply: func(ctx context.Context, e execer) error {
+			// Layer 21: a fact can be RETIRED by a newer, higher-authority one. We
+			// soft-supersede — mark, don't delete — so it stays auditable and
+			// reversible: superseded_by points at the fact that replaced it. NULL =
+			// active. Recall excludes superseded facts; /why still shows them.
+			_, err := e.ExecContext(ctx,
+				`ALTER TABLE memories ADD COLUMN superseded_by INTEGER`)
+			return err
+		},
+	},
 	// Iteration 5 continues here, one migration per layer.
 }
 

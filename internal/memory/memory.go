@@ -95,6 +95,9 @@ type Memory struct {
 	LastAccessed time.Time // zero if never recalled
 	AccessCount  int64
 	CreatedAt    time.Time
+	// SupersededBy is the id of the fact that retired this one (0 = active). A
+	// superseded fact is excluded from recall but kept for audit (Layer 21).
+	SupersededBy int64
 }
 
 // Hit is a memory returned by a similarity search, with its distance to the query
@@ -211,6 +214,7 @@ func (s *Store) recall(ctx context.Context, query string, k int, maxDistance flo
 		       m.created_at, v.distance
 		FROM vector_full_scan('memories', 'embedding', ?, ?) AS v
 		JOIN memories m ON m.id = v.rowid
+		WHERE m.superseded_by IS NULL
 		ORDER BY v.distance`, qvec, k*recallCandidateFactor)
 	if err != nil {
 		return nil, fmt.Errorf("recall scan: %w", err)
@@ -315,7 +319,8 @@ func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, kind, COALESCE(role, ''), content,
 		       COALESCE(provenance, 'unspecified'), COALESCE(confidence, 1.0),
-		       COALESCE(salience, 1.0), last_accessed, COALESCE(access_count, 0), created_at
+		       COALESCE(salience, 1.0), last_accessed, COALESCE(access_count, 0), created_at,
+		       COALESCE(superseded_by, 0)
 		FROM memories
 		ORDER BY id DESC
 		LIMIT ?`, limit)
@@ -334,7 +339,7 @@ func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
 			createdAt    string
 		)
 		if err := rows.Scan(&m.ID, &kind, &m.Role, &m.Content, &prov, &m.Confidence,
-			&m.Salience, &lastAccessed, &m.AccessCount, &createdAt); err != nil {
+			&m.Salience, &lastAccessed, &m.AccessCount, &createdAt, &m.SupersededBy); err != nil {
 			return nil, err
 		}
 		m.Kind = Kind(kind)

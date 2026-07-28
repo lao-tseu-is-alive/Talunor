@@ -70,6 +70,7 @@ Talunor/
 │   │   │                     #       migration 1 = baseline; 2 = provenance/confidence; 3 = salience (L17).
 │   │   ├── salience.go       #     LAYER 17: lazy decay (effective salience at read time), Reinforce /
 │   │   │                     #       ReinforceFact (confidence only on independent evidence), forget floor.
+│   │   ├── supersede.go      #     LAYER 21: the TRUST MODEL (Supersedes — who may retire whom) + soft-supersede (migration 5).
 │   │   ├── evidence.go       #     LAYER 20: the evidence trail (migration 4) — RecordEvidence / EvidenceFor
 │   │   │                     #       (which turns+sources support a fact) + MemoryByID (for /why).
 │   │   ├── shortterm.go      #     Bounded ring buffer of the most recent turns (immediate context).
@@ -79,6 +80,7 @@ Talunor/
 │   │   ├── salience_internal_test.go # Pure-fn tests (decay, credibility, bounded confidence) — no DB/ext.
 │   │   ├── salience_db_test.go #    Tests (reinforce bumps salience; confidence only on evidence; soft-forget).
 │   │   ├── evidence_test.go  #     Tests (evidence trail order/sources/NULL turn; MemoryByID).
+│   │   ├── supersede_test.go #     Tests (the trust model table; soft-supersede excludes from recall, self-supersede rejected).
 │   │   └── memory_test.go    #     Tests (semantic recall, thresholding, assistant-turn exclusion).
 │   │
 │   ├── llm/                  # LAYER 3 / 6: LLM provider abstraction + OpenAI-compatible adapter.
@@ -98,6 +100,7 @@ Talunor/
 │   │   ├── execute.go        #     LAYER 13: runPlanned — plan → policy pre-screen → whole-plan approval
 │   │   │                     #       → reactLoop capped to the plan's tools → learn; FormatPlan, /plan.
 │   │   ├── reflect.go        #     FactExtractor: the LLM distils durable facts into semantic memory.
+│   │   ├── arbiter.go        #     LAYER 21: FactArbiter — classifies a new fact vs a neighbour (restates/supersedes/unrelated).
 │   │   ├── debug.go          #     LAYER 11: /debug runtime toggle — streams recall rankings + reflection
 │   │   │                     #       inline as dimmed Reasoning notes (TUI + --plain).
 │   │   ├── agent_test.go     #     Tests (recall+store, approval allow/deny, tool-loop cap, policy deny/override).
@@ -182,7 +185,8 @@ Talunor/
 │   ├── architecture.fr.md #   French translation of architecture.md (bilingual, EN canonical).
 │   ├── decisions/         #   Architecture Decision Records (append-only, EN, contributor-facing).
 │   │   ├── 0001-memory-backends.md # ADR 1: the Embedder/VectorIndex seams + backend profiles (proposed/deferred).
-│   │   └── 0002-provenance-from-source.md # ADR 2: learned-fact provenance from the source, not eagerness (Layer 20).
+│   │   ├── 0002-provenance-from-source.md # ADR 2: learned-fact provenance from the source, not eagerness (Layer 20).
+│   │   └── 0003-trust-model-for-supersession.md # ADR 3: a memory's trust model is an explicit per-domain policy (Layer 21).
 │   ├── policy.sample.yaml #   Commented example TALUNOR_POLICY rule file (allow / prompt / deny per tool).
 │   ├── calibration.seed.yaml #  LAYER 14: public example calibration suite (deterministic, threat-model header).
 │   ├── ollama-networking.md # Reaching a loopback Ollama from inside the container, securely.

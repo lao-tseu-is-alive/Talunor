@@ -13,14 +13,15 @@ reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
 
-> Current version: **v0.19.1** — **Iteration 5 begins** (Layer 20, "learn from action",
-> + its [Lesson 20](docs/lessons/20-learn-from-action/)): reflection now also learns from
-> what the agent **observes** (tool results) — tagged `model_inferred`, or `tool_observed`
-> only from a `Verified` tool (honest by default, see
-> [ADR 0002](docs/decisions/0002-provenance-from-source.md)) — and records an auditable
-> **evidence trail** (`/why <id>` shows which turns/sources support a fact).
-> On top of the v0.18.x docs + hardening line (architecture page, competency matrix,
-> last data race closed, correctness batch, OCI-sandbox capability drop, two SSRF gaps).
+> Current version: **v0.20.0** — **Iteration 5** ("truthful memory"). Layer 21 lets a new
+> fact **supersede** an old, contradicting one, governed by an **explicit, per-domain trust
+> model** ([`memory.Supersedes`](internal/memory/supersede.go)) so a model's guess never
+> overwrites what the user said, yet a `Verified` tool's observation *can* retire a stale
+> belief (see [ADR 0003](docs/decisions/0003-trust-model-for-supersession.md)); supersession
+> is soft (`/why` shows it). On Layer 20 ("learn from action" — reflection also learns from
+> tool observations, tagged honestly, with an auditable evidence trail) and the v0.18.x docs
+> + hardening line (architecture page, competency matrix, last data race closed, correctness
+> batch, OCI-sandbox capability drop, two SSRF gaps).
 > Built on Iterations 1–3 (Layers 1–13), plus Layer 14
 > (**model calibration** — a deterministic reliability canary, `cmd/calibrate`), and
 > Iteration 4 (**learning**) through Layer 18 (schema migrations; per-fact **provenance
@@ -191,7 +192,7 @@ uncalibrated model should not silently gain the authority of an established one.
 | Layer | What | Status |
 |-------|------|--------|
 | 20 | **Learn from action + evidence trail** — reflection also learns from tool observations (tagged `model_inferred`, or `tool_observed` only from a `Verified` tool — honest by default), records an auditable evidence trail (which turns/sources support a fact; `/why <id>`), on an append-only migration | ✅ done (v0.19.0) |
-| 21 | **Contradiction & supersession** — a new fact can supersede an old one, gated so only independent, higher-provenance evidence supersedes (the echo-chamber guard extended from confidence to truth) | ⏳ planned |
+| 21 | **Contradiction & supersession** — a new fact supersedes an old, incompatible one, governed by an explicit, per-domain **trust model** (`memory.Supersedes`); the model never overrides the user, a `Verified` tool can retire a stale belief; soft (reversible, auditable) | ✅ done (v0.20.0) |
 | 22 | **Hybrid recall** — vector ∪ lexical (FTS5), so exact identifiers / rare terms aren't missed | ⏳ planned |
 
 The thesis: Iteration 4 made memory *learn, retain, and forget*; Iteration 5 makes it

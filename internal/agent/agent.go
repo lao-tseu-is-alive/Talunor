@@ -94,6 +94,17 @@ type Config struct {
 	// deliberately not wired to an env var (Layer 20; keeps a single TALUNOR_REFLECT).
 	ReflectAssistant bool
 
+	// Arbiter classifies how a freshly-learned fact relates to a near-neighbour it
+	// already holds — restates / supersedes / unrelated (Layer 21). If nil, New
+	// installs a default LLM arbiter over the agent's provider; inject
+	// DisableArbiter() to turn Layer 21 off (fall back to Layer 20 consolidation).
+	Arbiter FactArbiter
+	// SupersedeMaxDistance is the cosine radius within which the arbiter looks for a
+	// contradiction candidate. It is DELIBERATELY WIDER than DedupMaxDistance: a
+	// contradiction is "same topic, different value" (near, but not near-identical),
+	// so the tight dedup radius would miss it. 0 → a sensible default (0.35).
+	SupersedeMaxDistance float64
+
 	// ModelConfidence scales the confidence of every fact the agent *learns* (via
 	// reflection), in [0,1]. It is the calibration link: set it from a `calibrate`
 	// run's overall pass-rate so a fact learned from an unreliable model does not
@@ -147,11 +158,12 @@ func DefaultConfig() Config {
 		SystemPrompt: "You are Talunor, a helpful assistant with long-term memory. " +
 			"When the provided memories are relevant, use them to answer; " +
 			"otherwise ignore them and answer normally. Do not mention the memory system unless asked.",
-		RecallK:           8,
-		RecallMaxDistance: 0.75,
-		ShortTermCap:      6,    // ~3 exchanges.
-		DedupMaxDistance:  0.20, // near-identical facts only.
-		MaxToolIters:      6,
+		RecallK:              8,
+		RecallMaxDistance:    0.75,
+		ShortTermCap:         6,    // ~3 exchanges.
+		DedupMaxDistance:     0.20, // near-identical facts only (consolidation).
+		SupersedeMaxDistance: 0.35, // wider: "same topic, different value" (contradiction).
+		MaxToolIters:         6,
 	}
 }
 
@@ -161,6 +173,7 @@ type Agent struct {
 	short     *memory.ShortTerm
 	provider  llm.Provider
 	extractor FactExtractor
+	arbiter   FactArbiter
 	tools     *tools.Registry
 	policy    policy.Policy
 	planner   Planner
@@ -240,6 +253,9 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 	if cfg.DedupMaxDistance <= 0 {
 		cfg.DedupMaxDistance = def.DedupMaxDistance
 	}
+	if cfg.SupersedeMaxDistance <= 0 {
+		cfg.SupersedeMaxDistance = def.SupersedeMaxDistance
+	}
 	// ModelConfidence defaults to 1.0 (no scaling); both knobs are clamped to [0,1].
 	if cfg.ModelConfidence <= 0 {
 		cfg.ModelConfidence = 1.0
@@ -253,6 +269,12 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 	// semantic memory. Callers disable it with DisableReflection().
 	if cfg.Extractor == nil {
 		cfg.Extractor = newLLMExtractor(provider, cfg.Options)
+	}
+	// Default arbiter (Layer 21): classify a new fact vs. a near-neighbour so
+	// contradictions supersede instead of piling up. DisableArbiter() falls back to
+	// Layer 20 consolidation.
+	if cfg.Arbiter == nil {
+		cfg.Arbiter = newLLMArbiter(provider, cfg.Options)
 	}
 	// Default guardrail: consult each tool's own approval interfaces, exactly
 	// reproducing pre-policy behaviour. With no tools there is nothing to gate,
@@ -276,6 +298,7 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 		short:        memory.NewShortTerm(cfg.ShortTermCap),
 		provider:     provider,
 		extractor:    cfg.Extractor,
+		arbiter:      cfg.Arbiter,
 		tools:        cfg.Tools,
 		policy:       cfg.Policy,
 		planner:      cfg.Planner,
@@ -597,25 +620,82 @@ func (a *Agent) learnFrom(ctx context.Context, text string, prov memory.Provenan
 	}
 	conf := clamp01(memory.BaseConfidence(prov) * a.cfg.ModelConfidence)
 	gain := clamp01(consolidationGainBase * memory.EvidenceCredibility(prov) * a.cfg.ModelConfidence)
-	stored, consolidated := 0, 0
 	for _, f := range facts {
-		if existing, ok := a.knownFact(ctx, f); ok {
-			// Restatement: reinforce rather than duplicate — salience always rises,
-			// confidence only on independent evidence (gain>0).
-			if err := a.store.ReinforceFact(ctx, existing.ID, gain); err == nil {
-				consolidated++
-				a.recordEvidence(ctx, existing.ID, turnID, prov)
-			}
-			continue
-		}
-		if m, err := a.store.RememberFact(ctx, f, prov, conf); err == nil {
-			stored++
-			a.recordEvidence(ctx, m.ID, turnID, prov)
-		}
+		a.learnOneFact(ctx, f, prov, conf, gain, turnID)
 	}
 	if len(facts) > 0 {
-		a.trace("reflect", "source", string(prov), "extracted", len(facts),
-			"stored", stored, "consolidated", consolidated, "confidence", conf, "gain", gain)
+		a.trace("reflect", "source", string(prov), "extracted", len(facts), "confidence", conf, "gain", gain)
+	}
+}
+
+// learnOneFact stores, consolidates, or supersedes a single distilled fact. With the
+// arbiter off (DisableArbiter) it is the Layer 20 path: nearest near-identical fact →
+// consolidate, else store. With the arbiter on (Layer 21) it looks a bit WIDER for a
+// contradiction candidate and asks the arbiter how the two relate:
+//
+//	RESTATES   → consolidate onto the existing row (Layer 17).
+//	UNRELATED  → store as a new, distinct fact (fixes over-consolidation of merely
+//	             embedding-near-but-different facts).
+//	SUPERSEDES → the trust model (memory.Supersedes) decides: if this source is
+//	             authoritative enough to retire the old belief, store the new fact and
+//	             soft-supersede the old; otherwise DROP the new fact — the authoritative
+//	             old belief stands (e.g. the model must not overwrite what the user said).
+func (a *Agent) learnOneFact(ctx context.Context, f string, prov memory.Provenance, conf, gain float64, turnID int64) {
+	_, arbiterOff := a.arbiter.(noArbiter)
+
+	radius := a.cfg.SupersedeMaxDistance
+	if arbiterOff {
+		radius = a.cfg.DedupMaxDistance
+	}
+	cand, ok := a.knownFact(ctx, f, radius)
+	if !ok {
+		a.storeNewFact(ctx, f, prov, conf, turnID)
+		return
+	}
+
+	rel := RelRestates
+	if !arbiterOff {
+		r, err := a.arbiter.Classify(ctx, f, cand.Content)
+		if err != nil {
+			a.trace("arbiter.error", "err", err) // safe default: RelRestates (never retires a memory).
+		} else {
+			rel = r
+		}
+	}
+
+	switch rel {
+	case RelSupersedes:
+		if memory.Supersedes(prov, cand.Provenance) {
+			m, err := a.store.RememberFact(ctx, f, prov, conf)
+			if err != nil {
+				return
+			}
+			a.recordEvidence(ctx, m.ID, turnID, prov)
+			if err := a.store.Supersede(ctx, cand.ID, m.ID); err != nil {
+				a.trace("supersede.error", "old", cand.ID, "new", m.ID, "err", err)
+				return
+			}
+			a.trace("supersede", "old", cand.ID, "oldProv", string(cand.Provenance),
+				"new", m.ID, "newProv", string(prov))
+		} else {
+			// The trust model forbids it — the old belief is more authoritative than
+			// this source. Drop the new fact rather than store a contradiction.
+			a.trace("supersede.denied", "newProv", string(prov), "oldProv", string(cand.Provenance),
+				"old", cand.ID)
+		}
+	case RelUnrelated:
+		a.storeNewFact(ctx, f, prov, conf, turnID)
+	default: // RelRestates
+		if err := a.store.ReinforceFact(ctx, cand.ID, gain); err == nil {
+			a.recordEvidence(ctx, cand.ID, turnID, prov)
+		}
+	}
+}
+
+// storeNewFact stores a fresh fact and records its first evidence row (best-effort).
+func (a *Agent) storeNewFact(ctx context.Context, f string, prov memory.Provenance, conf float64, turnID int64) {
+	if m, err := a.store.RememberFact(ctx, f, prov, conf); err == nil {
+		a.recordEvidence(ctx, m.ID, turnID, prov)
 	}
 }
 
@@ -817,16 +897,18 @@ func clamp01(x float64) float64 {
 // weighting). Small, so trust grows gradually with repeated corroboration.
 const consolidationGainBase = 0.34
 
-// knownFact returns the nearest already-stored fact semantically equivalent to the
-// given one, so reflect can *consolidate* a restatement onto it instead of storing
-// a near-duplicate. Only existing KindFact rows count: a raw conversation turn that
-// happens to sit nearby must not block the first distillation of that turn.
-func (a *Agent) knownFact(ctx context.Context, fact string) (memory.Hit, bool) {
+// knownFact returns the nearest already-stored fact within maxDist of the given one
+// — the candidate reflect consolidates a restatement onto, or (Layer 21) asks the
+// arbiter about. Only existing KindFact rows count: a raw conversation turn that
+// happens to sit nearby must not block the first distillation of that turn. maxDist
+// is the caller's radius (tight DedupMaxDistance for consolidation, wider
+// SupersedeMaxDistance for contradictions).
+func (a *Agent) knownFact(ctx context.Context, fact string, maxDist float64) (memory.Hit, bool) {
 	// Use the consolidation-aware recall so a restatement of a long-neglected
 	// (soft-forgotten) fact still finds the old row and reinforces it, instead of
 	// silently inserting a near-duplicate the plain Recall would leave orphaned
 	// below the forget floor forever.
-	hits, err := a.store.RecallForConsolidation(ctx, fact, 3, a.cfg.DedupMaxDistance)
+	hits, err := a.store.RecallForConsolidation(ctx, fact, 3, maxDist)
 	if err != nil {
 		return memory.Hit{}, false
 	}
@@ -1000,6 +1082,9 @@ func (a *Agent) WhyMemory(ctx context.Context, id int64) (string, error) {
 		fmt.Fprintf(&b, "  %s, confidence %.0f%%, salience %.1f (×%d)\n",
 			m.Provenance, m.Confidence*100, m.Salience, m.AccessCount)
 	}
+	if m.SupersededBy > 0 {
+		fmt.Fprintf(&b, "  ⚠ superseded by #%d (retired from recall; kept for audit)\n", m.SupersededBy)
+	}
 	if len(ev) == 0 {
 		b.WriteString("  evidence: (none recorded)")
 		return b.String(), nil
@@ -1033,6 +1118,11 @@ func FormatMemories(mems []memory.Memory) string {
 		meta := ""
 		if m.Kind == memory.KindFact {
 			meta = fmt.Sprintf(" (%s %.0f%%, sal %.1f×%d)", m.Provenance, m.Confidence*100, m.Salience, m.AccessCount)
+		}
+		// A superseded fact is retired from recall but still listed (marked), so its
+		// history stays inspectable — /why <id> shows what replaced it (Layer 21).
+		if m.SupersededBy > 0 {
+			meta += fmt.Sprintf(" ⚠→#%d", m.SupersededBy)
 		}
 		fmt.Fprintf(&b, "  #%d [%s]%s %s  %s\n",
 			m.ID, label, meta, m.CreatedAt.Format("2006-01-02 15:04"), oneLine(m.Content, 66))

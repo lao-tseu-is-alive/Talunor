@@ -14,6 +14,65 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.20.0] - 2026-07-28 — Layer 21: contradiction & supersession (a memory that corrects itself)
+
+Iteration 5 continues. Until now memory could *accumulate* and *forget* but not
+**correct**: tell the agent "I live in Lausanne," then "I moved to Geneva," and both
+survived. Layer 21 lets a new fact **supersede** an old, incompatible one — governed by
+an **explicit, per-domain trust model** so the correction stays honest.
+
+### Added
+
+- **A relationship arbiter** (`internal/agent/arbiter.go`): `FactArbiter.Classify` decides
+  how a freshly-learned fact relates to a near neighbour — `RESTATES` (consolidate),
+  `SUPERSEDES` (same subject, incompatible), or `UNRELATED` (different subjects / both true).
+  Needed because embedding similarity ≠ contradiction ("lives in Lausanne" and "lives in
+  Geneva" are *near*). Default LLM impl (temp 0); `DisableArbiter()` falls back to Layer 20.
+- **The trust model** (`internal/memory/supersede.go`): `memory.Supersedes(newer, older)` —
+  **one small, named, documented function** that answers "who may retire whom." Default
+  (personal-assistant): the user and a Verified `tool_observed` are authoritative; a
+  `model_inferred` guess retires nothing (Layer-17's independence rule, extended to *truth*).
+  **This is the function a different agent (security, ops) replaces — nothing else.**
+- **Soft-supersession** (**migration 5**, `superseded_by`): a retired fact is marked and
+  excluded from recall, but the row survives for audit and reversal. `/why` and `/list` show
+  the supersession (`⚠→#N`).
+- `TALUNOR_SUPERSEDE_MAX_DISTANCE` — the (deliberately wider than dedup) radius the arbiter
+  searches for a contradiction candidate. Default `0.35`.
+- **ADR 0003** records the trust-model decision with both worked examples (below).
+
+### How it stays honest (ADR 0003)
+
+- **The model proposes, the system gates.** The arbiter may *propose* a supersession; only
+  `memory.Supersedes` decides if it's *allowed*. A model inference is **dropped** rather than
+  allowed to overwrite what the user said.
+- **The "flat earth" case:** a user's world-claim is stored as a **belief** ("User believes
+  the earth is flat"), which is a *different subject* from a world fact → `UNRELATED`, they
+  coexist. The agent remembers your view without adopting it as the world.
+- **The "attack signature" case:** a Verified tool's `tool_observed` fact *is* authoritative
+  in its domain and *can* retire a stale `model_inferred` belief — the `tools.Verified` seam
+  from Layer 20 is exactly the hook. A real agent must remember what it observed.
+
+### Compatibility
+
+Migration 5 is append-only (one nullable column; existing rows default active). No re-embed;
+existing facts unaffected. With the arbiter disabled, behaviour is exactly Layer 20.
+
+### Lessons learned
+
+1. **A single global provenance rank is a hidden, broken trust model.** "User > model" fails
+   the flat-earth case (corrupts world facts); "never store world facts" fails the
+   attack-signature case (a real agent must remember observations). No global rank works —
+   authority is *per-domain*, and provenance is a proxy for it. Making that ~10-line policy
+   an explicit, named function is the whole point.
+2. **Two opposing examples teach a principle; one teaches a rule.** The flat earth and the
+   attack signature pull in opposite directions, and both fall out of the *same* machinery
+   (arbiter + provenance-as-authority + `Verified` + the gate) — which is the sign the seam
+   is drawn at the right place. (This becomes Lesson 21.)
+3. **When the LLM gains a destructive power, gate it with a non-LLM rule and make it soft.**
+   The arbiter is the first LLM *decision* (not extraction) that can retire a memory; it is
+   bounded by a deterministic trust gate and made reversible by soft-supersession, so a wrong
+   call degrades gracefully.
+
 ## [0.19.1] - 2026-07-28 — Course: Lesson 20 (learn from action), bilingual
 
 A docs-only release: Layer 20 gets its lesson — the one that opens Iteration 5 in

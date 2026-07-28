@@ -81,6 +81,10 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    evidence.go (LAYER 20): the evidence trail (migration 4). RecordEvidence/
                    EvidenceFor (which turns+sources support a fact, one row per store/reinforce)
                    + MemoryByID (for /why). Append-only; a fact with no rows = empty trail.
+                   supersede.go (LAYER 21): the TRUST MODEL — Supersedes(newer,older) = the one
+                   named function deciding who may retire whom (default: user/Verified-tool
+                   authoritative, model_inferred retires nothing; swap it for another agent).
+                   Store.Supersede soft-marks superseded_by (migration 5); Recall excludes them.
 internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenRouter),
                    FromEnv() provider selection, NewOpenRouter
 internal/config/   minimal dependency-free .env loader (real env wins)
@@ -110,7 +114,13 @@ internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/obs
                    trivial/empty skipped + size-capped), assistant answer (opt-in
                    Config.ReflectAssistant, off). Provenance is per-source/system-assigned
                    (sources extracted separately, never model-labelled). Records evidence
-                   per store/reinforce; WhyMemory→/why. See ADR 0002. Optional Config.Debug (slog) traces
+                   per store/reinforce; WhyMemory→/why. See ADR 0002. LAYER 21: arbiter.go —
+                   FactArbiter classifies a new fact vs a near neighbour (restates/supersedes/
+                   unrelated; default LLM, DisableArbiter() falls back to L20). learnOneFact
+                   PROPOSES via the arbiter, then the memory.Supersedes trust model GATES: a
+                   model inference is dropped, not allowed to overwrite the user; a Verified
+                   tool can retire a stale belief. Candidate radius = wider SupersedeMaxDistance.
+                   See ADR 0003. Optional Config.Debug (slog) traces
                    recall/tools/reflection. debug.go: the /debug runtime toggle
                    (screenDebug) streams recall rankings inline as dimmed Reasoning
                    notes (reflection notes now go to the log, being async). Slash-command helpers too.
@@ -235,6 +245,7 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_RECALL_MIN_CONFIDENCE` | drop recalled memories below this confidence (`0`=off) | `0` |
 | `TALUNOR_SALIENCE_HALFLIFE` | Layer 17 decay half-life for un-recalled memories (Go duration) | `720h` (30d) |
 | `TALUNOR_FORGET_FLOOR` | effective salience below which a memory is soft-forgotten from recall | `0.05` |
+| `TALUNOR_SUPERSEDE_MAX_DISTANCE` | Layer 21 cosine radius the arbiter searches for a contradiction candidate (wider than dedup) | `0.35` |
 | `TALUNOR_TOOLS` | `0` disables tools (model without tool-calling support) | `1` |
 | `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow/prompt/deny; `docs/policy.sample.yaml`); unset = default per-tool gate | — |
 | `TALUNOR_PLANNER` | `1` plans before acting (inspectable, approved plan → ReAct execution capped to the plan's tools) | `0` |
@@ -557,6 +568,16 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   `internal/agent`/`memory`/`tools` to teach the honesty chain (confidence system-assigned → so is
   provenance → per-source extraction), the `model_inferred`-by-default rule + the `tools.Verified`
   seam, the evidence trail + `/why`. Competency matrix gains lesson 20; course now 00–20 (21 lessons).
-- **Next — open threads (documented, not started):** Layer 21 (contradiction & supersession — a
-  new fact supersedes an old one, gated so only independent higher-provenance evidence does),
-  Layer 22 (hybrid recall, vector ∪ FTS5); calibration→policy wiring. Same per-layer checkpoint rhythm.
+- **Layer 21 (done): v0.20.0** = **contradiction & supersession** — a memory that corrects itself.
+  `agent/arbiter.go` (`FactArbiter`: classify a new fact vs a near neighbour as restates/supersedes/
+  unrelated; default LLM, `DisableArbiter()`→L20) + `memory/supersede.go` (the **trust model**
+  `Supersedes(newer,older)` — the ONE named function for "who may retire whom"; default = user &
+  Verified-tool authoritative, model_inferred retires nothing; + `Store.Supersede` soft-marking
+  `superseded_by`, migration 5, excluded from recall). `learnOneFact` PROPOSES via the arbiter then
+  GATES via the trust model: a model inference is dropped (never overwrites the user); a Verified
+  tool can retire a stale belief. Two worked examples in **ADR 0003** (flat earth → belief, UNRELATED;
+  attack signature → tool_observed can supersede). `TALUNOR_SUPERSEDE_MAX_DISTANCE` (0.35, wider than
+  dedup). `/why` + `/list` show supersession. Append-only, no re-embed. Lesson 21 (v0.20.1) to write.
+- **Next — open threads (documented, not started):** Lesson 21 (v0.20.1, "Whose word counts?" —
+  trust-model-as-design-decision, bilingual); Layer 22 (hybrid recall, vector ∪ FTS5);
+  calibration→policy wiring. Same per-layer checkpoint rhythm.

@@ -686,6 +686,7 @@ func TestReflectLearnsFromToolObservation(t *testing.T) {
 			cfg := DefaultConfig()
 			cfg.Tools = tools.NewRegistry(factTool{name: "lookup", result: "Paris is the capital of France.", verified: c.verified})
 			cfg.Extractor = sourceExtractor{}
+			cfg.Arbiter = DisableArbiter() // pin the Layer-20 path (provenance, not supersession).
 			ag := New(store, prov, cfg)
 			defer ag.Close()
 
@@ -722,6 +723,110 @@ func TestReflectLearnsFromToolObservation(t *testing.T) {
 				t.Errorf("user fact provenance = %s, want user_stated", um.Provenance)
 			}
 		})
+	}
+}
+
+// scriptedArbiter returns a fixed relationship verdict, so the Layer-21 branches can
+// be driven deterministically without a live model.
+type scriptedArbiter struct{ rel Relation }
+
+func (s scriptedArbiter) Classify(context.Context, string, string) (Relation, error) {
+	return s.rel, nil
+}
+
+func factExists(t *testing.T, ctx context.Context, store *memory.Store, content string) bool {
+	t.Helper()
+	mems, err := store.List(ctx, 100)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, m := range mems {
+		if m.Content == content {
+			return true
+		}
+	}
+	return false
+}
+
+// newLearner builds an agent wired for direct learnOneFact tests: reflection off, a
+// scripted arbiter, and a wide supersede radius so the seeded neighbour is always the
+// candidate (the arbiter, not the distance, decides the branch).
+func newLearner(t *testing.T, store *memory.Store, rel Relation) *Agent {
+	t.Helper()
+	cfg := DefaultConfig()
+	cfg.Extractor = DisableReflection()
+	cfg.Arbiter = scriptedArbiter{rel: rel}
+	cfg.SupersedeMaxDistance = 0.9
+	ag := New(store, &fakeProvider{reply: "x"}, cfg)
+	t.Cleanup(func() { ag.Close() })
+	return ag
+}
+
+// TestSupersedeUserRetiresModel: a user statement supersedes a contradicting model
+// inference (arbiter says SUPERSEDES; the trust model allows user over model).
+func TestSupersedeUserRetiresModel(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	old, err := store.RememberFact(ctx, "User lives in Lausanne.", memory.ProvenanceModelInferred, 0.5)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ag := newLearner(t, store, RelSupersedes)
+
+	ag.learnOneFact(ctx, "User lives in Geneva.", memory.ProvenanceUserStated, 0.9, 0.3, 7)
+
+	got, _, _ := store.MemoryByID(ctx, old.ID)
+	if got.SupersededBy == 0 {
+		t.Fatal("the model-inferred fact was not superseded by the user's statement")
+	}
+	newFact := findStoredFact(t, ctx, store, "User lives in Geneva.")
+	if newFact.SupersededBy != 0 {
+		t.Error("the new fact should be active")
+	}
+	if got.SupersededBy != newFact.ID {
+		t.Errorf("superseded_by = %d, want the new fact #%d", got.SupersededBy, newFact.ID)
+	}
+}
+
+// TestSupersedeGateProtectsUser: a MODEL inference must NOT supersede a user-stated
+// fact — the trust model forbids it, and the new (model) fact is dropped, not stored
+// as a rival.
+func TestSupersedeGateProtectsUser(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	old, err := store.RememberFact(ctx, "User loves Go.", memory.ProvenanceUserStated, 0.9)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ag := newLearner(t, store, RelSupersedes)
+
+	ag.learnOneFact(ctx, "User dislikes Go.", memory.ProvenanceModelInferred, 0.5, 0, 8)
+
+	if got, _, _ := store.MemoryByID(ctx, old.ID); got.SupersededBy != 0 {
+		t.Error("a model inference was allowed to supersede a user-stated fact")
+	}
+	if factExists(t, ctx, store, "User dislikes Go.") {
+		t.Error("the denied model fact was stored anyway")
+	}
+}
+
+// TestUnrelatedStoresNew: a nearby-but-unrelated fact is stored as its own fact, not
+// merged onto the neighbour — the "flat earth" coexistence, generalised.
+func TestUnrelatedStoresNew(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	if _, err := store.RememberFact(ctx, "User lives in Lausanne.", memory.ProvenanceUserStated, 0.9); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ag := newLearner(t, store, RelUnrelated)
+
+	ag.learnOneFact(ctx, "User lives in Geneva.", memory.ProvenanceUserStated, 0.9, 0.3, 9)
+
+	if !factExists(t, ctx, store, "User lives in Lausanne.") {
+		t.Error("the original fact was wrongly retired/merged")
+	}
+	if !factExists(t, ctx, store, "User lives in Geneva.") {
+		t.Error("the unrelated new fact was not stored")
 	}
 }
 
