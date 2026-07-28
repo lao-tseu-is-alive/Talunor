@@ -70,12 +70,15 @@ Talunor/
 │   │   │                     #       migration 1 = baseline; 2 = provenance/confidence; 3 = salience (L17).
 │   │   ├── salience.go       #     LAYER 17: lazy decay (effective salience at read time), Reinforce /
 │   │   │                     #       ReinforceFact (confidence only on independent evidence), forget floor.
+│   │   ├── evidence.go       #     LAYER 20: the evidence trail (migration 4) — RecordEvidence / EvidenceFor
+│   │   │                     #       (which turns+sources support a fact) + MemoryByID (for /why).
 │   │   ├── shortterm.go      #     Bounded ring buffer of the most recent turns (immediate context).
 │   │   ├── cgo_link.go       #     cgo glue: dlopen libm with RTLD_GLOBAL — vector.so needs it in scope.
 │   │   ├── provenance_test.go #    Tests (fresh=OK, canary mismatch=Stale→ReEmbed, legacy=Unknown, cosine).
 │   │   ├── migrate_test.go   #     Tests (fresh stamps latest, idempotent reopen, legacy baseline no data loss).
 │   │   ├── salience_internal_test.go # Pure-fn tests (decay, credibility, bounded confidence) — no DB/ext.
 │   │   ├── salience_db_test.go #    Tests (reinforce bumps salience; confidence only on evidence; soft-forget).
+│   │   ├── evidence_test.go  #     Tests (evidence trail order/sources/NULL turn; MemoryByID).
 │   │   └── memory_test.go    #     Tests (semantic recall, thresholding, assistant-turn exclusion).
 │   │
 │   ├── llm/                  # LAYER 3 / 6: LLM provider abstraction + OpenAI-compatible adapter.
@@ -178,7 +181,8 @@ Talunor/
 │   ├── architecture.md    #   The mental model: one-turn flow + package DAG (Mermaid) + load-bearing decisions.
 │   ├── architecture.fr.md #   French translation of architecture.md (bilingual, EN canonical).
 │   ├── decisions/         #   Architecture Decision Records (append-only, EN, contributor-facing).
-│   │   └── 0001-memory-backends.md # ADR 1: the Embedder/VectorIndex seams + backend profiles (proposed/deferred).
+│   │   ├── 0001-memory-backends.md # ADR 1: the Embedder/VectorIndex seams + backend profiles (proposed/deferred).
+│   │   └── 0002-provenance-from-source.md # ADR 2: learned-fact provenance from the source, not eagerness (Layer 20).
 │   ├── policy.sample.yaml #   Commented example TALUNOR_POLICY rule file (allow / prompt / deny per tool).
 │   ├── calibration.seed.yaml #  LAYER 14: public example calibration suite (deterministic, threat-model header).
 │   ├── ollama-networking.md # Reaching a loopback Ollama from inside the container, securely.

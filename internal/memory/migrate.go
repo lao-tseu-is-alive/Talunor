@@ -77,7 +77,32 @@ var migrations = []migration{
 			return nil
 		},
 	},
-	// Iteration 4 continues here, one migration per layer.
+	{
+		version: 4,
+		name:    "evidence trail",
+		apply: func(ctx context.Context, e execer) error {
+			// Layer 20 (Iteration 5): the auditable evidence chain. Each row records
+			// that a fact was supported by a turn from a source (its provenance), on
+			// first store and on every reinforcement — so "why do you believe this?"
+			// can be answered. Append-only; nothing on the memories table changes.
+			for _, ddl := range []string{
+				`CREATE TABLE IF NOT EXISTS evidence (
+				    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+				    fact_id    INTEGER NOT NULL,
+				    turn_id    INTEGER,
+				    source     TEXT NOT NULL,
+				    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+				)`,
+				`CREATE INDEX IF NOT EXISTS idx_evidence_fact ON evidence(fact_id)`,
+			} {
+				if _, err := e.ExecContext(ctx, ddl); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	},
+	// Iteration 5 continues here, one migration per layer.
 }
 
 // latestSchemaVersion is the version a fully-migrated store reports.

@@ -14,6 +14,68 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.19.0] - 2026-07-28 — Layer 20: learn from action + the evidence trail (Iteration 5 begins)
+
+Iteration 5 ("truthful memory") opens. Until now, **every** learned fact was
+`user_stated` — the agent only learned from what the user *said*. Layer 20 extends
+reflection to what the agent **observes** (tool results) and, opt-in, what it **says**,
+tags each fact with system-assigned provenance, and records an auditable **evidence
+trail**. It sets up Layer 21 (contradiction & supersession) to arbitrate on.
+
+### Added
+
+- **`reflect` learns from multiple sources per turn** (`internal/agent`): the user
+  message (`user_stated`, as before), each **tool observation**, and — opt-in via
+  `Config.ReflectAssistant` (off by default) — the assistant answer. `reflect(job)`
+  loops over sources via a new `learnFrom(text, provenance, turnID)`; the turn now
+  carries its sources to the async worker (`reflectJob` grew from one string).
+- **`tools.Verified`** — an optional capability (`Verified() bool`) declaring a tool's
+  output a deterministic, structured fact. See provenance below.
+- **The evidence trail** (`internal/memory/evidence.go`, **migration 4**): an `evidence`
+  table records, for each fact, every turn+source that supported it — on first store
+  **and** each reinforcement. `Store.RecordEvidence` / `EvidenceFor` / `MemoryByID`.
+- **`/why <id>`** — shows a fact and its evidence trail (which turns, from which
+  sources). Wired in the TUI and the REPL.
+- **ADR 0002** (`docs/decisions/`) records the provenance decision below.
+
+### Provenance — honest by default (see ADR 0002)
+
+- A fact the LLM distils from a tool's **text** output is **`model_inferred`**, not
+  `tool_observed`: the tool produced text, the model *interpreted* it — that is
+  inference. Calling it "observed" would inflate confidence (the sycophancy trap).
+- **`tool_observed` is reserved** for facts from a `tools.Verified` tool. No shipped
+  tool is verified today (calculator/clock are deterministic but produce nothing
+  durable; web_fetch/bash are unverified prose), so the path is a wired, tested seam
+  for a future durable-fact tool. **This is deliberate.**
+- Provenance is assigned **per source by the system**, so sources are extracted
+  separately — never one combined call asking the model to label its own provenance
+  (that would break Layer 16's system-assigned-confidence invariant).
+- Trivial/empty observations are skipped and observations are size-capped, so the extra
+  learning stays cheap; it all rides the single `TALUNOR_REFLECT` toggle and the async
+  worker (Layer 18). **In the default toolset (calculator/clock/recall_memory, all
+  trivial), the visible new behaviour is the evidence trail + `/why`; tool-observation
+  learning fires once `web_fetch`/`bash` are enabled.**
+
+### Compatibility
+
+Migration 4 is append-only (a new `evidence` table; the `memories` table is unchanged),
+so existing databases baseline cleanly with no re-embed and zero change to stored facts.
+
+### Lessons learned
+
+1. **Most "tool knowledge" is model-interpreted, not observed.** The eager design —
+   "it came from a tool, mark it `tool_observed`" — quietly launders a model guess into
+   high confidence. Honesty means the *default* is `model_inferred` and `tool_observed`
+   is the narrow, verified exception. Under-claim, don't over-claim.
+2. **Keeping confidence system-assigned forces per-source extraction.** The cheap move
+   (one call, let the model label each fact's source) is exactly the move that breaks
+   the invariant. The architecture — extract per source so the *system* knows the
+   source — is what preserves it. The honesty rule dictated the control flow.
+3. **A capability with no current user can still be worth shipping** — if it's a
+   *tested seam* that resists a bad default. `tools.Verified` fires for no builtin today,
+   but it exists so that a future durable-fact tool doesn't tempt someone into tagging
+   interpreted prose as observed.
+
 ## [0.18.4] - 2026-07-27 — Docs: architecture page + competency matrix
 
 A documentation release — no code behaviour change. It adds the two pedagogy

@@ -618,6 +618,113 @@ func factContents(t *testing.T, ctx context.Context, store *memory.Store) []stri
 	return out
 }
 
+// factTool is a fake tool returning a fixed observation; verified controls whether
+// it implements tools.Verified as true (→ tool_observed) or false (→ model_inferred).
+type factTool struct {
+	name, result string
+	verified     bool
+}
+
+func (f factTool) Name() string            { return f.name }
+func (f factTool) Description() string     { return "test tool" }
+func (f factTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (f factTool) Verified() bool          { return f.verified }
+func (f factTool) Execute(context.Context, json.RawMessage) (string, error) {
+	return f.result, nil
+}
+
+// sourceExtractor returns a different canned fact per source, so a fact's
+// provenance can be traced to which source it was distilled from.
+type sourceExtractor struct{}
+
+func (sourceExtractor) Extract(_ context.Context, text string) ([]string, error) {
+	switch {
+	case strings.Contains(text, "USERMSG"):
+		return []string{"User asked about France."}, nil
+	case strings.Contains(text, "capital"):
+		return []string{"The capital of France is Paris."}, nil
+	}
+	return nil, nil
+}
+
+func findStoredFact(t *testing.T, ctx context.Context, store *memory.Store, content string) memory.Memory {
+	t.Helper()
+	mems, err := store.List(ctx, 100)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, m := range mems {
+		if m.Content == content {
+			return m
+		}
+	}
+	t.Fatalf("fact %q not stored", content)
+	return memory.Memory{}
+}
+
+// TestReflectLearnsFromToolObservation proves Layer 20: a fact distilled from a
+// tool's observation carries provenance from its SOURCE (system-assigned) — verified
+// tools yield tool_observed, everything else model_inferred — records an evidence
+// row, and /why surfaces it. The user-message fact stays user_stated regardless.
+func TestReflectLearnsFromToolObservation(t *testing.T) {
+	cases := []struct {
+		name     string
+		verified bool
+		want     memory.Provenance
+	}{
+		{"unverified tool → model_inferred", false, memory.ProvenanceModelInferred},
+		{"verified tool → tool_observed", true, memory.ProvenanceToolObserved},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ctx := context.Background()
+			store := testStore(t)
+			prov := &scriptedProvider{steps: [][]llm.Chunk{
+				{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "lookup", Args: `{}`}}}},
+				{{Content: "Paris."}},
+			}}
+			cfg := DefaultConfig()
+			cfg.Tools = tools.NewRegistry(factTool{name: "lookup", result: "Paris is the capital of France.", verified: c.verified})
+			cfg.Extractor = sourceExtractor{}
+			ag := New(store, prov, cfg)
+			defer ag.Close()
+
+			out, err := ag.Turn(ctx, "USERMSG look up France")
+			if err != nil {
+				t.Fatalf("turn: %v", err)
+			}
+			if _, err := drain(out); err != nil {
+				t.Fatalf("drain: %v", err)
+			}
+			if err := ag.Quiesce(context.Background()); err != nil {
+				t.Fatalf("quiesce: %v", err)
+			}
+
+			// The tool-derived fact carries the source's provenance…
+			m := findStoredFact(t, ctx, store, "The capital of France is Paris.")
+			if m.Provenance != c.want {
+				t.Errorf("tool-derived provenance = %s, want %s", m.Provenance, c.want)
+			}
+			// …and an evidence row from that source, anchored to a real turn.
+			ev, err := store.EvidenceFor(ctx, m.ID)
+			if err != nil {
+				t.Fatalf("evidence: %v", err)
+			}
+			if len(ev) == 0 || ev[0].Source != c.want || ev[0].TurnID == 0 {
+				t.Errorf("evidence = %+v, want a %s row with a turn id", ev, c.want)
+			}
+			// /why surfaces the source.
+			if why, err := ag.WhyMemory(ctx, m.ID); err != nil || !strings.Contains(why, string(c.want)) {
+				t.Errorf("/why missing source %s: %q (err %v)", c.want, why, err)
+			}
+			// The user-message fact is user_stated — provenance is per-source.
+			if um := findStoredFact(t, ctx, store, "User asked about France."); um.Provenance != memory.ProvenanceUserStated {
+				t.Errorf("user fact provenance = %s, want user_stated", um.Provenance)
+			}
+		})
+	}
+}
+
 // TestReActToolLoop drives a full act→observe loop: the model asks to call the
 // calculator, the agent executes it and feeds the observation back, and the
 // model produces a final answer using it. Uses a real tool + store (embeddings)

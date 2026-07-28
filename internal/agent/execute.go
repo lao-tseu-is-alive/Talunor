@@ -19,7 +19,7 @@ import (
 // The phases mirror the cognition model: plan → gate → execute → learn. A planning
 // failure is not fatal — it falls back to the plain ReAct loop so the turn still
 // answers.
-func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string, hits []memory.Hit, out chan<- llm.Chunk) {
+func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string, userTurnID int64, hits []memory.Hit, out chan<- llm.Chunk) {
 	defer close(out)
 	a.emitRecallDebug(ctx, out, input, hits)
 
@@ -35,7 +35,7 @@ func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string
 	if err != nil {
 		a.trace("plan.failed", "err", err)
 		a.sendDebug(ctx, out, "plan: failed (%v) — falling back to ReAct", err)
-		a.reactLoop(ctx, msgs, input, out, execCtx{})
+		a.reactLoop(ctx, msgs, input, userTurnID, out, execCtx{})
 		return
 	}
 	a.lastPlan.Store(pl)
@@ -56,7 +56,7 @@ func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string
 				reason = "policy error: " + perr.Error()
 			}
 			a.trace("plan.denied", "step", s.ID, "tool", s.Tool, "reason", reason)
-			a.finishAnswer(ctx, out, input, fmt.Sprintf(
+			a.finishAnswer(ctx, out, input, userTurnID, fmt.Sprintf(
 				"I can't carry out this plan: step %s (%s) is not permitted (%s).", s.ID, s.Tool, reason))
 			return
 		}
@@ -75,7 +75,7 @@ func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string
 				return
 			}
 			a.trace("plan.rejected")
-			a.finishAnswer(ctx, out, input, "Plan not approved; I won't proceed.")
+			a.finishAnswer(ctx, out, input, userTurnID, "Plan not approved; I won't proceed.")
 			return
 		}
 	}
@@ -102,23 +102,32 @@ func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string
 		// prompts as it would without a planner.
 		exec.reapproveAtOrAbove = plan.RiskLow
 	}
-	a.reactLoop(ctx, msgs, input, out, exec)
+	a.reactLoop(ctx, msgs, input, userTurnID, out, exec)
 }
 
 // finishAnswer streams a canned final answer and runs the same learn step
 // (short-term + long-term store, then reflection) the ReAct core would — so an
-// aborted plan (denied or unapproved) is still a proper, remembered turn.
-func (a *Agent) finishAnswer(ctx context.Context, out chan<- llm.Chunk, input, answer string) {
+// aborted plan (denied or unapproved) is still a proper, remembered turn. No tools
+// ran, so there are no observations to reflect on.
+func (a *Agent) finishAnswer(ctx context.Context, out chan<- llm.Chunk, input string, userTurnID int64, answer string) {
+	var assistantTurnID int64
 	if answer != "" {
 		a.send(ctx, out, llm.Chunk{Content: answer})
 		a.short.Add(llm.RoleAssistant, answer)
-		if _, err := a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, answer); err != nil {
+		if m, err := a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, answer); err != nil {
 			a.trace("store.assistant.error", "err", err)
 			a.sendDebug(ctx, out, "store: assistant turn not persisted: %v", err)
+		} else {
+			assistantTurnID = m.ID
 		}
 	}
 	// Learn off the critical path (Layer 18) — see reactLoop.
-	a.enqueueReflect(input)
+	a.enqueueReflect(reflectJob{
+		userInput:       input,
+		userTurnID:      userTurnID,
+		assistantAnswer: answer,
+		assistantTurnID: assistantTurnID,
+	})
 }
 
 // LastPlan returns the most recent plan produced this session, or nil if planning

@@ -78,6 +78,9 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    with diminishing returns — but only on INDEPENDENT evidence
                    (EvidenceCredibility: user/tool=1, model_inferred=0, the echo
                    guard). Half-life/floor via TALUNOR_SALIENCE_HALFLIFE/_FORGET_FLOOR
+                   evidence.go (LAYER 20): the evidence trail (migration 4). RecordEvidence/
+                   EvidenceFor (which turns+sources support a fact, one row per store/reinforce)
+                   + MemoryByID (for /why). Append-only; a fact with no rows = empty trail.
 internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenRouter),
                    FromEnv() provider selection, NewOpenRouter
 internal/config/   minimal dependency-free .env loader (real env wins)
@@ -101,7 +104,13 @@ internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/obs
                    18: reflect is ASYNC — enqueueReflect → bounded reflectCh → a single
                    reflectWorker goroutine (started in New); Agent.Close() drains it,
                    Agent.Quiesce(ctx) waits (tests). One worker + single conn ⇒ no
-                   extra locking. Optional Config.Debug (slog) traces
+                   extra locking. LAYER 20: reflect(job) learns from the turn's SOURCES
+                   via learnFrom(text,prov,turnID) — user msg (user_stated), each tool
+                   observation (model_inferred, or tool_observed iff tools.Verified;
+                   trivial/empty skipped + size-capped), assistant answer (opt-in
+                   Config.ReflectAssistant, off). Provenance is per-source/system-assigned
+                   (sources extracted separately, never model-labelled). Records evidence
+                   per store/reinforce; WhyMemory→/why. See ADR 0002. Optional Config.Debug (slog) traces
                    recall/tools/reflection. debug.go: the /debug runtime toggle
                    (screenDebug) streams recall rankings inline as dimmed Reasoning
                    notes (reflection notes now go to the log, being async). Slash-command helpers too.
@@ -126,7 +135,10 @@ internal/tools/    action layer: Tool interface + Registry; builtins Calculator
                    (sandboxed shell; opt-in TALUNOR_BASH), WebFetch (SSRF-guarded
                    HTTP; opt-in TALUNOR_WEBFETCH). Approvable = coarse human-OK
                    interface; ApprovableFor = per-call gate from args (web_fetch's
-                   allowlist bypass) — the default ToolGatePolicy consults these
+                   allowlist bypass) — the default ToolGatePolicy consults these.
+                   Verified (LAYER 20): optional — a tool declaring its output a
+                   deterministic verified fact ⇒ learned as tool_observed (no builtin
+                   implements it yet; the honest seam, ADR 0002)
 internal/sandbox/  runs an untrusted script under limits; Sandbox iface + FromEnv.
                    Two backends: ociRuntime (nerdctl/docker — strong) and
                    namespaces (rootless userns re-exec — Linux-only, teaching, no
@@ -527,7 +539,19 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   post-0.18.3 doc fixes: FR lesson links now point to `README.fr.md` (were resolving to EN),
   README "18-lesson"→"20-lesson", and **`lessons-check` extended to guard language-suffixed links**
   (`.md`/`.fr.md`/`.es.md` — the `.es.md` arm readies a future Spanish rollout). No code change.
-- **Next — open threads (documented, not started):** the executed plan as a learning input
-  (deferred from Layer 13; would populate `tool_observed`/`model_inferred` provenance — a
-  possible Iteration 5 seed); calibration→policy wiring. (The `lastPlan`/`screenDebug` race is
-  fixed in v0.18.3.) Same per-layer checkpoint rhythm.
+- **Iteration 5 STARTED — Layer 20 (done): v0.19.0** = **learn from action + evidence trail**.
+  `agent.reflect` no longer learns only from the user's message: `reflect(job)` loops over the
+  turn's SOURCES via `learnFrom(text, prov, turnID)` — the user message (`user_stated`), each tool
+  observation, and (opt-in `Config.ReflectAssistant`, off by default) the assistant answer. A fact
+  distilled from a tool's text is **`model_inferred`** (an LLM interpreting text is inference);
+  **`tool_observed`** is reserved for a `tools.Verified` tool (new optional capability) — none
+  ship today, so it's a wired/tested seam. Provenance is assigned **per source by the system**
+  (sources extracted separately — never one call asking the model to label itself; preserves the
+  Layer-16 invariant). `internal/memory/evidence.go` (**migration 4**): an `evidence` table +
+  `RecordEvidence`/`EvidenceFor`/`MemoryByID`, one row per store/reinforce; **`/why <id>`** shows
+  it. Trivial/empty observations skipped + size-capped; rides the single `TALUNOR_REFLECT` toggle +
+  the async worker. Append-only, no re-embed, zero change to existing facts. Decision recorded in
+  **ADR 0002**. Deferred to later Iteration-5 layers: contradiction/supersession (21), hybrid recall (22).
+- **Next — open threads (documented, not started):** Layer 21 (contradiction & supersession — a
+  new fact supersedes an old one, gated so only independent higher-provenance evidence does),
+  Layer 22 (hybrid recall, vector ∪ FTS5); calibration→policy wiring. Same per-layer checkpoint rhythm.

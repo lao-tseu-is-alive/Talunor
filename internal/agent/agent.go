@@ -87,6 +87,12 @@ type Config struct {
 	// existing fact lies within this cosine distance, so restating something does
 	// not pile up near-duplicate facts. Small = "only skip near-identical facts".
 	DedupMaxDistance float64
+	// ReflectAssistant, when true, also distils facts from the assistant's own
+	// answer (tagged model_inferred). Off by default: learning from the model's own
+	// output is the echo-chamber risk, and EvidenceCredibility(model_inferred)=0
+	// already stops it raising confidence — so it is opt-in at the Config level and
+	// deliberately not wired to an env var (Layer 20; keeps a single TALUNOR_REFLECT).
+	ReflectAssistant bool
 
 	// ModelConfidence scales the confidence of every fact the agent *learns* (via
 	// reflection), in [0,1]. It is the calibration link: set it from a `calibrate`
@@ -190,8 +196,26 @@ type Agent struct {
 	drainTimeout time.Duration
 }
 
-// reflectJob is one unit of deferred learning: reflect on this user message.
-type reflectJob struct{ input string }
+// reflectObservation is one tool result gathered during a turn, a candidate source
+// of durable facts (Layer 20). verified is true when the tool declared its output a
+// deterministic, structured fact (tools.Verified) — which decides whether a fact
+// distilled from it is tool_observed or (the honest default) model_inferred.
+type reflectObservation struct {
+	tool     string
+	result   string
+	verified bool
+}
+
+// reflectJob is one unit of deferred learning: the sources of a completed turn.
+// The user message is always present; observations/assistant are optional. Turn
+// ids anchor the evidence trail (Layer 20).
+type reflectJob struct {
+	userInput       string
+	userTurnID      int64
+	assistantAnswer string
+	assistantTurnID int64
+	observations    []reflectObservation
+}
 
 // reflectQueueCap bounds the reflection backlog. A human converses far slower
 // than reflection completes, so it rarely fills; if it does, Turn blocks briefly
@@ -288,9 +312,11 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 	// Reason: build the prompt from prior context.
 	msgs := a.buildMessages(hits, input)
 
-	// Store the user turn now (it happened regardless of how the reply goes).
+	// Store the user turn now (it happened regardless of how the reply goes). Its id
+	// anchors the evidence trail for anything learned from this turn (Layer 20).
 	a.short.Add(llm.RoleUser, input)
-	if _, err := a.store.Remember(ctx, memory.KindTurn, llm.RoleUser, input); err != nil {
+	userTurn, err := a.store.Remember(ctx, memory.KindTurn, llm.RoleUser, input)
+	if err != nil {
 		return nil, err
 	}
 
@@ -299,9 +325,9 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 	// loop, discovering tool calls as it goes.
 	out := make(chan llm.Chunk)
 	if a.planner != nil {
-		go a.runPlanned(ctx, msgs, input, hits, out)
+		go a.runPlanned(ctx, msgs, input, userTurn.ID, hits, out)
 	} else {
-		go a.runLoop(ctx, msgs, input, hits, out)
+		go a.runLoop(ctx, msgs, input, userTurn.ID, hits, out)
 	}
 	return out, nil
 }
@@ -309,12 +335,12 @@ func (a *Agent) Turn(ctx context.Context, input string) (<-chan llm.Chunk, error
 // runLoop is the plain (planner-off) entry point: it surfaces the recall trace,
 // runs the ReAct core with no plan constraints — every tool offered, the policy's
 // own per-step approval — then closes the channel.
-func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, hits []memory.Hit, out chan<- llm.Chunk) {
+func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, userTurnID int64, hits []memory.Hit, out chan<- llm.Chunk) {
 	defer close(out)
 	// With /debug on, surface the recall ranking that shaped this turn's prompt —
 	// the single most useful thing to see when memory "doesn't remember".
 	a.emitRecallDebug(ctx, out, input, hits)
-	a.reactLoop(ctx, msgs, input, out, execCtx{})
+	a.reactLoop(ctx, msgs, input, userTurnID, out, execCtx{})
 }
 
 // reactLoop is the cognitive loop's reasoning+acting core, shared by the plain and
@@ -326,7 +352,7 @@ func (a *Agent) runLoop(ctx context.Context, msgs []llm.Message, input string, h
 // notes. On clean completion the final answer is stored and reflection runs. It does
 // NOT close out — the caller owns the channel — so observing the stream end still
 // means learning is done.
-func (a *Agent) reactLoop(ctx context.Context, msgs []llm.Message, input string, out chan<- llm.Chunk, exec execCtx) {
+func (a *Agent) reactLoop(ctx context.Context, msgs []llm.Message, input string, userTurnID int64, out chan<- llm.Chunk, exec execCtx) {
 	opts := a.cfg.Options
 	if a.tools != nil {
 		opts.Tools = a.toolSpecs(exec.allowTools)
@@ -334,6 +360,9 @@ func (a *Agent) reactLoop(ctx context.Context, msgs []llm.Message, input string,
 
 	var answer string
 	answered := false
+	// Tool observations gathered this turn, fed to reflection (Layer 20) so the
+	// agent can also learn from what it *observed*, not only what the user said.
+	var observations []reflectObservation
 	for iter := 0; iter <= a.cfg.MaxToolIters; iter++ {
 		stream, err := a.provider.Chat(ctx, msgs, opts)
 		if err != nil {
@@ -391,6 +420,7 @@ func (a *Agent) reactLoop(ctx context.Context, msgs []llm.Message, input string,
 				return
 			}
 			msgs = append(msgs, llm.Message{Role: llm.RoleTool, ToolCallID: tc.ID, Content: obs})
+			observations = append(observations, reflectObservation{tool: tc.Name, result: obs, verified: a.toolVerified(tc.Name)})
 		}
 	}
 
@@ -410,16 +440,26 @@ func (a *Agent) reactLoop(ctx context.Context, msgs []llm.Message, input string,
 	// assistant turn is best-effort (the reply already streamed) — but not silent: a
 	// failure is traced and shown under /debug, so a later "why didn't it remember
 	// that?" is diagnosable instead of invisible.
+	var assistantTurnID int64
 	if answer != "" {
 		a.short.Add(llm.RoleAssistant, answer)
-		if _, err := a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, answer); err != nil {
+		if m, err := a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, answer); err != nil {
 			a.trace("store.assistant.error", "err", err)
 			a.sendDebug(ctx, out, "store: assistant turn not persisted: %v", err)
+		} else {
+			assistantTurnID = m.ID
 		}
 	}
-	// Learn off the critical path: hand the user's message to the background worker
-	// and let this turn end. The reply has already streamed; the channel closes now.
-	a.enqueueReflect(input)
+	// Learn off the critical path: hand the turn's sources (user message, tool
+	// observations, and the answer) to the background worker and let this turn end.
+	// The reply has already streamed; the channel closes now.
+	a.enqueueReflect(reflectJob{
+		userInput:       input,
+		userTurnID:      userTurnID,
+		assistantAnswer: answer,
+		assistantTurnID: assistantTurnID,
+		observations:    observations,
+	})
 }
 
 // runTool runs one tool call after consulting the policy. It wraps the call as a
@@ -497,51 +537,137 @@ func (a *Agent) toolSpecs(allow map[string]bool) []llm.ToolSpec {
 	return specs
 }
 
-// reflect is the agent's learning step: it asks the extractor for durable facts
-// in the user's message and stores each new one as semantic memory
-// (memory.KindFact). It is best-effort — an extraction or storage failure must
-// never disturb the reply the caller already received — and it consolidates a
-// restated fact onto the existing row instead of accumulating copies (Layer 17).
-// It runs on the background worker (Layer 18), so it no longer streams inline
-// notes to a transcript that has already closed; its decisions go to the debug
-// trace (a.trace → TALUNOR_DEBUG file/stderr) instead.
-func (a *Agent) reflect(ctx context.Context, input string) {
+// reflect is the agent's learning step: it distils durable facts from the turn's
+// SOURCES and stores each as semantic memory (memory.KindFact). Layer 20 widens it
+// from "the user's message" to what the agent also observed and (opt-in) said:
+//
+//   - the user message      → user_stated  (always)
+//   - each tool observation → tool_observed if the tool is tools.Verified, else
+//     model_inferred (an LLM interpreting a tool's text is inference, not
+//     observation — honest by default). Trivial/empty observations are skipped.
+//   - the assistant answer  → model_inferred, only when Config.ReflectAssistant
+//     (off by default: learning from one's own output is the echo-chamber risk).
+//
+// The SYSTEM assigns each fact's provenance from which source produced it — the
+// model is never asked to label its own provenance (Layer 16's honesty rule), which
+// is why sources are extracted separately, not in one combined call. It is
+// best-effort (a failure never disturbs the already-streamed reply), consolidates a
+// restatement onto the existing row (Layer 17), and records an evidence row per
+// store/reinforce (Layer 20). Runs on the background worker (Layer 18) → its
+// decisions go to the debug trace, not a closed transcript.
+func (a *Agent) reflect(ctx context.Context, job reflectJob) {
 	if a.extractor == nil {
 		return
 	}
-	facts, err := a.extractor.Extract(ctx, input)
-	if err != nil {
-		// Reflection is best-effort, but a debug trace explains a later "why didn't
-		// it remember that?" without changing behaviour.
-		a.trace("reflect.error", "err", err)
+	// User message: the primary, highest-provenance source.
+	a.learnFrom(ctx, job.userInput, memory.ProvenanceUserStated, job.userTurnID)
+	// Tool observations: learn from what was observed. Verified tools yield
+	// tool_observed; everything else is model_inferred (the honest default).
+	for _, o := range job.observations {
+		if !worthReflecting(o) {
+			continue
+		}
+		prov := memory.ProvenanceModelInferred
+		if o.verified {
+			prov = memory.ProvenanceToolObserved
+		}
+		a.learnFrom(ctx, truncateForReflect(o.result), prov, job.userTurnID)
+	}
+	// Assistant answer: opt-in, model_inferred (EvidenceCredibility 0 → never raises
+	// confidence on its own; the echo-chamber guard from Layer 17).
+	if a.cfg.ReflectAssistant && job.assistantAnswer != "" {
+		a.learnFrom(ctx, job.assistantAnswer, memory.ProvenanceModelInferred, job.assistantTurnID)
+	}
+}
+
+// learnFrom extracts durable facts from one source's text and stores or
+// consolidates each, tagging it with the source's provenance/confidence and
+// appending an evidence row (turnID, source) for the audit trail. All bookkeeping
+// is best-effort. confidence is scaled by the model's calibration; the
+// consolidation gain also folds in the source's credibility as INDEPENDENT evidence
+// (user/tool raise confidence; the model echoing itself does not — Layer 17).
+func (a *Agent) learnFrom(ctx context.Context, text string, prov memory.Provenance, turnID int64) {
+	if strings.TrimSpace(text) == "" {
 		return
 	}
-	// Facts distilled from the user's message are user-stated; scale the base
-	// confidence by the model's calibration, so what an unreliable extraction model
-	// "learns" carries less authority (the calibration link, Config.ModelConfidence).
-	prov := memory.ProvenanceUserStated
+	facts, err := a.extractor.Extract(ctx, text)
+	if err != nil {
+		a.trace("reflect.error", "source", string(prov), "err", err)
+		return
+	}
 	conf := clamp01(memory.BaseConfidence(prov) * a.cfg.ModelConfidence)
-	// Consolidation gain for a restated fact: a fraction of the way to the
-	// confidence ceiling, weighted by how much this restatement counts as
-	// INDEPENDENT evidence (a user restating = real corroboration; the model echoing
-	// its own inference = none) and by the model's calibration. See Layer 17.
 	gain := clamp01(consolidationGainBase * memory.EvidenceCredibility(prov) * a.cfg.ModelConfidence)
 	stored, consolidated := 0, 0
 	for _, f := range facts {
 		if existing, ok := a.knownFact(ctx, f); ok {
-			// Restatement: reinforce the existing fact rather than pile up a
-			// near-duplicate — salience always rises, confidence only on independent
-			// evidence (gain>0). Repetition strengthens memory.
+			// Restatement: reinforce rather than duplicate — salience always rises,
+			// confidence only on independent evidence (gain>0).
 			if err := a.store.ReinforceFact(ctx, existing.ID, gain); err == nil {
 				consolidated++
+				a.recordEvidence(ctx, existing.ID, turnID, prov)
 			}
 			continue
 		}
-		if _, err := a.store.RememberFact(ctx, f, prov, conf); err == nil {
+		if m, err := a.store.RememberFact(ctx, f, prov, conf); err == nil {
 			stored++
+			a.recordEvidence(ctx, m.ID, turnID, prov)
 		}
 	}
-	a.trace("reflect", "extracted", len(facts), "stored", stored, "consolidated", consolidated, "confidence", conf, "gain", gain)
+	if len(facts) > 0 {
+		a.trace("reflect", "source", string(prov), "extracted", len(facts),
+			"stored", stored, "consolidated", consolidated, "confidence", conf, "gain", gain)
+	}
+}
+
+// recordEvidence appends one support row for a fact (best-effort; a failure is
+// traced, never fatal). See memory.Store.RecordEvidence.
+func (a *Agent) recordEvidence(ctx context.Context, factID, turnID int64, prov memory.Provenance) {
+	if err := a.store.RecordEvidence(ctx, factID, turnID, prov); err != nil {
+		a.trace("evidence.error", "fact", factID, "err", err)
+	}
+}
+
+// toolVerified reports whether the named tool declares its output a deterministic,
+// structured fact (tools.Verified) — which routes a distilled fact to tool_observed
+// rather than model_inferred. Unknown or non-verified tools are false.
+func (a *Agent) toolVerified(name string) bool {
+	if a.tools == nil {
+		return false
+	}
+	t, ok := a.tools.Get(name)
+	if !ok {
+		return false
+	}
+	v, ok := t.(tools.Verified)
+	return ok && v.Verified()
+}
+
+// trivialTools produce no durable facts (deterministic scratch values or a view of
+// memory itself), so their observations are skipped before spending an extraction
+// call on them. web_fetch/bash are NOT here — they can carry durable facts.
+var trivialTools = map[string]bool{"calculator": true, "current_time": true, "recall_memory": true}
+
+// reflectObservationMaxRunes caps how much of a tool observation is handed to the
+// extractor, so a large body (a fetched page, long shell output) can't blow up the
+// reflection call. The head usually carries any durable fact.
+const reflectObservationMaxRunes = 2000
+
+// worthReflecting drops observations that can't yield a durable fact: empty, an
+// error observation, the "(no output)" sentinel, or a trivial tool's output.
+func worthReflecting(o reflectObservation) bool {
+	r := strings.TrimSpace(o.result)
+	if r == "" || r == "(no output)" || strings.HasPrefix(r, "error:") {
+		return false
+	}
+	return !trivialTools[o.tool]
+}
+
+// truncateForReflect caps text to reflectObservationMaxRunes runes.
+func truncateForReflect(s string) string {
+	if r := []rune(s); len(r) > reflectObservationMaxRunes {
+		return string(r[:reflectObservationMaxRunes])
+	}
+	return s
 }
 
 // reflectWorker is the single goroutine that owns deferred learning. It processes
@@ -552,22 +678,22 @@ func (a *Agent) reflect(ctx context.Context, input string) {
 func (a *Agent) reflectWorker() {
 	defer a.workerWG.Done()
 	for job := range a.reflectCh {
-		a.reflect(a.bgCtx, job.input)
+		a.reflect(a.bgCtx, job)
 		a.reflectWG.Done()
 	}
 }
 
-// enqueueReflect hands a user message to the background worker and returns at
-// once, so reflection stays off the turn's critical path. If the queue is full it
-// blocks briefly (backpressure) rather than dropping the learning. With no worker
-// (should not happen after New) it falls back to reflecting inline.
-func (a *Agent) enqueueReflect(input string) {
+// enqueueReflect hands a completed turn's sources to the background worker and
+// returns at once, so reflection stays off the turn's critical path. If the queue
+// is full it blocks briefly (backpressure) rather than dropping the learning. With
+// no worker (should not happen after New) it falls back to reflecting inline.
+func (a *Agent) enqueueReflect(job reflectJob) {
 	if a.reflectCh == nil {
-		a.reflect(context.Background(), input)
+		a.reflect(context.Background(), job)
 		return
 	}
 	a.reflectWG.Add(1)
-	a.reflectCh <- reflectJob{input: input}
+	a.reflectCh <- job
 }
 
 // Quiesce blocks until every enqueued reflection job has been processed (or ctx is
@@ -789,6 +915,7 @@ const HelpText = `Commands:
   /mem         memory stats (count + database file + embedding provenance)
   /list [n]    list the most recent n memories (default 10)
   /forget <id> delete the memory with that #id (as shown by /list)
+  /why <id>    show a fact's evidence trail (which turns/sources support it)
   /plan        show the most recent plan (when TALUNOR_PLANNER=1)
   /debug [on|off]  toggle inline trace of recall rankings & reflection
   /clear       clear the on-screen transcript (TUI only; does not erase memory)
@@ -850,6 +977,42 @@ func (a *Agent) ForgetMemory(ctx context.Context, id int64) (string, error) {
 		return fmt.Sprintf("no memory #%d to forget", id), nil
 	}
 	return fmt.Sprintf("forgot memory #%d", id), nil
+}
+
+// WhyMemory returns a display-ready view of a fact and its evidence trail: which
+// turns, from which sources, supported it (Layer 20). A memory with no recorded
+// evidence (e.g. one learned before this layer) shows an empty trail.
+func (a *Agent) WhyMemory(ctx context.Context, id int64) (string, error) {
+	m, ok, err := a.store.MemoryByID(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return fmt.Sprintf("no memory #%d", id), nil
+	}
+	ev, err := a.store.EvidenceFor(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "#%d [%s] %s\n", m.ID, m.Kind, oneLine(m.Content, 80))
+	if m.Kind == memory.KindFact {
+		fmt.Fprintf(&b, "  %s, confidence %.0f%%, salience %.1f (×%d)\n",
+			m.Provenance, m.Confidence*100, m.Salience, m.AccessCount)
+	}
+	if len(ev) == 0 {
+		b.WriteString("  evidence: (none recorded)")
+		return b.String(), nil
+	}
+	fmt.Fprintf(&b, "  evidence (%d):\n", len(ev))
+	for _, e := range ev {
+		turn := "—"
+		if e.TurnID > 0 {
+			turn = fmt.Sprintf("turn #%d", e.TurnID)
+		}
+		fmt.Fprintf(&b, "    - %-8s %-14s %s\n", turn, e.Source, e.CreatedAt.Format("2006-01-02 15:04"))
+	}
+	return strings.TrimRight(b.String(), "\n"), nil
 }
 
 // FormatMemories renders memories (newest first) as a compact, readable list.

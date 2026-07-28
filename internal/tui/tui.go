@@ -352,6 +352,17 @@ func (m *Model) runCommand(line string) tea.Cmd {
 				m.memCount = n
 			}
 		}
+	case "/why":
+		id, ok := agent.MemoryID(fields)
+		if !ok {
+			m.appendInfo("usage: /why <id>  (the #id shown by /list)")
+			break
+		}
+		if s, err := m.ag.WhyMemory(m.ctx, id); err != nil {
+			m.errText = err.Error()
+		} else {
+			m.appendInfo(s)
+		}
 	case "/plan":
 		m.appendInfo(m.ag.PlanCommand())
 	case "/debug":

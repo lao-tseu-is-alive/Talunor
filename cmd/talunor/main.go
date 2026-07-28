@@ -365,6 +365,17 @@ func command(ctx context.Context, line string, ag *agent.Agent) (done bool, err 
 			return false, err
 		}
 		fmt.Println(msg)
+	case "/why":
+		id, ok := agent.MemoryID(fields)
+		if !ok {
+			fmt.Println("usage: /why <id>  (the #id shown by /list)")
+			return false, nil
+		}
+		out, err := ag.WhyMemory(ctx, id)
+		if err != nil {
+			return false, err
+		}
+		fmt.Println(out)
 	case "/plan":
 		fmt.Println(ag.PlanCommand())
 	case "/debug":

@@ -31,7 +31,7 @@ func (noReflection) Extract(context.Context, string) ([]string, error) { return 
 // or the sentinel NONE. Keeping the contract this rigid is what makes the output
 // cheap to parse and safe to store.
 const factSystemPrompt = `You maintain the long-term memory of an assistant.
-From the user's message, extract only DURABLE facts worth remembering about the user:
+From the text below, extract only DURABLE facts worth remembering about the user:
 their identity (e.g. name), lasting preferences, background, skills, and ongoing goals.
 Ignore anything transient: one-off requests, questions, greetings, and small talk.
 

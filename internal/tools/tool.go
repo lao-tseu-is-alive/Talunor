@@ -48,6 +48,20 @@ type ApprovableFor interface {
 	RequiresApprovalForArgs(args json.RawMessage) bool
 }
 
+// Verified is an optional interface a Tool may implement to declare that its
+// observations are DETERMINISTIC, structured facts the tool itself asserts — not
+// prose an LLM has to interpret. When the agent learns from a tool's output
+// (Layer 20), a fact distilled from a verified tool is recorded as
+// ProvenanceToolObserved; everything else is model_inferred, because an LLM
+// interpreting a tool's text is inference, not observation. No builtin currently
+// implements it (the calculator/clock are verified but produce nothing durable;
+// web_fetch/bash are unverified) — it is the seam for a future tool that returns
+// durable verified facts, kept honest so "tool_observed" is never overstated.
+// See docs/decisions/0002-provenance-from-source.md.
+type Verified interface {
+	Verified() bool
+}
+
 // Def is a tool's public definition, handed to the LLM. It is transport-neutral;
 // the provider adapter maps it onto the wire format (OpenAI "function" tools).
 type Def struct {
