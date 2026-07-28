@@ -11,7 +11,7 @@ This directory turns that idea into a guided path. Each lesson has a clear goal,
 short reading list, a hands-on experiment, and a checklist so you know when you're
 done.
 
-> **Status: in progress.** Lessons 00–20 are ready; Iteration 5 is being built.
+> **Status: in progress.** Lessons 00–21 are ready; Iteration 5 is being built.
 
 ## Who this is for
 
@@ -56,7 +56,7 @@ you prove it. Lesson numbers refer to [the route](#the-route) below.
 | **Persistence & retrieval (SQLite + embeddings)** | 02 · 03 | Explain how a text query becomes a ranked, thresholded recall | Tune the recall threshold and watch the results change (03) |
 | **Agentic memory: provenance · confidence · salience** | 11 · 16 · 17 · 18 · 20 | Separate embedding-provenance from fact-provenance; explain why confidence is system-assigned, never self-reported; learn from action without over-claiming | Read migrations 2–3 and `salience.go` (17, 18); trace a fact to its evidence with `/why` (20) |
 | **The agent loop & tools (ReAct)** | 05 · 06 · 13 | Trace a tool call from the model's request to the observation fed back | Watch `/debug` follow a tool call end to end (05, 06) |
-| **Agent safety: injection · policy · sandbox · SSRF** | 09 · 10 · 12 · 14 | Name which layer stops which threat — and why fencing text is a mitigation, not a boundary | Read the policy gate (12) and the approval post-mortem (14) |
+| **Agent safety: injection · policy · sandbox · SSRF** | 09 · 10 · 12 · 14 · 21 | Name which layer stops which threat — and why fencing text is a mitigation, not a boundary; decide a memory's trust model on purpose | Read the policy gate (12), the approval post-mortem (14), the trust model (21) |
 | **Trustworthy evaluation & verification** | 15 · 16 | Build a deterministic check (no LLM judge) and falsify a claim against the code | Do the "verify the AI review" exercise (15); read the matchers (16) |
 
 ## The route
@@ -84,6 +84,7 @@ you prove it. Lesson numbers refer to [the route](#the-route) below.
 | [18](18-the-memory-of-the-gesture/) | The memory of the gesture: salience, decay & consolidation | 3 · **advanced** | 75 min | `v0.17.0` → `main` | ✅ ready |
 | [19](19-off-the-critical-path/) | Off the critical path: learning in the background | 3 · **advanced** | 70 min | `v0.18.0` → `main` | ✅ ready |
 | [20](20-learn-from-action/) | Learn from action: most "tool knowledge" is model-interpreted | 3 · **advanced** | 65 min | `v0.19.0` → `main` | ✅ ready |
+| [21](21-whose-word-counts/) | Whose word counts? A trust model is a decision, not a default | 3 · **advanced** | 65 min | `v0.20.0` → `main` | ✅ ready |
 
 ## Two kinds of lesson — don't mix them up
 

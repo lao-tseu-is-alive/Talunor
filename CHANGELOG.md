@@ -14,6 +14,32 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.20.1] - 2026-07-28 — Course: Lesson 21 ("Whose word counts?"), bilingual
+
+A docs-only release: Layer 21 gets its lesson — a *meta* lesson (in the spirit of
+Lesson 15) on trust-model-as-design-decision.
+
+### Added
+
+- **Lesson 21 — "Whose word counts? A trust model is a decision, not a default"**
+  (`docs/lessons/21-whose-word-counts/`, bilingual EN/FR). A ~65-min Level-3 🔍 exploration +
+  hands-on, pinned to `v0.20.0`. It uses the two opposing worked examples (the flat earth and
+  the attack signature) to show that a single global provenance rank fails in *both*
+  directions; lands the principle (authority is per-domain; provenance is a proxy); reads
+  `memory.Supersedes` + the arbiter (propose vs. gate); ships a reusable **"before you build
+  agent memory" checklist**; and has the student **flip `supersedeAuthority`** to watch
+  `TestSupersedeGateProtectsUser` fail — proving in ten characters that the trust model is
+  load-bearing. Competency matrix gains lesson 21 (agentic memory + agent safety); course now
+  00–21 (22 lessons).
+
+### Lessons learned
+
+1. **Two opposing examples teach a principle; one teaches a rule — so the lesson is built
+   from the tension, not the mechanism.** The flat earth and the attack signature disagree
+   about what to do, and that disagreement is the pedagogy: it forces the reader past "pick a
+   better rank" to "the rank itself is the wrong shape." The most reusable thing shipped is
+   not code — it is the seven-question checklist that turns the insight into a habit.
+
 ## [0.20.0] - 2026-07-28 — Layer 21: contradiction & supersession (a memory that corrects itself)
 
 Iteration 5 continues. Until now memory could *accumulate* and *forget* but not

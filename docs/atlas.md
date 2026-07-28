@@ -213,7 +213,8 @@ Talunor/
 │       ├── 17-learning-with-humility/README.md   # 🔍 Provenance + confidence; source-not-self-report; the calibration link (Layer 16).
 │       ├── 18-the-memory-of-the-gesture/README.md # 🔍 Salience, lazy decay, consolidation & the independence rule (Layer 17).
 │       ├── 19-off-the-critical-path/README.md    # 🔍 Async reflection: single-conn-as-lock, the drain contract (Layer 18).
-│       └── 20-learn-from-action/README.md        # 🔍 Learn from tool observations honestly (model_inferred vs tool_observed), evidence trail (Layer 20).
+│       ├── 20-learn-from-action/README.md        # 🔍 Learn from tool observations honestly (model_inferred vs tool_observed), evidence trail (Layer 20).
+│       └── 21-whose-word-counts/README.md        # 🔍 Trust model as a design decision; supersession, the flat-earth vs attack-signature examples (Layer 21).
 │
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.

@@ -13,7 +13,8 @@ reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
 
-> Current version: **v0.20.0** — **Iteration 5** ("truthful memory"). Layer 21 lets a new
+> Current version: **v0.20.1** — **Iteration 5** ("truthful memory") + its
+> [Lesson 21](docs/lessons/21-whose-word-counts/) ("Whose word counts?"). Layer 21 lets a new
 > fact **supersede** an old, contradicting one, governed by an **explicit, per-domain trust
 > model** ([`memory.Supersedes`](internal/memory/supersede.go)) so a model's guess never
 > overwrites what the user said, yet a `Verified` tool's observation *can* retire a stale
@@ -40,8 +41,8 @@ reads as a guided tour of how to build a full cognitive-loop agent
 > network opt-in). See [CHANGELOG.md](CHANGELOG.md) for the version-by-version
 > build log and lessons.
 >
-> 📚 a **[21-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
-> French, lessons 00–20) turns the tag-by-tag history into a guided path for Go
+> 📚 a **[22-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
+> French, lessons 00–21) turns the tag-by-tag history into a guided path for Go
 > beginners — start at [Lesson 00](docs/lessons/).
 
 ## Run without building

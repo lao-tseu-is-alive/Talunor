@@ -578,6 +578,11 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   tool can retire a stale belief. Two worked examples in **ADR 0003** (flat earth → belief, UNRELATED;
   attack signature → tool_observed can supersede). `TALUNOR_SUPERSEDE_MAX_DISTANCE` (0.35, wider than
   dedup). `/why` + `/list` show supersession. Append-only, no re-embed. Lesson 21 (v0.20.1) to write.
-- **Next — open threads (documented, not started):** Lesson 21 (v0.20.1, "Whose word counts?" —
-  trust-model-as-design-decision, bilingual); Layer 22 (hybrid recall, vector ∪ FTS5);
+- **v0.20.1 (docs)** = course **Lesson 21** — "Whose word counts? A trust model is a decision, not a
+  default" (`docs/lessons/21-whose-word-counts/`, bilingual). Pinned to `v0.20.0`; a META lesson (like
+  L15): the flat-earth vs attack-signature opposing examples → a single global provenance rank breaks
+  both ways → authority is per-domain → `memory.Supersedes` is the one place to decide it. Ships a
+  reusable "before you build agent memory" checklist + a hands-on that flips `supersedeAuthority` to
+  make `TestSupersedeGateProtectsUser` fail. Competency matrix gains lesson 21; course now 00–21 (22 lessons).
+- **Next — open threads (documented, not started):** Layer 22 (hybrid recall, vector ∪ FTS5);
   calibration→policy wiring. Same per-layer checkpoint rhythm.
