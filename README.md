@@ -30,13 +30,13 @@ because ...
 
 ## Demo
 
-[![Talunor demo preview](images/demo.gif)](images/demo.mp4)
+[![Talunor demo preview](images/demo.gif)](https://raw.githubusercontent.com/lao-tseu-is-alive/Talunor/main/images/demo.mp4)
 
 GitHub does not reliably render repository videos inline from `README.md`.
 Click the preview above, or open the full demo directly:
 
-- [Watch the MP4 demo](images/demo.mp4) — best browser compatibility.
-- [Watch the WebM demo](images/demo.webm) — smaller open format.
+- [Watch the MP4 demo](https://raw.githubusercontent.com/lao-tseu-is-alive/Talunor/main/images/demo.mp4) — best browser compatibility.
+- [Watch the WebM demo](https://raw.githubusercontent.com/lao-tseu-is-alive/Talunor/main/images/demo.webm) — smaller open format.
 
 ## Why it's different
 
