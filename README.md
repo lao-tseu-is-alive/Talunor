@@ -33,6 +33,22 @@ because ...
 ![Talunor demo](images/demo.gif)
 
 ▶️ **Watch the full demonstration:** [demo.webm](images/demo.webm)
+<details>
+  <summary>🎬 Watch the full  demo (vidéo)</summary>
+
+  <video src="https://github.com/lao-tseu-is-alive/Talunor/raw/refs/heads/main/images/demo.mp4"  controls width="100%">
+    Votre navigateur ne supporte pas la lecture de cette vidéo.
+  </video>
+</details>
+
+
+<details>
+  <summary>🎬 Watch the full  demo (vidéo)</summary>
+
+  <video src="https://github.com/lao-tseu-is-alive/Talunor/raw/refs/heads/main/images/demo.webm"  controls width="100%">
+    Votre navigateur ne supporte pas la lecture de cette vidéo.
+  </video>
+</details>
 
 ## Why it's different
 
