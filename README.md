@@ -1,3 +1,4 @@
+[demo.webm](https://github.com/user-attachments/assets/d5465a90-88f7-4a7d-85d0-5cd6e319e0b5)
 # Talunor
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=lao-tseu-is-alive_Talunor&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=lao-tseu-is-alive_Talunor)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=lao-tseu-is-alive_Talunor&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=lao-tseu-is-alive_Talunor)
@@ -34,6 +35,9 @@ because ...
 
 GitHub does not reliably render repository videos inline from `README.md`.
 Click the preview above, or open the full demo directly:
+
+[demo.webm](https://github.com/user-attachments/assets/5558db57-1a67-4830-8463-ffcb7620a3dc)
+
 
 - [Watch the MP4 demo](https://raw.githubusercontent.com/lao-tseu-is-alive/Talunor/main/images/demo.mp4) — best browser compatibility.
 - [Watch the WebM demo](https://raw.githubusercontent.com/lao-tseu-is-alive/Talunor/main/images/demo.webm) — smaller open format.
