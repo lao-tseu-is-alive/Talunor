@@ -12,7 +12,47 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
+## Philosophy
 
+Talunor explores how to engineer trustworthy AI agents.
+
+Rather than relying on opaque frameworks,
+each capability is implemented explicitly,
+tested,
+and introduced incrementally.
+
+The goal is not merely to build another agent,
+but to understand and teach the engineering decisions behind one.
+because ...
+> [!NOTE]
+> *"Life is a journey, not a destination."*  
+> — **Ralph Waldo Emerson**
+
+## Demo
+
+![Talunor demo](images/demo.gif)
+
+▶️ **Watch the full demonstration:** [demo.webm](images/demo.webm)
+
+## Why it's different
+
+Unlike many AI agent projects, Talunor focuses on software engineering rather than
+prompt engineering.
+
+Every capability is introduced incrementally,
+tested,
+documented,
+and justified.
+
+The repository can therefore be read both as
+
+• a usable AI agent
+
+and
+
+• a complete guide to building one.
+
+## What's new
 > Current version: **v0.20.3** — [Lesson 22](docs/lessons/22-the-silent-suite/)
 > ("The silent suite: a skipped test is not a passing test"), the post-mortem of the
 > v0.20.2 fix below. On **v0.20.2**, a hardening patch: the sandbox's
@@ -49,69 +89,6 @@ reads as a guided tour of how to build a full cognitive-loop agent
 > 📚 a **[23-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
 > French, lessons 00–22) turns the tag-by-tag history into a guided path for Go
 > beginners — start at [Lesson 00](docs/lessons/).
-
-## Run without building
-
-Each release (git tag `vX.Y.Z`) ships two prebuilt, self-contained artifacts so
-you can try any iteration without a Go/C toolchain or `make deps`. Both bundle
-the SQLite extensions **and** the embedding model, so memory works offline — only
-the **chat** needs a local [Ollama](https://ollama.com) (default model
-`qwen3:latest`). Linux **amd64** only (the sqliteai extensions are x86_64-only).
-
-**Container image** (Docker or, with Rancher Desktop, `nerdctl` — same commands):
-
-```bash
-# The container reaches your host's Ollama via host.docker.internal. -v keeps
-# long-term memory across runs. `docker run …` is identical. Port 11435 is the
-# secure bridge below (use 11434 for the quick option).
-nerdctl run --rm -it \
-  --add-host=host.docker.internal:host-gateway \
-  -e TALUNOR_OLLAMA_URL=http://host.docker.internal:11435/v1 \
-  -v talunor-data:/data \
-  ghcr.io/lao-tseu-is-alive/talunor:latest
-# Add --plain for the REPL, --list 10 to inspect memory. Swap :latest for a
-# release tag (e.g. :vX.Y.Z, see the Releases page) to pin a specific version.
-```
-
-- **Connecting to Ollama needs one-time host setup.** Ollama listens on
-  `127.0.0.1` only, and under Rancher/Docker Desktop the container is in a VM —
-  see **[Connecting the container to Ollama](docs/ollama-networking.md)**.
-  Recommended: keep Ollama on localhost and bridge only the VM through a
-  default-drop firewall (Option A = socat + systemd, Option B = pure nftables);
-  the quick alternative exposes Ollama to your LAN. Native Docker Engine on Linux
-  just needs `--network host`.
-- **TTY:** the TUI needs `-it`. Without it, use `--plain` for the line REPL.
-- Build the image locally: `make nerdctl-build && make nerdctl-run` (or the
-  `docker-*` equivalents); override the endpoint with
-  `make nerdctl-run OLLAMA_URL=http://host.docker.internal:11434/v1`.
-
-**Standalone bundle** (a `.tar.gz` on each GitHub Release). Replace `vX.Y.Z`
-with the tag you downloaded from the [Releases](../../releases) page:
-
-```bash
-tar xzf talunor-vX.Y.Z-linux-amd64.tar.gz
-cd talunor-vX.Y.Z-linux-amd64
-./run.sh            # TUI  (./run.sh --plain for the REPL)
-```
-
-The bundle needs `libstdc++6` on the host (the `ai.so` embedding runtime links
-it); the container image needs nothing. Verify downloads against `SHA256.txt`.
-
-## Why it's interesting
-
-- **Embeddings run *inside* SQLite.** A GGUF model (`all-MiniLM-L6-v2`, 384-dim)
-  is executed in-process by the [`sqlite-ai`](https://github.com/sqliteai/sqlite-ai)
-  extension — no external embedding service.
-- **Vector search is just SQL.** The [`sqlite-vector`](https://github.com/sqliteai/sqlite-vector)
-  extension stores embeddings as `FLOAT32` BLOBs and does KNN over them.
-- **One file is the whole brain.** The agent's long-term memory is a single
-  SQLite database file.
-- **The agent writes its own memory.** After each turn a *reflection* step asks
-  the model to distil durable facts from what you said ("User's favourite
-  languages are Go and TypeScript") and stores them as **semantic** memory,
-  separate from the verbatim **episodic** turns — so later questions recall a
-  clean fact instead of a noisy sentence.
-
 ## Architecture (target)
 
 > 🗺️ **New:** [`docs/architecture.md`](docs/architecture.md) ([🇫🇷 Français](docs/architecture.fr.md))
