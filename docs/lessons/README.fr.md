@@ -11,7 +11,7 @@ Ce répertoire transforme cette idée en un parcours guidé. Chaque leçon a un 
 clair, une courte liste de lecture, une expérience pratique et une checklist pour
 savoir quand tu as terminé.
 
-> **Statut : en cours.** Les leçons 00–22 sont prêtes, **entièrement en
+> **Statut : en cours.** Les leçons 00–23 sont prêtes, **entièrement en
 > anglais et en français** (utilise le sélecteur de langue en haut de chaque page) ;
 > l'Itération 5 est en construction.
 
@@ -58,7 +58,7 @@ ci-dessous.
 | **Interfaces & composition Go** | 04 · 06 · 07 | Concevoir une couture à une méthode et remplacer l'implémentation réelle par un fake | Ajouter un outil (06) et le tester avec un provider factice (07) |
 | **Context, annulation & timeouts** | 04 · 16 · 19 | Expliquer la propagation du context, une opération bornée, et un arrêt propre | Lire le contrat `Close`/drain (19) ; raisonner sur un provider figé (16) |
 | **Concurrence & modèle mémoire Go** | 05 · 18 · 19 | Justifier pourquoi un état partagé exige un atomic/verrou, et pourquoi une seule connexion peut en remplacer un | Lancer `go test -race` ; lire l'idée « connexion unique = verrou » (19) |
-| **Persistance & récupération (SQLite + embeddings)** | 02 · 03 | Expliquer comment une requête texte devient un rappel classé et seuillé | Régler le seuil de rappel et observer les résultats changer (03) |
+| **Persistance & récupération (SQLite + embeddings)** | 02 · 03 · 23 | Expliquer comment une requête texte devient un rappel classé et seuillé — et ce qu'un embedding ne peut pas représenter | Régler le seuil de rappel et observer les résultats changer (03) ; rendre un identifiant introuvable, puis retrouvable (23) |
 | **Mémoire agentique : provenance · confiance · saillance** | 11 · 16 · 17 · 18 · 20 | Distinguer provenance d'embedding et provenance de fait ; expliquer pourquoi la confiance est assignée par le système, jamais auto-évaluée ; apprendre de l'action sans sur-affirmer | Lire les migrations 2–3 et `salience.go` (17, 18) ; tracer un fait jusqu'à son évidence avec `/why` (20) |
 | **La boucle agent & les outils (ReAct)** | 05 · 06 · 13 | Tracer un appel d'outil depuis la demande du modèle jusqu'à l'observation réinjectée | Suivre un appel d'outil de bout en bout avec `/debug` (05, 06) |
 | **Sécurité de l'agent : injection · policy · sandbox · SSRF** | 09 · 10 · 12 · 14 · 21 | Nommer quelle couche arrête quelle menace — et pourquoi clôturer du texte est une mitigation, pas une frontière ; décider exprès le modèle de confiance d'une mémoire | Lire la barrière policy (12), le post-mortem d'approbation (14), le modèle de confiance (21) |
@@ -91,6 +91,7 @@ ci-dessous.
 | [20](20-learn-from-action/README.fr.md) | Apprendre de l'action : le « savoir des outils » est surtout interprété par le modèle | 3 · **avancé** | 65 min | `v0.19.0` → `main` | ✅ prête |
 | [21](21-whose-word-counts/README.fr.md) | La parole de qui compte ? Un modèle de confiance est une décision | 3 · **avancé** | 65 min | `v0.20.0` → `main` | ✅ prête |
 | [22](22-the-silent-suite/README.fr.md) | La suite silencieuse : un test sauté n'est pas un test réussi | 3 · **avancé** | 70 min | `v0.20.1` → `v0.20.2` | ✅ prête |
+| [23](23-two-ways-to-find-a-memory/README.fr.md) | Deux façons de retrouver une mémoire : quand le sens est le mauvais index | 3 · **avancé** | 75 min | `v0.21.0` | ✅ prête |
 
 ## Deux types de leçon — à ne pas confondre
 

@@ -683,5 +683,11 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   regression: `RecallForConsolidation` stays VECTOR-ONLY** — retrieval is hybrid, IDENTITY is
   metric. Needs **`-tags sqlite_fts5`** (Makefile GOTAGS + Dockerfile + release.yml + CI, which
   now also sets `TALUNOR_REQUIRE=ext,fts5`). Knob `TALUNOR_RECALL=hybrid|vector`. Lesson 23 to write.
+- **v0.21.1 (docs)** = course **Lesson 23** — "Two ways to find a memory: when meaning is the
+  wrong index" (`docs/lessons/23-two-ways-to-find-a-memory/`, bilingual). Pinned to `v0.21.0`;
+  opens with the reader reproducing the gap via `TALUNOR_RECALL=vector`, then FTS5/BM25, the
+  stopword incident, RRF + its single-arm trap, retrieval-vs-identity, and build-tag capability.
+  Competency matrix: persistence/retrieval becomes 02 · 03 · 23; course now 00–23 (24 lessons).
+  **Iteration 5 is fully built AND fully lessoned.**
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source. Same per-layer checkpoint rhythm.

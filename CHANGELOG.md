@@ -14,6 +14,38 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.21.1] - 2026-07-29 — Course: Lesson 23 ("Two ways to find a memory"), bilingual
+
+A docs-only release: Layer 22 gets its lesson, and the course closes the
+Iteration-5 arc — a memory that learns from action (20), corrects itself (21),
+and can now *find* what it holds (22).
+
+### Added
+
+- **Lesson 23 — "Two ways to find a memory: when meaning is the wrong index"**
+  (`docs/lessons/23-two-ways-to-find-a-memory/`, bilingual EN/FR). ~75-min Level-3
+  🔍 exploration pinned to `v0.21.0`. It opens by having the reader *feel* the gap
+  (`TALUNOR_RECALL=vector`, store an identifier, fail to get it back), then reads
+  the FTS5 arm (external content, no stemmer because the memory is bilingual, `OR`
+  + IDF rather than `AND`), the stopword incident, rank fusion and its
+  single-arm trap (with the table to work by hand), the retrieval-vs-identity
+  boundary, and finally the build-tag capability. Hands-on: break each arm in turn
+  and watch which questions die — including deleting one stopword to turn "no
+  answer" into a confident wrong one. Competency matrix: "Persistence &
+  retrieval" becomes 02 · 03 · 23; course now 00–23 (24 lessons).
+
+### Lessons learned
+
+1. **The best lesson opening is the failure, not the feature.** Layer 22 is easy
+   to describe and hard to *care* about until you have watched an agent lose your
+   contract reference. `TALUNOR_RECALL=vector` turned out to be worth shipping for
+   the lesson alone: a knob that reproduces the previous layer's behaviour lets a
+   reader experience the problem before reading the solution.
+2. **Write the lesson and you find out what the code failed to say.** Explaining
+   why RRF is not the identity function on a single list forced the clearest
+   statement of that rule anywhere in the repo — clearer than the comment in
+   `fuse` it was derived from, which has since been rewritten to match.
+
 ## [0.21.0] - 2026-07-29 — Layer 22: hybrid recall (vector ∪ lexical)
 
 Iteration 5 continues. Memory could learn from action (Layer 20) and correct

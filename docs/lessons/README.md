@@ -11,7 +11,7 @@ This directory turns that idea into a guided path. Each lesson has a clear goal,
 short reading list, a hands-on experiment, and a checklist so you know when you're
 done.
 
-> **Status: in progress.** Lessons 00–22 are ready; Iteration 5 is being built.
+> **Status: in progress.** Lessons 00–23 are ready; Iteration 5 is being built.
 
 ## Who this is for
 
@@ -53,7 +53,7 @@ you prove it. Lesson numbers refer to [the route](#the-route) below.
 | **Go interfaces & composition** | 04 · 06 · 07 | Design a one-method seam and swap the real implementation for a fake | Add a tool (06) and test it against a fake provider (07) |
 | **Context, cancellation & timeouts** | 04 · 16 · 19 | Explain context propagation, a bounded operation, and a clean shutdown | Read the `Close`/drain contract (19); reason about a hung provider (16) |
 | **Concurrency & the Go memory model** | 05 · 18 · 19 | Justify why shared state needs an atomic/lock, and why one connection can stand in for one | Run `go test -race`; read the single-connection-as-lock insight (19) |
-| **Persistence & retrieval (SQLite + embeddings)** | 02 · 03 | Explain how a text query becomes a ranked, thresholded recall | Tune the recall threshold and watch the results change (03) |
+| **Persistence & retrieval (SQLite + embeddings)** | 02 · 03 · 23 | Explain how a text query becomes a ranked, thresholded recall — and what an embedding cannot represent | Tune the recall threshold and watch the results change (03); make an identifier unfindable, then findable (23) |
 | **Agentic memory: provenance · confidence · salience** | 11 · 16 · 17 · 18 · 20 | Separate embedding-provenance from fact-provenance; explain why confidence is system-assigned, never self-reported; learn from action without over-claiming | Read migrations 2–3 and `salience.go` (17, 18); trace a fact to its evidence with `/why` (20) |
 | **The agent loop & tools (ReAct)** | 05 · 06 · 13 | Trace a tool call from the model's request to the observation fed back | Watch `/debug` follow a tool call end to end (05, 06) |
 | **Agent safety: injection · policy · sandbox · SSRF** | 09 · 10 · 12 · 14 · 21 | Name which layer stops which threat — and why fencing text is a mitigation, not a boundary; decide a memory's trust model on purpose | Read the policy gate (12), the approval post-mortem (14), the trust model (21) |
@@ -86,6 +86,7 @@ you prove it. Lesson numbers refer to [the route](#the-route) below.
 | [20](20-learn-from-action/) | Learn from action: most "tool knowledge" is model-interpreted | 3 · **advanced** | 65 min | `v0.19.0` → `main` | ✅ ready |
 | [21](21-whose-word-counts/) | Whose word counts? A trust model is a decision, not a default | 3 · **advanced** | 65 min | `v0.20.0` → `main` | ✅ ready |
 | [22](22-the-silent-suite/) | The silent suite: a skipped test is not a passing test | 3 · **advanced** | 70 min | `v0.20.1` → `v0.20.2` | ✅ ready |
+| [23](23-two-ways-to-find-a-memory/) | Two ways to find a memory: when meaning is the wrong index | 3 · **advanced** | 75 min | `v0.21.0` | ✅ ready |
 
 ## Two kinds of lesson — don't mix them up
 

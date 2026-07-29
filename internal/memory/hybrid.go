@@ -95,8 +95,13 @@ func (h Hit) FromLexical() bool { return h.LexicalRank > 0 }
 //   - With one arm, the ranking must be exactly what that arm already produced.
 //     A Talunor built without FTS5 has to behave like Layer 17 did, so the
 //     classic score (1-distance)·confidence·effective-salience is kept verbatim.
-//     Introducing rank fusion there would silently re-order recall for every user
-//     who never asked for hybrid.
+//     This case is NOT redundant: **RRF is not the identity function on a single
+//     list.** Ranking by 1/(60+rank)·conf·sal re-orders results compared with
+//     (1-distance)·conf·sal, because the two relevance terms fall off
+//     differently — a hit at distance 0.10 with confidence 0.5 scores 0.45
+//     classically (first) but 0.0082 under RRF (second, behind a 0.70/1.0 hit at
+//     rank 2). Falling through to the fused branch would therefore silently
+//     re-order recall for every user who never asked for hybrid.
 //   - With two arms, there is no shared scale to multiply, so RRF supplies the
 //     relevance term instead: score = rrf·confidence·effective-salience.
 //

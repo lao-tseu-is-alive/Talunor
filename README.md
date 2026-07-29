@@ -12,7 +12,7 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> 📚 The tag-by-tag history is also a **[23-lesson course](docs/lessons/)** (🇬🇧 English
+> 📚 The tag-by-tag history is also a **[24-lesson course](docs/lessons/)** (🇬🇧 English
 > & 🇫🇷 Français) for Go beginners — start at [Lesson 00](docs/lessons/).
 
 ## Philosophy — and why it's different
@@ -294,14 +294,15 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.21.0** — **Layer 22: hybrid recall.** Memory now retrieves with
-> two arms and fuses them: vector KNN for *meaning*, an FTS5/BM25 index for *wording*.
-> An embedding cannot tell `AFF-2024-113` from `AFF-2024-114`; a lexical index cannot
-> generalise but never confuses them — so the exact identifier, rare name or version
-> number you would otherwise lose becomes retrievable again. The two rankings are merged
-> by reciprocal-rank fusion, then still weighted by Layer 16/17 confidence and salience.
-> `TALUNOR_RECALL=vector` turns the lexical arm off; a build without `-tags sqlite_fts5`
-> degrades to vector-only and says so in `make doctor` and `/mem`.
+> Current version: **v0.21.1** — [Lesson 23](docs/lessons/23-two-ways-to-find-a-memory/)
+> ("Two ways to find a memory"), the bilingual lesson for **Layer 22: hybrid recall**
+> (v0.21.0). Recall runs two arms and fuses them: vector KNN for *meaning*, an FTS5/BM25
+> index for *wording*. An embedding cannot tell `AFF-2024-113` from `AFF-2024-114`; a
+> lexical index cannot generalise but never confuses them — so the exact identifier, rare
+> name or version number you would otherwise lose becomes retrievable again. Ranks are
+> merged by reciprocal-rank fusion, then still weighted by Layer 16/17 confidence and
+> salience. `TALUNOR_RECALL=vector` turns the lexical arm off; a build without
+> `-tags sqlite_fts5` degrades to vector-only and says so in `make doctor` and `/mem`.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
