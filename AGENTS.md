@@ -153,7 +153,11 @@ internal/sandbox/  runs an untrusted script under limits; Sandbox iface + FromEn
                    Two backends: ociRuntime (nerdctl/docker — strong) and
                    namespaces (rootless userns re-exec — Linux-only, teaching, no
                    seccomp). Non-zero exit = output, not error. Linux files carry
-                   //go:build linux; namespaces_other.go stubs elsewhere
+                   //go:build linux; namespaces_other.go stubs elsewhere.
+                   v0.20.2: verifyChildIdentity(pid,tokenFD,env) authenticates the
+                   re-exec (pid 1 + per-run token on fd 3) before childMain mounts
+                   anything — an ambient TALUNOR_SANDBOX_CHILD=1 can no longer
+                   hijack a binary linking this package (gotcha 11)
 internal/webfetch/ guarded HTTP fetcher for web_fetch: SSRF guard in the dialer
                    Control hook (blockedIP, DNS-rebinding-safe, re-checked per
                    redirect), timeout/MaxBytes/redirect limits, text-only bodies
@@ -312,17 +316,27 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
     `namespaces_linux.go` hijacks the process when `TALUNOR_SANDBOX_CHILD=1` and
     becomes the container init *before* `main()` runs — the child shares Talunor's
     binary. This also means the backend works from a test binary (it imports the
-    package, so the `init` is present).
-12. **Rootless breaks the obvious limits.** RLIMIT_NPROC is per-host-uid (would
+    package, so the `init` is present). **The env var is only the trigger** (v0.20.2):
+    `childMain` calls `verifyChildIdentity` first — pid must be 1 of the new pidns
+    AND a per-run 128-bit token must arrive both in `TALUNOR_SANDBOX_TOKEN` and on
+    the pipe inherited as fd 3, else exit 127 before any mount. When touching that
+    plumbing remember `exec.Cmd` dups `ExtraFiles` **at `Start`**: close the parent's
+    read end after `Run` (defer), the write end before it (so the child sees EOF).
+12. **A green `go test ./internal/sandbox/` may mean nothing.** Every real
+    namespaces test skips when unprivileged userns are unavailable, and Ubuntu
+    re-applies `kernel.apparmor_restrict_unprivileged_userns=1` across updates. Check
+    the sysctl (gotcha 14) before believing the backend still works; the guard tests
+    are deliberately written to need neither userns nor root.
+13. **Rootless breaks the obvious limits.** RLIMIT_NPROC is per-host-uid (would
     throttle the user's own processes) and rootless cgroup delegation is usually
     absent, so there is **no reliable pids cap**; the memory rlimit + hard timeout
     (killing pid 1 of the pidns cascades) are what actually contain a fork bomb.
-13. **Ubuntu 24.04+ AppArmor blocks unprivileged userns.**
+14. **Ubuntu 24.04+ AppArmor blocks unprivileged userns.**
     `kernel.apparmor_restrict_unprivileged_userns=1` makes `uid_map` writes fail
     with `EPERM`; `userNSAvailable()` detects it and points at the `sysctl` fix or
     the nerdctl backend. On such hosts the namespaces backend can't run — verify
     it after `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`.
-14. **No seccomp in the namespaces backend** — it's defense-in-depth/teaching, not
+15. **No seccomp in the namespaces backend** — it's defense-in-depth/teaching, not
     a boundary for hostile code. Say so; use the OCI runtime for real isolation.
 
 ## Testing conventions
@@ -584,5 +598,15 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   both ways → authority is per-domain → `memory.Supersedes` is the one place to decide it. Ships a
   reusable "before you build agent memory" checklist + a hands-on that flips `supersedeAuthority` to
   make `TestSupersedeGateProtectsUser` fail. Competency matrix gains lesson 21; course now 00–21 (22 lessons).
+- **v0.20.2 (fix)** = **the sandbox re-exec is authenticated, not just triggered**. `init()` in
+  `namespaces_linux.go` runs in every binary linking the package, so a stray
+  `TALUNOR_SANDBOX_CHILD=1` in an environment turned `talunor` (or any test binary) into a
+  container init that exited 127 before `main()` — a self-DoS footgun (it died at the first
+  `mount`, EPERM: `pivot_root` on the host was never reachable unprivileged). New
+  `verifyChildIdentity(pid, tokenFD, envValue)` gates `childMain` on pid 1 **and** a per-run
+  128-bit token delivered twice (env + pipe on fd 3), fstat'd as a FIFO and read bounded.
+  Tests need neither userns nor root: an impostor table + a subprocess run of the test binary
+  (`-test.run=^$`, so a regression cannot fork-bomb). Closes the `todo.md` "future patch:
+  namespaces re-exec guard" item.
 - **Next — open threads (documented, not started):** Layer 22 (hybrid recall, vector ∪ FTS5);
   calibration→policy wiring. Same per-layer checkpoint rhythm.

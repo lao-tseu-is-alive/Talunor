@@ -164,7 +164,8 @@ Talunor/
 │   │   ├── rootfs_linux.go #     Prepares/caches the busybox rootfs the namespaces backend pivot_roots into.
 │   │   ├── namespaces_other.go # Non-Linux stubs (//go:build !linux) so the package still compiles.
 │   │   ├── util.go         #     Shared sandbox helpers.
-│   │   └── sandbox_test.go #     Backend behaviour tests (host-dependent; skip when unavailable).
+│   │   ├── sandbox_test.go #     Backend behaviour tests (host-dependent; skip when unavailable).
+│   │   └── namespaces_linux_test.go # v0.20.2: the re-exec guard (impostor table + ambient-env subprocess).
 │   │
 │   ├── webfetch/           # LAYER 10 engine: the guarded HTTP fetcher behind the web_fetch tool.
 │   │   ├── webfetch.go     #     Client/Fetch; SSRF guard = blockedIP (pure) enforced in the dialer's

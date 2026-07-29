@@ -13,7 +13,10 @@ reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
 
-> Current version: **v0.20.1** — **Iteration 5** ("truthful memory") + its
+> Current version: **v0.20.2** — a hardening patch: the sandbox's
+> `/proc/self/exe` re-exec now **authenticates** the child (pid-1 + a per-run token on an
+> inherited pipe), so a stray `TALUNOR_SANDBOX_CHILD=1` in an environment can no longer
+> hijack any binary linking `internal/sandbox`. On **Iteration 5** ("truthful memory") + its
 > [Lesson 21](docs/lessons/21-whose-word-counts/) ("Whose word counts?"). Layer 21 lets a new
 > fact **supersede** an old, contradicting one, governed by an **explicit, per-domain trust
 > model** ([`memory.Supersedes`](internal/memory/supersede.go)) so a model's guess never

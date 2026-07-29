@@ -14,6 +14,65 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.20.2] - 2026-07-29 — Fix: the sandbox re-exec is authenticated, not just triggered
+
+A small hardening patch on `internal/sandbox`, closing the last item of the
+"future patch" list: the namespaces backend's `init()` hook could be fired by an
+ambient environment variable.
+
+### Fixed
+
+- **The `/proc/self/exe` re-exec now proves it is the intended child before any
+  side effect** (`internal/sandbox/namespaces_linux.go`). `init()` hijacks the
+  process whenever `TALUNOR_SANDBOX_CHILD=1` — and that `init()` is linked into
+  *every* binary importing the package (`cmd/talunor` via `internal/tools`, and
+  each test binary). A stray exported variable therefore turned any Talunor
+  binary into a container init that exited 127 with `sandbox child: make /
+  private: operation not permitted` before `main()` ever ran. New
+  `verifyChildIdentity(pid, tokenFD, envValue)` gates `childMain` on two
+  independent facts: the process is **pid 1** of its own PID namespace, and a
+  **128-bit random token** arrives *both* in `TALUNOR_SANDBOX_TOKEN` and through
+  a pipe inherited as fd 3. The environment is inherited by every descendant of
+  whoever exported it; a pipe write is not, so only our own `Run` can satisfy
+  both. Verified severity: an unprivileged process died at the *first* `mount`
+  (EPERM), so this was a self-DoS/footgun, not a path to `pivot_root` on the host.
+
+### Added
+
+- **`internal/sandbox/namespaces_linux_test.go`** — a table of impostors
+  (ordinary pid, missing/short token, fd at EOF, fd that is not a pipe, absent
+  fd, wrong token) plus a subprocess test that re-runs the test binary with
+  `TALUNOR_SANDBOX_CHILD=1` and asserts it exits `127` on the guard, with no
+  `make / private` or `pivot_root` in its output. The child runs `-test.run=^$`,
+  so a future regression cannot make the test fork-bomb itself.
+
+### Lessons learned
+
+1. **A guard that reads an *inherited* fd must be told what it is allowed to
+   read.** The obvious implementation — `io.ReadAll(os.NewFile(3, …))` — reads
+   *whatever* fd 3 happens to be in a process that never expected the trick: it
+   can consume an unrelated file, or block forever on a socket a supervisor left
+   open, hanging the binary in `init()` where nothing can report it. The guard
+   `fstat`s the fd for `S_IFIFO` and reads exactly the token's length.
+2. **Two empty strings are equal — comparison is not authentication.** A first
+   version of this fix compared the fd's bytes to the env var and accepted a
+   match. With `/dev/null` on fd 3 and the variable unset, both sides are `""`
+   and the impostor walks through the gate it was supposed to fail. A secret
+   check has to reject the *shape* (absent, wrong length) before comparing values.
+3. **`exec.Cmd` dups `ExtraFiles` at `Start`, not at assignment.** Closing the
+   parent's read end before `cmd.Run()` hands the child a bad fd — the sandbox
+   still *looks* wired up, and every run fails the token check with `EBADF`. The
+   parent's copy must outlive `Start` (`defer`), while the *write* end must close
+   early so the child sees EOF.
+4. **The reason none of this was caught by a green test run:
+   `kernel.apparmor_restrict_unprivileged_userns` had reverted to `1`.** Every
+   real namespaces test `t.Skip`s on such a host, so the whole backend can be
+   broken while `go test ./...` reports success. Hence the shape of the new
+   tests: the guard is a pure function unit-tested with plain pipes, and the
+   accidental-trigger path is a subprocess test — **neither needs user
+   namespaces**, so they keep protecting the code on hosts (and CI runners) where
+   the backend itself cannot run. A skipped test is not a passing test.
+
 ## [0.20.1] - 2026-07-28 — Course: Lesson 21 ("Whose word counts?"), bilingual
 
 A docs-only release: Layer 21 gets its lesson — a *meta* lesson (in the spirit of

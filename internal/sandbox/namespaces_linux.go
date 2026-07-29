@@ -5,8 +5,12 @@ package sandbox
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -21,11 +25,25 @@ import (
 // scrubbed before the user's script runs, so they never leak into its env.
 const (
 	envChild    = "TALUNOR_SANDBOX_CHILD"
+	envToken    = "TALUNOR_SANDBOX_TOKEN"
 	envScript   = "TALUNOR_SANDBOX_SCRIPT"
 	envRootfs   = "TALUNOR_SANDBOX_ROOTFS_DIR"
 	envFSBytes  = "TALUNOR_SANDBOX_FSBYTES"
 	envMemBytes = "TALUNOR_SANDBOX_MEMBYTES"
 	envCPUSecs  = "TALUNOR_SANDBOX_CPUSECS"
+)
+
+// The re-exec handshake (see verifyChildIdentity). The parent draws
+// tokenBytes of randomness per run, hands the hex form to the child twice — in
+// envToken and through a pipe inherited as childTokenFD — and the child only
+// proceeds if the two match. An ambient environment cannot trigger the sandbox
+// path: an env var is inherited by every descendant, a pipe write is not.
+const (
+	childTokenFD  = 3  // first fd after stdin/stdout/stderr, i.e. cmd.ExtraFiles[0]
+	tokenBytes    = 16 // 128 bits
+	tokenHexLen   = 2 * tokenBytes
+	childInitPID  = 1 // the child is pid 1 of its own CLONE_NEWPID namespace
+	childFailExit = 127
 )
 
 // namespaces is the from-scratch backend. It re-executes Talunor's own binary
@@ -44,6 +62,10 @@ type namespaces struct {
 // interior, and execs the script. This is the standard "/proc/self/exe re-exec"
 // trick (à la Docker's libcontainer): the child shares our binary but branches
 // here before any normal startup happens.
+//
+// The env var alone is only the *trigger*; childMain re-checks that we really
+// are the child the parent forked (verifyChildIdentity) before touching a single
+// mount, because this init runs in EVERY binary that links this package.
 func init() {
 	if os.Getenv(envChild) == "1" {
 		childMain() // never returns
@@ -84,9 +106,30 @@ func (n *namespaces) Run(ctx context.Context, script string, lim Limits) (string
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	// The re-exec handshake: one random token per run, delivered twice.
+	token, tokenR, tokenW, err := newChildToken()
+	if err != nil {
+		return "", err
+	}
+	// The parent's copy of the read end must stay open until exec.Cmd has dup'd
+	// it into the child (that happens in Start, i.e. inside Run) — closing it any
+	// earlier hands the child a bad fd and every run fails the token check.
+	defer tokenR.Close()
+	if _, err := tokenW.WriteString(token); err != nil {
+		tokenW.Close()
+		return "", fmt.Errorf("sandbox: write child token: %w", err)
+	}
+	// Closing the write end now is safe: the token already sits in the pipe
+	// buffer, and the child sees EOF right after it.
+	if err := tokenW.Close(); err != nil {
+		return "", fmt.Errorf("sandbox: close child token pipe: %w", err)
+	}
+
 	cmd := exec.CommandContext(runCtx, "/proc/self/exe")
+	cmd.ExtraFiles = []*os.File{tokenR} // inherited as childTokenFD
 	cmd.Env = append(os.Environ(),
 		envChild+"=1",
+		envToken+"="+token,
 		envScript+"="+script,
 		envRootfs+"="+n.rootfs,
 		envFSBytes+"="+strconv.FormatInt(lim.FSBytes, 10),
@@ -108,7 +151,7 @@ func (n *namespaces) Run(ctx context.Context, script string, lim Limits) (string
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if runCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
 		return truncate(buf.String()) + fmt.Sprintf("\n[timed out after %s]", timeout), nil
 	}
@@ -123,6 +166,70 @@ func (n *namespaces) Run(ctx context.Context, script string, lim Limits) (string
 		return truncate(out), fmt.Errorf("sandbox: namespaces run failed: %w", err)
 	}
 	return truncate(out), nil
+}
+
+// newChildToken draws one run's random token and the pipe that proves the caller
+// created it. The token is returned in hex (the form that travels in envToken);
+// the caller writes it into tokenW and passes tokenR to the child as
+// childTokenFD. Callers own both ends — see Run for the closing order, which is
+// the subtle part.
+func newChildToken() (token string, tokenR, tokenW *os.File, err error) {
+	raw := make([]byte, tokenBytes)
+	if _, err := rand.Read(raw); err != nil {
+		return "", nil, nil, fmt.Errorf("sandbox: generate child token: %w", err)
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("sandbox: child token pipe: %w", err)
+	}
+	return hex.EncodeToString(raw), r, w, nil
+}
+
+// verifyChildIdentity answers the one question childMain must not get wrong: are
+// we really the child our own Run forked, or did a stray TALUNOR_SANDBOX_CHILD=1
+// in someone's environment reach an ordinary process? It is kept separate from
+// childMain (which can only ever exit or exec) so the whole decision is unit
+// testable: pass the process' pid, the inherited fd, and the token from the env.
+//
+// Two independent facts must hold, both cheap and both checked before any mount:
+//
+//  1. pid == childInitPID. The real child is pid 1 of its own CLONE_NEWPID
+//     namespace. Nothing else on a normal system is — except a container's
+//     entrypoint, which is exactly why this check is not enough on its own.
+//  2. The fd carries the same token as the environment. The environment is
+//     inherited by every descendant of whoever exported it; the pipe is not, so
+//     only our parent can satisfy this. An empty token never counts: an fd that
+//     is merely at EOF (/dev/null, a drained pipe) must not match an unset var.
+func verifyChildIdentity(pid int, tokenFD *os.File, envValue string) error {
+	if pid != childInitPID {
+		return fmt.Errorf("pid is %d, not %d: %s=1 is set in a process that is not a sandbox child "+
+			"(unset it — see internal/sandbox)", pid, childInitPID, envChild)
+	}
+	if len(envValue) != tokenHexLen {
+		return fmt.Errorf("%s is missing or malformed: not a sandbox child", envToken)
+	}
+	if tokenFD == nil {
+		return fmt.Errorf("no token on fd %d: not a sandbox child", childTokenFD)
+	}
+	// The fd must be the pipe our parent made, not whatever else a supervisor
+	// happened to leave open — an fstat here also keeps the read below from
+	// blocking on, say, an inherited socket or terminal.
+	var st unix.Stat_t
+	if err := unix.Fstat(int(tokenFD.Fd()), &st); err != nil {
+		return fmt.Errorf("fd %d: %w", childTokenFD, err)
+	}
+	if st.Mode&unix.S_IFMT != unix.S_IFIFO {
+		return fmt.Errorf("fd %d is not a pipe: not a sandbox child", childTokenFD)
+	}
+	// Bounded read: exactly the token, never "whatever this fd yields".
+	got := make([]byte, tokenHexLen)
+	if _, err := io.ReadFull(tokenFD, got); err != nil {
+		return fmt.Errorf("read token from fd %d: %w", childTokenFD, err)
+	}
+	if subtle.ConstantTimeCompare(got, []byte(envValue)) != 1 {
+		return errors.New("token mismatch: not a sandbox child")
+	}
+	return nil
 }
 
 // userNSAvailable reports a clear error when unprivileged user namespaces are
@@ -159,17 +266,27 @@ func userNSAvailable() error {
 // childMain is the container init: it runs inside the new namespaces, builds the
 // isolated root, clamps resources, drops privileges, and execs the script. It
 // never returns — it either execs the shell or exits with a diagnostic.
+//
+// It runs from init(), so it must first prove it is the intended child: this
+// code is linked into every binary that imports the package, and an inherited
+// TALUNOR_SANDBOX_CHILD=1 would otherwise turn `talunor` (or a test binary) into
+// a container init that mounts over its own root. verifyChildIdentity comes
+// before every side effect, so an accidental trigger costs one fstat and exits.
 func childMain() {
+	die := func(err error) {
+		fmt.Fprintln(os.Stderr, "sandbox child: "+err.Error())
+		os.Exit(childFailExit)
+	}
+
+	if err := verifyChildIdentity(os.Getpid(), os.NewFile(childTokenFD, "sandbox-token"), os.Getenv(envToken)); err != nil {
+		die(err)
+	}
+
 	script := os.Getenv(envScript)
 	rootfs := os.Getenv(envRootfs)
 	fsBytes, _ := strconv.ParseInt(os.Getenv(envFSBytes), 10, 64)
 	memBytes, _ := strconv.ParseInt(os.Getenv(envMemBytes), 10, 64)
 	cpuSecs, _ := strconv.Atoi(os.Getenv(envCPUSecs))
-
-	die := func(err error) {
-		fmt.Fprintln(os.Stderr, "sandbox child: "+err.Error())
-		os.Exit(127)
-	}
 
 	_ = unix.Sethostname([]byte("talunor-sandbox"))
 
