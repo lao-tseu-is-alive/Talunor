@@ -38,8 +38,12 @@ Talunor/
 ├── .gitignore                # Ignored paths: build output, ext/ assets, *.db, .env, todo.md, /reports.
 ├── .env_sample               # Annotated template of every env var — copy to .env to configure.
 │
-├── images/                   # Static image assets referenced by the docs.
-│   └── Talunor.jpg           #   Project logo shown at the top of the README.
+├── images/                   # Static assets referenced by the docs (logo + the README demo).
+│   ├── Talunor.jpg           #   Project logo shown at the top of the README.
+│   ├── demo.gif              #   Animated preview of a session — the clickable poster in the README.
+│   ├── demo.mp4              #   Full screen recording, best browser compatibility (linked from the README).
+│   ├── demo.webm             #   Same recording, VP9/WebM (smaller; served via a GitHub user-attachments URL).
+│   └── demo_transcript.md    #   Text transcript of the demo: two sessions showing memory persisting across restarts.
 │
 ├── .github/workflows/        # CI/CD pipelines (GitHub Actions).
 │   ├── ci.yml                #   Push/PR to main: make deps + go vet + go test (cgo; caches ext/).
@@ -177,8 +181,12 @@ Talunor/
 │   │   ├── history.go      #     JSON-per-line store next to the DB; unique entries, temp-file+rename, capped.
 │   │   └── history_test.go #     Dedup, navigation/draft, persistence round-trip tests.
 │   │
-│   └── version/            # Build identity.
-│       └── version.go      #     Version const (0.MINOR.PATCH); Commit/Date injected via -ldflags.
+│   ├── version/            # Build identity.
+│   │   └── version.go      #     Version const (0.MINOR.PATCH); Commit/Date injected via -ldflags.
+│   │
+│   └── testenv/            # Test-only: turn "I can't test this here" into a per-host decision.
+│       ├── testenv.go      #     Require(t,cap,err) — skips by default, FAILS when TALUNOR_REQUIRE names the capability.
+│       └── testenv_test.go #     Parsing of the TALUNOR_REQUIRE list (all/case/spaces/no-prefix-match).
 │
 ├── docs/                  # Documentation.
 │   ├── atlas.md           #   THIS FILE — the repository map.

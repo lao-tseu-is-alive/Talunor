@@ -167,6 +167,9 @@ internal/tui/      Bubble Tea + Glamour front-end (↑/↓ = prompt-history reca
 internal/history/  persistent, deduplicated prompt history (JSON-per-line next to
                    the DB; unique entries, temp-file+rename write, capped)
 internal/version/  build identity (Version const; Commit/Date via -ldflags)
+internal/testenv/  test-only capability contract (v0.20.4): Require(t,cap,err) skips
+                   by default, FAILS when TALUNOR_REQUIRE names the capability
+                   (ext|sandbox|docker|all). Imported only from _test.go files
 ext/               fetched .so extensions + GGUF model (gitignored)
 ```
 
@@ -268,6 +271,7 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_DB` | database file | `$XDG_DATA_HOME/talunor/talunor.db` → `~/.local/share/talunor/talunor.db` |
 | `TALUNOR_VECTOR_EXT` / `TALUNOR_AI_EXT` / `TALUNOR_EMBED_MODEL` | ext/model paths | under `ext/` |
 | `CALIBRATION_KEY` | passphrase to decrypt / `calibrate encrypt` a private calibration suite (Layer 14) | — |
+| `TALUNOR_REQUIRE` | **tests only** (`internal/testenv`): capabilities this host must exercise — `ext`,`sandbox`,`docker`,`all`. A missing one FAILS instead of skipping. NOT read from `.env` (`go test` doesn't load it) — export it | — |
 
 Dev machine has Ollama running; `qwen3:latest` is a **thinking model** (see
 gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
@@ -342,8 +346,16 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
 ## Testing conventions
 
 - Tests needing the SQLite extensions/model resolve paths relative to the repo
-  root and **`t.Skip` if `ext/` is absent** (so CI without `make deps` is green).
+  root and **skip if `ext/` is absent** (so CI without `make deps` is green).
   Copy the `testStore`/`testConfig` helper pattern.
+- **Never `t.Skip` a capability directly — go through `internal/testenv`**
+  (`testenv.Require(t, testenv.CapExt|CapSandbox|CapDocker, err)`). It skips by
+  default, but *fails* on a host that exported `TALUNOR_REQUIRE` (…`=all` on the
+  maintainer's machine). Rationale: `go test` prints the same `ok` whether a
+  package ran everything or skipped it all, so a host that loses a capability
+  silently shrinks the suite — which is how a broken sandbox backend passed a
+  green run (v0.20.2 / Lesson 22). `make capabilities` prints host state +
+  declaration; `release-check` shows it first.
 - LLM tests use an `httptest` SSE server — no live model.
 - TUI tests are **headless**: feed synthetic `tea.Msg`s through `Update` and pump
   the returned `Cmd`s; assert on `View()`. A real terminal is not needed.
@@ -618,5 +630,14 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   becomes 07 · 15 · 16 · 22; course now 00–22 (23 lessons). **NOTE:** lesson numbering is
   release-ordered, so course Lesson 22 is NOT Layer 22 (hybrid recall) — that layer's lesson will
   be 23.
+- **v0.20.4 (fix/tooling)** = **the capability contract** — Lesson 22's principle put into
+  the build. `internal/testenv`: `Require(t, cap, err)` replaces every direct capability
+  `t.Skip` (ext / sandbox / docker); it still skips by default but **fails** when the host
+  exported `TALUNOR_REQUIRE` (`=all` on a full dev machine) — so a silently reverted sysctl
+  stops a release instead of shrinking the suite. `make capabilities` (now first in
+  `release-check`) prints host state + declaration. **`TALUNOR_REQUIRE` is NOT read from
+  `.env`** — `go test` doesn't load it; export it from the shell. Also fixed env-doc drift:
+  `TALUNOR_SUPERSEDE_MAX_DISTANCE` was missing from the README table (all 31 user-facing vars
+  now in README + AGENTS + `.env_sample`; the 7 internal sandbox handshake vars in none).
 - **Next — open threads (documented, not started):** Layer 22 (hybrid recall, vector ∪ FTS5);
   calibration→policy wiring. Same per-layer checkpoint rhythm.

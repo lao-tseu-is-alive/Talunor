@@ -54,7 +54,7 @@ LDFLAGS     := -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(B
 # Container image (local builds). IMAGE overridable; nerdctl for Rancher Desktop.
 IMAGE ?= talunor:local
 
-.PHONY: deps doctor build test release-check atlas-check readme-check lessons-check tidy clean distclean \
+.PHONY: deps doctor build test release-check capabilities atlas-check readme-check lessons-check tidy clean distclean \
         docker-build docker-run nerdctl-build nerdctl-run
 
 ## deps: download the SQLite extensions and the embedding model into ext/
@@ -97,6 +97,7 @@ test:
 ## asset checksum. Offline: it re-verifies the ext/ already on disk rather than
 ## re-downloading. The heavier, networked proof is a clean-room `make nerdctl-build`.
 release-check: deps
+	@$(MAKE) --no-print-directory capabilities
 	@echo "==> gofmt (no diffs allowed)"
 	@bad="$$(gofmt -l .)"; [ -z "$$bad" ] || { echo "needs gofmt:"; echo "$$bad"; exit 1; }
 	@echo "==> go vet"
@@ -120,6 +121,23 @@ release-check: deps
 	@echo "==> lessons reference valid tags / links / files"
 	@$(MAKE) --no-print-directory lessons-check
 	@echo "release-check: OK"
+
+## capabilities: state what this host can actually exercise, so a green suite is
+## read with the right expectations. `go test` prints the same "ok" whether a
+## package ran every test or skipped them all (see docs/lessons/22-the-silent-suite),
+## and the sandbox capability in particular comes and goes — Ubuntu re-applies
+## kernel.apparmor_restrict_unprivileged_userns=1 on update. Export
+## TALUNOR_REQUIRE (ext,sandbox,docker or all) to turn a missing capability from a
+## silent skip into a test failure; this line reports what you declared.
+capabilities:
+	@ext=no; [ -f ext/vector.so ] && [ -f ext/ai.so ] && [ -f "$(EMBED_MODEL)" ] && ext=yes; \
+	 userns=yes; \
+	 [ "$$(uname -s)" = "Linux" ] || userns=no; \
+	 [ "$$(cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || echo 1)" = "0" ] && userns=no; \
+	 [ "$$(cat /proc/sys/user/max_user_namespaces 2>/dev/null || echo 1)" = "0" ] && userns=no; \
+	 [ "$$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)" = "1" ] && userns=no; \
+	 docker=no; { command -v nerdctl >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; } && docker=yes; \
+	 echo "==> capabilities: ext=$$ext sandbox=$$userns docker=$$docker | TALUNOR_REQUIRE=$${TALUNOR_REQUIRE:-<unset, missing ones will SKIP>}"
 
 ## atlas-check: fail if docs/atlas.md doesn't reference every tracked file, so a
 ## file added/removed without refreshing the map blocks a release (structural

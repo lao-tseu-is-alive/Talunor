@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/lao-tseu-is-alive/Talunor/internal/testenv"
 )
 
 // provConfig points at the repo-root ext/ artifacts and a fresh file-backed DB
@@ -22,9 +24,8 @@ func provConfig(t *testing.T) Config {
 		AIExtPath:      filepath.Join(root, "ext", "ai"),
 		EmbedModelPath: filepath.Join(root, "ext", "models", "all-MiniLM-L6-v2.f16.gguf"),
 	}
-	if _, err := os.Stat(cfg.VectorExtPath + ".so"); err != nil {
-		t.Skip("extensions/model missing — run `make deps` first")
-	}
+	_, err := os.Stat(cfg.VectorExtPath + ".so")
+	testenv.Require(t, testenv.CapExt, err) // `make deps` fetches these
 	return cfg
 }
 

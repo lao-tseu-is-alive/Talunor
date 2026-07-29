@@ -374,6 +374,39 @@ go test ./internal/sandbox/ -run Namespaces -v
 L'étape 3 est celle qu'il faut laisser infuser. Rien dans ton code n'a changé entre
 l'étape 3 et l'étape 4. Ce sont tes *preuves* qui ont changé.
 
+## Ce que Talunor a livré à cause de cette leçon
+
+Le principe 7 ci-dessous est une habitude, et les habitudes s'effritent. La `v0.20.4` l'a
+donc inscrit dans le build (`internal/testenv`) : une machine peut **déclarer** ce qu'elle
+doit être capable d'exercer.
+
+```bash
+export TALUNOR_REQUIRE=all        # cette machine doit faire tourner les tests ext + sandbox + docker
+```
+
+Chaque saut de capacité passe désormais par un seul appel — `testenv.Require(t, cap, err)` —
+qui saute comme avant sur une machine dépourvue de la capacité, et **échoue** sur une
+machine qui l'a déclarée. Rien ne change pour un contributeur ; sur la machine du mainteneur,
+le sysctl revenu à 1 arrête maintenant la release au lieu de rétrécir la suite :
+
+```
+--- FAIL: TestRuntimeEcho
+    TALUNOR_REQUIRE=docker declares this host must be able to exercise "docker",
+    but it cannot: no nerdctl/docker on PATH
+```
+
+Et `make capabilities` (affiché en premier par `make release-check`) énonce le terrain
+avant le moindre test :
+
+```
+==> capabilities: ext=yes sandbox=yes docker=yes | TALUNOR_REQUIRE=all
+```
+
+Note ce que ce n'est *pas* : cela n'audite pas les sauts, ne les compte pas, ne les compare
+pas à une référence. Afficher une liste que tu ignorais déjà ne change rien. La déclaration
+fonctionne parce qu'elle encode ce que toi seul sais — *ce que cette machine précise est
+censée savoir faire* — et transforme l'écart avec la réalité en test rouge.
+
 ## Les principes
 
 ```text

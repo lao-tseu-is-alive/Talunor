@@ -359,6 +359,38 @@ go test ./internal/sandbox/ -run Namespaces -v
 Step 3 is the one to sit with. Nothing about your code changed between step 3 and step
 4. Your *evidence* changed.
 
+## What Talunor shipped because of this lesson
+
+Principle 7 below is a habit, and habits decay. So `v0.20.4` put it in the build
+(`internal/testenv`): a host can **declare** what it must be able to exercise.
+
+```bash
+export TALUNOR_REQUIRE=all        # this machine must run ext + sandbox + docker tests
+```
+
+Every capability skip now goes through one call — `testenv.Require(t, cap, err)` — which
+skips as before on a machine that lacks the capability, and **fails** on a machine that
+declared it. Nothing changes for a contributor; on the maintainer's box the reverted
+sysctl now stops the release instead of shrinking the suite:
+
+```
+--- FAIL: TestRuntimeEcho
+    TALUNOR_REQUIRE=docker declares this host must be able to exercise "docker",
+    but it cannot: no nerdctl/docker on PATH
+```
+
+And `make capabilities` (printed first by `make release-check`) states the ground truth
+before any test runs:
+
+```
+==> capabilities: ext=yes sandbox=yes docker=yes | TALUNOR_REQUIRE=all
+```
+
+Note what this is *not*: it does not audit skips, count them, or diff them against a
+baseline. Printing a list you already ignored changes nothing. The declaration works
+because it encodes something only you know — *what this particular machine is supposed to
+be able to do* — and turns the gap between that and reality into a red test.
+
 ## The principles
 
 ```text

@@ -9,11 +9,13 @@ import (
 	"testing"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
+	"github.com/lao-tseu-is-alive/Talunor/internal/testenv"
 )
 
 // testConfig builds a Config pointing at the repo-root ext/ artifacts (this
 // test file lives two directories below the root) and an ephemeral database.
-// It skips the test if `make deps` has not been run.
+// It skips the test if `make deps` has not been run — or fails it, if the host
+// declared TALUNOR_REQUIRE=ext (see internal/testenv).
 func testConfig(t *testing.T) memory.Config {
 	t.Helper()
 	_, file, _, _ := runtime.Caller(0)
@@ -24,9 +26,8 @@ func testConfig(t *testing.T) memory.Config {
 		AIExtPath:      filepath.Join(root, "ext", "ai"),
 		EmbedModelPath: filepath.Join(root, "ext", "models", "all-MiniLM-L6-v2.f16.gguf"),
 	}
-	if _, err := os.Stat(cfg.VectorExtPath + ".so"); err != nil {
-		t.Skip("extensions/model missing — run `make deps` first")
-	}
+	_, err := os.Stat(cfg.VectorExtPath + ".so")
+	testenv.Require(t, testenv.CapExt, err) // `make deps` fetches these
 	return cfg
 }
 

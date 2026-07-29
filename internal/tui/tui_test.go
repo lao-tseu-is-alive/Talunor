@@ -16,6 +16,7 @@ import (
 	"github.com/lao-tseu-is-alive/Talunor/internal/history"
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
 	"github.com/lao-tseu-is-alive/Talunor/internal/memory"
+	"github.com/lao-tseu-is-alive/Talunor/internal/testenv"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tools"
 	"github.com/lao-tseu-is-alive/Talunor/internal/tui"
 )
@@ -81,9 +82,8 @@ func testStore(t *testing.T) *memory.Store {
 		AIExtPath:      filepath.Join(root, "ext", "ai"),
 		EmbedModelPath: filepath.Join(root, "ext", "models", "all-MiniLM-L6-v2.f16.gguf"),
 	}
-	if _, err := os.Stat(cfg.VectorExtPath + ".so"); err != nil {
-		t.Skip("extensions/model missing — run `make deps` first")
-	}
+	_, err := os.Stat(cfg.VectorExtPath + ".so")
+	testenv.Require(t, testenv.CapExt, err) // `make deps` fetches these
 	store, err := memory.Open(cfg)
 	if err != nil {
 		t.Fatalf("open store: %v", err)

@@ -14,6 +14,56 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.20.4] - 2026-07-29 — A host can declare what it must be able to test
+
+Lesson 22's principle, moved from prose into the build. Plus an env-var
+documentation sync.
+
+### Added
+
+- **`internal/testenv` — the capability contract.** `testenv.Require(t,
+  capability, err)` replaces every direct `t.Skip` of a capability (`CapExt`,
+  `CapSandbox`, `CapDocker`). It skips exactly as before *unless* the host
+  exported `TALUNOR_REQUIRE` (`ext`, `sandbox`, `docker`, `all`,
+  comma-separated), in which case a missing capability **fails**:
+
+  ```
+  --- FAIL: TestRuntimeEcho
+      TALUNOR_REQUIRE=docker declares this host must be able to exercise
+      "docker", but it cannot: no nerdctl/docker on PATH
+  ```
+
+  Contributors and minimal CI runners are unaffected. `TALUNOR_REQUIRE` is read
+  by `go test`, which does **not** load `.env` — it belongs in a shell profile.
+- **`make capabilities`** — prints `ext=… sandbox=… docker=…` plus the current
+  declaration, and now runs first inside `make release-check`, so the pre-tag
+  ritual always states what the green run covered.
+
+### Fixed
+
+- **Env-var documentation drift:** `TALUNOR_SUPERSEDE_MAX_DISTANCE` (shipped in
+  v0.20.0) was in `AGENTS.md` and `.env_sample` but missing from the README
+  table. All 31 user-facing variables are now in all three, and the seven
+  internal sandbox handshake variables are deliberately in none of them —
+  `.env_sample` instead carries a "never set `TALUNOR_SANDBOX_CHILD`" note.
+
+### Lessons learned
+
+1. **The useful guard encodes what only the human knows.** The obvious idea —
+   audit or diff the skips — fails for a dull reason: nobody reads a list they
+   were already ignoring, and a global skip baseline is noise across machines
+   that legitimately differ. `TALUNOR_REQUIRE` works because it captures a fact
+   living nowhere in the repo: *what this particular machine is supposed to be
+   able to do.* The gap between that declaration and reality is a red test.
+2. **Opt-in keeps a strict check kind.** Making a missing capability fail
+   globally would punish every contributor without `make deps`; making it fail
+   only where declared costs them nothing and still catches the maintainer's
+   silently-reverted sysctl before a tag.
+3. **`.env` is not the environment.** `go test` never loads it — only
+   `cmd/talunor` and `cmd/calibrate` do. A test-only knob documented as an
+   `.env` entry would have looked configured while doing nothing, which is the
+   same silent-failure shape this release is about.
+
 ## [0.20.3] - 2026-07-29 — Course: Lesson 22 ("The silent suite"), bilingual
 
 A docs-only release: the v0.20.2 fix gets its post-mortem — the course's third
