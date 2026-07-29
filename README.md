@@ -30,25 +30,13 @@ because ...
 
 ## Demo
 
-![Talunor demo](images/demo.gif)
+[![Talunor demo preview](images/demo.gif)](images/demo.mp4)
 
-▶️ **Watch the full demonstration:** [demo.webm](images/demo.webm)
-<details>
-  <summary>🎬 Watch the full  demo (vidéo)</summary>
+GitHub does not reliably render repository videos inline from `README.md`.
+Click the preview above, or open the full demo directly:
 
-  <video src="https://github.com/lao-tseu-is-alive/Talunor/raw/refs/heads/main/images/demo.mp4"  controls width="100%">
-    Votre navigateur ne supporte pas la lecture de cette vidéo.
-  </video>
-</details>
-
-
-<details>
-  <summary>🎬 Watch the full  demo (vidéo)</summary>
-
-  <video src="https://github.com/lao-tseu-is-alive/Talunor/raw/refs/heads/main/images/demo.webm"  controls width="100%">
-    Votre navigateur ne supporte pas la lecture de cette vidéo.
-  </video>
-</details>
+- [Watch the MP4 demo](images/demo.mp4) — best browser compatibility.
+- [Watch the WebM demo](images/demo.webm) — smaller open format.
 
 ## Why it's different
 
