@@ -14,6 +14,45 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.20.5] - 2026-07-29 — README: a reading order, not an archive
+
+Docs only, no code. The front page had grown by accretion — every release
+appended to it — until a newcomer met ~200 lines of history before the three
+commands that run the thing.
+
+### Changed
+
+- **Reading order is now demo → run it → use it → what's new → how it's built.**
+  `Requirements` + `Quickstart` moved above the fold, directly after the demo;
+  the usage reference (commands, providers, tools, `bash`, `web_fetch`, memory
+  location, environment) gathered under a new `## Using Talunor` parent so those
+  `###` sections stop being orphans; `What's new`, `Architecture` and `Status`
+  follow the narrative instead of interrupting it.
+- **The layer-by-layer status tables are folded into a `<details>`** — six
+  iterations of history are reference material, not the pitch.
+- **`Philosophy` and `Why it's different` merged.** They made the same claim
+  twice ("incrementally, tested, documented, justified"); one section now says it
+  once and ends on the Emerson quote.
+- **The course callout moved to the top**, right under the intro: being a
+  23-lesson bilingual course is one of the project's two identities, so it
+  belongs where the 10-second reader sees it, not buried in a version banner.
+  The "a complete guide to building one" bullet now links to it too.
+- **The demo section links the [session transcript](images/demo_transcript.md)**,
+  which existed but was referenced from nowhere — it shows `/list` and `/why` and
+  memory surviving a restart, which a GIF cannot.
+
+### Lessons learned
+
+1. **A README rots by append.** Every release added a clause to the "current
+   version" banner, and each addition was individually reasonable; the result was
+   a 40-line paragraph nobody could parse. The banner's job is *what changed
+   now* — the archive already exists in this file, one section per version.
+2. **Moving an `##` section orphans its `###` children.** Hoisting `Quickstart`
+   left `### Commands`, `### Tools`, … dangling under `## Status`, which reads
+   fine in raw Markdown and is nonsense in the rendered outline. Restructuring
+   prose needs the same care as moving code between packages: check what was
+   nested under what.
+
 ## [0.20.4] - 2026-07-29 — A host can declare what it must be able to test
 
 Lesson 22's principle, moved from prose into the build. Plus an env-var

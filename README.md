@@ -12,17 +12,23 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-## Philosophy
+> 📚 The tag-by-tag history is also a **[23-lesson course](docs/lessons/)** (🇬🇧 English
+> & 🇫🇷 Français) for Go beginners — start at [Lesson 00](docs/lessons/).
+
+## Philosophy — and why it's different
 
 Talunor explores how to engineer trustworthy AI agents.
 
-Rather than relying on opaque frameworks,
-each capability is implemented explicitly,
-tested,
-and introduced incrementally.
+Unlike many AI agent projects, it focuses on **software engineering rather than prompt
+engineering**. Rather than relying on opaque frameworks, each capability is implemented
+explicitly, tested, documented, and introduced incrementally.
 
-The goal is not merely to build another agent,
-but to understand and teach the engineering decisions behind one.
+The goal is not merely to build another agent, but to understand and teach the
+engineering decisions behind one — so the repository can be read both as
+
+- **a usable AI agent**, and
+- **a complete guide to building one** ([take the course →](docs/lessons/)).
+
 because ...
 > *"Life is a journey, not a destination."*  
 > — **Ralph Waldo Emerson**
@@ -37,134 +43,8 @@ Click the preview above, or open the full demo directly:
 [demo.webm](https://github.com/user-attachments/assets/5558db57-1a67-4830-8463-ffcb7620a3dc)
 
 - [Watch the MP4 demo](https://raw.githubusercontent.com/lao-tseu-is-alive/Talunor/main/images/demo.mp4) — best browser compatibility.
-
-## Why it's different
-
-Unlike many AI agent projects, Talunor focuses on software engineering rather than
-prompt engineering.
-
-Every capability is introduced incrementally,
-tested,
-documented,
-and justified.
-
-The repository can therefore be read both as
-
-- **a usable AI agent**, and
-- **a complete guide to building one.**
-
-## What's new
-
-> Current version: **v0.20.4** — a machine can now **declare what it must be able to
-> test** (`TALUNOR_REQUIRE=all`, `make capabilities`), so a capability that used to skip
-> silently now fails on the host that claims it. Just before it: the sandbox re-exec is
-> [authenticated](internal/sandbox/namespaces_linux.go) rather than merely triggered
-> (v0.20.2), and its post-mortem became
-> [Lesson 22](docs/lessons/22-the-silent-suite/) — *a skipped test is not a passing test*.
-
-**Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
-provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
-Layer 14 added **model calibration**; Iteration 4 taught it to *learn* (schema
-migrations, per-fact provenance & confidence, salience/decay/consolidation, async
-reflection). **Iteration 5 — "truthful memory" — is in progress:** a fact now carries an
-auditable **evidence trail** (`/why`) and can be **superseded** by a newer one under an
-explicit, per-domain [trust model](internal/memory/supersede.go), so a model's guess
-never overwrites what you said. Layer by layer, with the reasoning:
-[CHANGELOG.md](CHANGELOG.md).
-
-> 📚 The tag-by-tag history is also a **[23-lesson course](docs/lessons/)** (🇬🇧 English
-> & 🇫🇷 Français) for Go beginners — start at [Lesson 00](docs/lessons/).
-## Architecture (target)
-
-> 🗺️ **New:** [`docs/architecture.md`](docs/architecture.md) ([🇫🇷 Français](docs/architecture.fr.md))
-> is the mental-model page — one turn of the loop and the package graph as Mermaid
-> diagrams, plus the load-bearing design decisions, each linked to its lesson.
-
-```
-Perception ─► Memory recall (KNN) ─► Reasoning (LLM) ─► Action ─► Learning
-                    ▲                                              │
-                    └───────────────── store ◄─────────────────────┘
-
-internal/memory   SQLite store + short-term ring buffer (embeddings, KNN)  [Layers 1-2 ✓]
-internal/llm      Provider interface + OpenAI-compatible adapter (Ollama)  [Layer 3 ✓]
-internal/agent    the cognitive loop (perceive→recall→reason→store)        [Layer 4 ✓]
-internal/render   shared streaming console renderer                        [✓]
-internal/tui      Bubble Tea + Glamour front-end (default)                 [Layer 5 ✓]
-internal/version  build identity                                           [✓]
-cmd/doctor        memory substrate smoke test                              [✓]
-cmd/chat          LLM provider smoke test (streaming)                      [✓]
-cmd/talunor       interactive agent REPL (persistent memory)               [✓]
-```
-
-## Status
-
-### Iteration 1 — conversational agent + memory
-
-| Layer | What | Status |
-|-------|------|--------|
-| 1 | **DB foundation** — load extensions, in-DB embeddings, KNN | ✅ done (v0.1.0) |
-| 2 | **Memory API** — `Remember` / `Recall` (KNN + threshold), short-term ring buffer | ✅ done (v0.2.0) |
-| 3 | **LLM provider** — `Provider` interface + Ollama (OpenAI-compatible) adapter, streaming | ✅ done (v0.3.0) |
-| 4 | **Agent loop** — Perceive → Recall → Reason → Store | ✅ done (v0.4.0) |
-| 5 | **TUI** — Bubble Tea + Glamour (default front-end) | ✅ done (v0.5.0) |
-
-**Iteration 1 is complete** — Talunor is a working memory-augmented conversational
-agent. Iteration 2 gives it the ability to *act*.
-
-### Iteration 2 — tools & actions
-
-| Layer | What | Status |
-|-------|------|--------|
-| 6 | **Providers & config** — OpenRouter provider, `llm.FromEnv()`, `.env` loader | ✅ done (v0.6.0) |
-| 7 | **Tools & ReAct loop** — tool registry, native tool-calling, act→observe loop | ✅ done (v0.7.0) |
-| 8 | **Approval gate** — human-in-the-loop y/n for side-effecting tools (guardrail) | ✅ done (v0.8.0) |
-| 9 | **Sandboxed `bash`** — pluggable sandbox (namespaces/nerdctl), behind the gate | ✅ done (v0.9.0) |
-| 10 | **`web_fetch`** — the network opt-IN: SSRF-guarded HTTP fetch, per-URL approval | ✅ done (v0.10.0) |
-| 11 | **Memory integrity & observability** — embedding-provenance guard + `--reembed`, inline `/debug` trace | ✅ done (v0.11.0) |
-
-### Iteration 3 — planning & guardrails
-
-| Layer | What | Status |
-|-------|------|--------|
-| 12 | **Policy engine** — a `Policy` consulted before each tool call (auto-allow / approve / deny), a `plan` vocabulary, YAML rule files via `TALUNOR_POLICY` | ✅ done (v0.12.0) |
-| 13 | **Explicit planner** — an opt-in plan-then-execute turn: an inspectable, human-approved plan, then ReAct execution *capped to the plan's tools* (`TALUNOR_PLANNER`, `TALUNOR_APPROVAL`) | ✅ done (v0.13.0) |
-
-**Iteration 3 is complete** — Talunor now has both a guardrail (policy) and
-forethought (planner). Deferred to later increments: `/edit-plan`, semantic
-deviation detection, and automatic re-planning.
-
-### Layer 14 — model calibration (a bridge to Iteration 4)
-
-| Layer | What | Status |
-|-------|------|--------|
-| 14 | **Model calibration** — a deterministic reliability canary (`internal/calibration`, `cmd/calibrate`): a YAML suite of known-answer scenarios scored with machine-checkable matchers (no LLM judge), with pass-rate/consistency, baseline **drift** detection, and optional AES-256-GCM encryption of private suites | ✅ done (v0.14.0) |
-
-Motivated by the review episode behind Lesson 15: before an agent *learns* from a
-model (Iteration 4), you must *measure* whether that model is reliable — and catch
-silent drift when it degrades.
-
-### Iteration 4 — learning
-
-| Layer | What | Status |
-|-------|------|--------|
-| 15 | **Schema versioning & migrations** — an ordered, append-only migration runner (`internal/memory`), so the memory schema can evolve safely as learning adds columns; zero behaviour change | ✅ done (v0.15.0) |
-| 16 | **Fact provenance & confidence** — every memory records its source + a confidence; a learned fact's confidence is scaled by the model's calibration (`TALUNOR_MODEL_CONFIDENCE`), so hallucinations don't gain established authority | ✅ done (v0.16.0) |
-| 17 | **Salience / decay / consolidation** — recalled facts are reinforced, a restatement consolidates (and, from independent sources, strengthens confidence) instead of duplicating, and neglected facts decay and soft-fade from recall | ✅ done (v0.17.0) |
-| 18 | **Async reflection** — learning (the second LLM call) runs on a single background worker off the turn's critical path; `Agent.Close()` drains it on shutdown so in-flight learning isn't lost | ✅ done (v0.18.0) |
-
-Learning is **informed by calibration** (Layer 14): a fact from an unreliable or
-uncalibrated model should not silently gain the authority of an established one.
-
-### Iteration 5 — truthful memory
-
-| Layer | What | Status |
-|-------|------|--------|
-| 20 | **Learn from action + evidence trail** — reflection also learns from tool observations (tagged `model_inferred`, or `tool_observed` only from a `Verified` tool — honest by default), records an auditable evidence trail (which turns/sources support a fact; `/why <id>`), on an append-only migration | ✅ done (v0.19.0) |
-| 21 | **Contradiction & supersession** — a new fact supersedes an old, incompatible one, governed by an explicit, per-domain **trust model** (`memory.Supersedes`); the model never overrides the user, a `Verified` tool can retire a stale belief; soft (reversible, auditable) | ✅ done (v0.20.0) |
-| 22 | **Hybrid recall** — vector ∪ lexical (FTS5), so exact identifiers / rare terms aren't missed | ⏳ planned |
-
-The thesis: Iteration 4 made memory *learn, retain, and forget*; Iteration 5 makes it
-stay **true** — learn from its own actions, justify its beliefs, and correct itself.
+- **Prefer text?** Read the [session transcript](images/demo_transcript.md) — two runs
+  showing the memory survive a restart, with `/list` and `/why`.
 
 ## Requirements
 
@@ -242,6 +122,10 @@ commands) are recalled with ↑/↓ across sessions, kept unique (re-submitting 
 prompt promotes it to newest rather than duplicating), and stored in a
 `history.jsonl` file next to the database. The `--plain` REPL records to the same
 file but, being scanner-based, cannot do ↑/↓ line editing itself.
+
+## Using Talunor
+
+Everything below is reference — reach for it once the quickstart is running.
 
 ### Commands
 
@@ -406,6 +290,124 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 > from your shell (`export TALUNOR_REQUIRE=all` on a full dev machine) or pass it
 > inline: `TALUNOR_REQUIRE=all make release-check`. `make capabilities` prints what
 > this host can actually exercise, and what you declared.
+
+## What's new
+
+> Current version: **v0.20.5** — a README you can read top to bottom (demo → run it →
+> use it), with the layer history folded away. On **v0.20.4**, a machine can **declare
+> what it must be able to
+> test** (`TALUNOR_REQUIRE=all`, `make capabilities`), so a capability that used to skip
+> silently now fails on the host that claims it. Just before it: the sandbox re-exec is
+> [authenticated](internal/sandbox/namespaces_linux.go) rather than merely triggered
+> (v0.20.2), and its post-mortem became
+> [Lesson 22](docs/lessons/22-the-silent-suite/) — *a skipped test is not a passing test*.
+
+**Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
+provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
+Layer 14 added **model calibration**; Iteration 4 taught it to *learn* (schema
+migrations, per-fact provenance & confidence, salience/decay/consolidation, async
+reflection). **Iteration 5 — "truthful memory" — is in progress:** a fact now carries an
+auditable **evidence trail** (`/why`) and can be **superseded** by a newer one under an
+explicit, per-domain [trust model](internal/memory/supersede.go), so a model's guess
+never overwrites what you said. Layer by layer, with the reasoning:
+[CHANGELOG.md](CHANGELOG.md).
+
+## Architecture (target)
+
+> 🗺️ **New:** [`docs/architecture.md`](docs/architecture.md) ([🇫🇷 Français](docs/architecture.fr.md))
+> is the mental-model page — one turn of the loop and the package graph as Mermaid
+> diagrams, plus the load-bearing design decisions, each linked to its lesson.
+
+```
+Perception ─► Memory recall (KNN) ─► Reasoning (LLM) ─► Action ─► Learning
+                    ▲                                              │
+                    └───────────────── store ◄─────────────────────┘
+
+internal/memory   SQLite store + short-term ring buffer (embeddings, KNN)  [Layers 1-2 ✓]
+internal/llm      Provider interface + OpenAI-compatible adapter (Ollama)  [Layer 3 ✓]
+internal/agent    the cognitive loop (perceive→recall→reason→store)        [Layer 4 ✓]
+internal/render   shared streaming console renderer                        [✓]
+internal/tui      Bubble Tea + Glamour front-end (default)                 [Layer 5 ✓]
+internal/version  build identity                                           [✓]
+cmd/doctor        memory substrate smoke test                              [✓]
+cmd/chat          LLM provider smoke test (streaming)                      [✓]
+cmd/talunor       interactive agent REPL (persistent memory)               [✓]
+```
+
+## Status
+
+<details>
+<summary><strong>The layer-by-layer status tables</strong> (Iterations 1–5) — click to expand</summary>
+
+### Iteration 1 — conversational agent + memory
+
+| Layer | What | Status |
+|-------|------|--------|
+| 1 | **DB foundation** — load extensions, in-DB embeddings, KNN | ✅ done (v0.1.0) |
+| 2 | **Memory API** — `Remember` / `Recall` (KNN + threshold), short-term ring buffer | ✅ done (v0.2.0) |
+| 3 | **LLM provider** — `Provider` interface + Ollama (OpenAI-compatible) adapter, streaming | ✅ done (v0.3.0) |
+| 4 | **Agent loop** — Perceive → Recall → Reason → Store | ✅ done (v0.4.0) |
+| 5 | **TUI** — Bubble Tea + Glamour (default front-end) | ✅ done (v0.5.0) |
+
+**Iteration 1 is complete** — Talunor is a working memory-augmented conversational
+agent. Iteration 2 gives it the ability to *act*.
+
+### Iteration 2 — tools & actions
+
+| Layer | What | Status |
+|-------|------|--------|
+| 6 | **Providers & config** — OpenRouter provider, `llm.FromEnv()`, `.env` loader | ✅ done (v0.6.0) |
+| 7 | **Tools & ReAct loop** — tool registry, native tool-calling, act→observe loop | ✅ done (v0.7.0) |
+| 8 | **Approval gate** — human-in-the-loop y/n for side-effecting tools (guardrail) | ✅ done (v0.8.0) |
+| 9 | **Sandboxed `bash`** — pluggable sandbox (namespaces/nerdctl), behind the gate | ✅ done (v0.9.0) |
+| 10 | **`web_fetch`** — the network opt-IN: SSRF-guarded HTTP fetch, per-URL approval | ✅ done (v0.10.0) |
+| 11 | **Memory integrity & observability** — embedding-provenance guard + `--reembed`, inline `/debug` trace | ✅ done (v0.11.0) |
+
+### Iteration 3 — planning & guardrails
+
+| Layer | What | Status |
+|-------|------|--------|
+| 12 | **Policy engine** — a `Policy` consulted before each tool call (auto-allow / approve / deny), a `plan` vocabulary, YAML rule files via `TALUNOR_POLICY` | ✅ done (v0.12.0) |
+| 13 | **Explicit planner** — an opt-in plan-then-execute turn: an inspectable, human-approved plan, then ReAct execution *capped to the plan's tools* (`TALUNOR_PLANNER`, `TALUNOR_APPROVAL`) | ✅ done (v0.13.0) |
+
+**Iteration 3 is complete** — Talunor now has both a guardrail (policy) and
+forethought (planner). Deferred to later increments: `/edit-plan`, semantic
+deviation detection, and automatic re-planning.
+
+### Layer 14 — model calibration (a bridge to Iteration 4)
+
+| Layer | What | Status |
+|-------|------|--------|
+| 14 | **Model calibration** — a deterministic reliability canary (`internal/calibration`, `cmd/calibrate`): a YAML suite of known-answer scenarios scored with machine-checkable matchers (no LLM judge), with pass-rate/consistency, baseline **drift** detection, and optional AES-256-GCM encryption of private suites | ✅ done (v0.14.0) |
+
+Motivated by the review episode behind Lesson 15: before an agent *learns* from a
+model (Iteration 4), you must *measure* whether that model is reliable — and catch
+silent drift when it degrades.
+
+### Iteration 4 — learning
+
+| Layer | What | Status |
+|-------|------|--------|
+| 15 | **Schema versioning & migrations** — an ordered, append-only migration runner (`internal/memory`), so the memory schema can evolve safely as learning adds columns; zero behaviour change | ✅ done (v0.15.0) |
+| 16 | **Fact provenance & confidence** — every memory records its source + a confidence; a learned fact's confidence is scaled by the model's calibration (`TALUNOR_MODEL_CONFIDENCE`), so hallucinations don't gain established authority | ✅ done (v0.16.0) |
+| 17 | **Salience / decay / consolidation** — recalled facts are reinforced, a restatement consolidates (and, from independent sources, strengthens confidence) instead of duplicating, and neglected facts decay and soft-fade from recall | ✅ done (v0.17.0) |
+| 18 | **Async reflection** — learning (the second LLM call) runs on a single background worker off the turn's critical path; `Agent.Close()` drains it on shutdown so in-flight learning isn't lost | ✅ done (v0.18.0) |
+
+Learning is **informed by calibration** (Layer 14): a fact from an unreliable or
+uncalibrated model should not silently gain the authority of an established one.
+
+### Iteration 5 — truthful memory
+
+| Layer | What | Status |
+|-------|------|--------|
+| 20 | **Learn from action + evidence trail** — reflection also learns from tool observations (tagged `model_inferred`, or `tool_observed` only from a `Verified` tool — honest by default), records an auditable evidence trail (which turns/sources support a fact; `/why <id>`), on an append-only migration | ✅ done (v0.19.0) |
+| 21 | **Contradiction & supersession** — a new fact supersedes an old, incompatible one, governed by an explicit, per-domain **trust model** (`memory.Supersedes`); the model never overrides the user, a `Verified` tool can retire a stale belief; soft (reversible, auditable) | ✅ done (v0.20.0) |
+| 22 | **Hybrid recall** — vector ∪ lexical (FTS5), so exact identifiers / rare terms aren't missed | ⏳ planned |
+
+The thesis: Iteration 4 made memory *learn, retain, and forget*; Iteration 5 makes it
+stay **true** — learn from its own actions, justify its beliefs, and correct itself.
+
+</details>
 
 ## Lessons learned so far
 

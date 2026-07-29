@@ -639,5 +639,12 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   `.env`** — `go test` doesn't load it; export it from the shell. Also fixed env-doc drift:
   `TALUNOR_SUPERSEDE_MAX_DISTANCE` was missing from the README table (all 31 user-facing vars
   now in README + AGENTS + `.env_sample`; the 7 internal sandbox handshake vars in none).
+- **v0.20.5 (docs)** = **README restructured for a first-time reader** (no code). Order is now
+  intro (+ the course callout, moved out of the version banner) → merged Philosophy/Why →
+  Demo (+ a link to `images/demo_transcript.md`, previously referenced nowhere) → Requirements
+  → Quickstart → **`## Using Talunor`** (new parent for the commands/providers/tools/`bash`/
+  `web_fetch`/memory/env `###` sections, which the Quickstart move had orphaned) → What's new →
+  Architecture → Status (**tables folded into `<details>`**). **Keep the banner to the current
+  release** — it had accreted five versions of history; the archive is CHANGELOG.md.
 - **Next — open threads (documented, not started):** Layer 22 (hybrid recall, vector ∪ FTS5);
   calibration→policy wiring. Same per-layer checkpoint rhythm.
