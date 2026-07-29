@@ -42,6 +42,12 @@ const (
 	// CapDocker is a container runtime on PATH (nerdctl or docker) for the OCI
 	// sandbox backend.
 	CapDocker = "docker"
+	// CapFTS5 is SQLite's FTS5 module, which mattn/go-sqlite3 compiles in only
+	// under `-tags sqlite_fts5`. Without it, hybrid recall (LAYER 22) has no
+	// lexical arm — a capability that depends on how the binary was BUILT rather
+	// than on what the machine has installed, and therefore especially easy to
+	// lose without noticing.
+	CapFTS5 = "fts5"
 )
 
 // EnvRequire names the variable holding the comma-separated capability list.

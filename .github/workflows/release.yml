@@ -47,7 +47,8 @@ jobs:
           LDFLAGS="-s -w \
             -X github.com/lao-tseu-is-alive/Talunor/internal/version.Commit=$(git rev-parse --short HEAD) \
             -X github.com/lao-tseu-is-alive/Talunor/internal/version.Date=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-          go build -ldflags "${LDFLAGS}" -o talunor-linux-amd64 ./cmd/talunor
+          # -tags sqlite_fts5: hybrid recall needs FTS5 in the driver (see Makefile GOTAGS).
+          go build -tags sqlite_fts5 -ldflags "${LDFLAGS}" -o talunor-linux-amd64 ./cmd/talunor
 
       # Assemble a self-contained bundle: binary + extensions + model + a run.sh
       # that wires the ext/model paths relative to the extracted folder.

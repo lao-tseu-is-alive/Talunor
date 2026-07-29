@@ -46,10 +46,18 @@ jobs:
       # drift guards (fetch targets, checksums, atlas-check, readme-check,
       # lessons-check). Running it here means a PR that breaks formatting or lets
       # the docs/atlas/lessons drift fails CI, not just a local pre-tag run.
+      # TALUNOR_REQUIRE names the capabilities this runner must be able to
+      # exercise (internal/testenv): with `ext` and `fts5` declared, a fetch that
+      # silently failed or a driver built without FTS5 turns the affected tests
+      # RED instead of letting them skip behind a green "ok".
       - name: Release guards (gofmt + vet + tests + drift alarms)
         run: make release-check
+        env:
+          TALUNOR_REQUIRE: ext,fts5
 
       # The race detector isn't part of release-check (it changes the test build);
       # run it separately so data races surface in CI.
       - name: Test with the race detector
-        run: go test -race ./...
+        run: go test -tags sqlite_fts5 -race ./...
+        env:
+          TALUNOR_REQUIRE: ext,fts5

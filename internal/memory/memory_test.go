@@ -31,6 +31,28 @@ func testConfig(t *testing.T) memory.Config {
 	return cfg
 }
 
+// testStore opens an ephemeral store for a test, closing it at the end.
+func testStore(t *testing.T) *memory.Store {
+	t.Helper()
+	return testStoreWithConfig(t, nil)
+}
+
+// testStoreWithConfig is testStore with a hook to adjust the config first (a
+// tighter forget floor, a shorter half-life, vector-only recall …).
+func testStoreWithConfig(t *testing.T, tweak func(*memory.Config)) *memory.Store {
+	t.Helper()
+	cfg := testConfig(t)
+	if tweak != nil {
+		tweak(&cfg)
+	}
+	store, err := memory.Open(cfg)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+	return store
+}
+
 var corpus = []string{
 	"The cat slept on the warm windowsill all afternoon.",
 	"Go compiles to a single static binary with no runtime dependencies.",

@@ -14,6 +14,78 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.21.0] - 2026-07-29 — Layer 22: hybrid recall (vector ∪ lexical)
+
+Iteration 5 continues. Memory could learn from action (Layer 20) and correct
+itself (Layer 21), but it could still only *find* things by meaning — and meaning
+is exactly what an identifier does not have. `AFF-2024-113` and `AFF-2024-114`
+sit at almost the same point in embedding space, and neither is near the sentence
+you type to look them up. Recall now runs two arms and fuses them.
+
+### Added
+
+- **The lexical arm** (`internal/memory/lexical.go`): an SQLite **FTS5**
+  external-content index over `memories.content` (`content='memories'`, so the
+  text is never duplicated), kept in sync by the standard FTS5 triggers and
+  queried with **BM25** ranking. `matchExpression` turns arbitrary user text into
+  a safe MATCH expression — tokenise, drop one-character tokens, quote each term
+  (which makes every FTS5 operator inert) and join with `OR`, letting BM25's IDF
+  do the discriminating. The tokenizer is `unicode61 remove_diacritics 2`:
+  deliberately no stemmer, because this memory holds French and English side by
+  side.
+- **The fusion** (`internal/memory/hybrid.go`): **reciprocal rank fusion**,
+  `Σ 1/(60+rank)`. A memory found by both arms accumulates from both, so
+  corroboration wins with nobody choosing a weight. `Hit` gains
+  `VectorRank`/`LexicalRank`/`BM25` with `HasVector()`/`FromLexical()`.
+- **Observability**: `/debug` prints each hit's provenance in the retrieval sense
+  — `v#1 d=0.2314 l#3` — and `/mem` and `make doctor` report the recall mode.
+- **`TALUNOR_RECALL`** (`hybrid`, the default, or `vector`), and the new
+  `fts5` capability in `internal/testenv`, declared by CI
+  (`TALUNOR_REQUIRE=ext,fts5`).
+
+### Changed
+
+- **`-tags sqlite_fts5` is now part of every supported build** (Makefile
+  `GOTAGS`, Dockerfile, `release.yml`, CI). `mattn/go-sqlite3` compiles FTS5 in
+  only under that tag. A build without it keeps working: `Store.Lexical()`
+  reports `unavailable`, recall is vector-only, and both doctor and `/mem` say
+  so.
+- **`RecallForConsolidation` stays vector-only** — see lesson 3 below.
+
+### Lessons learned
+
+1. **You cannot average a cosine distance and a BM25 score.** One is bounded in
+   [0,2] and means "angle"; the other is negative, unbounded and corpus-relative.
+   Any weighted blend of the two is a knob someone tunes forever. RRF throws the
+   scores away and keeps the orders, which is why it needs no tuning — but it has
+   a corollary that is easy to miss: **with only one arm, RRF is not the identity
+   function.** Ranking by `1/(60+rank)·confidence·salience` re-orders results
+   compared to `(1-distance)·confidence·salience`, because the two relevance
+   terms fall off differently. A vector-only build must therefore keep the old
+   formula verbatim, or this layer silently changes recall for everyone who never
+   asked for hybrid.
+2. **A derived index does not belong in a migration.** Every byte of the FTS5
+   index is rebuildable from `memories`, and a binary built without the tag
+   *cannot create it at all* — so a migration would make `schema_version` claim
+   something the database may be unable to honour. It is created idempotently at
+   Open instead, like `vector_init`, with `'rebuild'` backfilling any database
+   written before this layer. Migrations stay reserved for source data.
+3. **Retrieval is hybrid; identity is metric.** Wiring the lexical arm into
+   *every* recall broke reflection: `RecallForConsolidation` asks "do I already
+   hold this fact?", and a lexical hit has no coordinate in the cosine radius
+   that question is expressed in. Two sentences sharing the rare token `NX-9000`
+   can state entirely different things — so consolidation began merging new facts
+   onto merely word-similar ones and stopped storing them. The fix is a boundary,
+   not a threshold: hybrid answers *"what might help me answer this?"*,
+   vector-only answers *"is this the same thing?"*. It was caught by an existing
+   Layer-20 test, which is the best argument for keeping old tests honest.
+4. **The driver's build tags are part of the feature contract.** This is the
+   first Talunor capability that depends on how the *binary was compiled* rather
+   than on what the machine has installed — invisible in the source, invisible in
+   `go.mod`, and silent when missing. v0.20.4's capability contract turned out to
+   be the right groundwork one release early: `TALUNOR_REQUIRE=fts5` makes a
+   tagless build fail the tests that matter instead of skipping them.
+
 ## [0.20.5] - 2026-07-29 — README: a reading order, not an archive
 
 Docs only, no code. The front page had grown by accretion — every release

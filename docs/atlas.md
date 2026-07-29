@@ -72,6 +72,9 @@ Talunor/
 │   │   │                     #       Open flags OK/Stale/Unknown; ReEmbed re-vectorises all rows.
 │   │   ├── migrate.go        #     LAYER 15: ordered append-only migration runner; schema_version in meta;
 │   │   │                     #       migration 1 = baseline; 2 = provenance/confidence; 3 = salience (L17).
+│   │   ├── lexical.go        #     LAYER 22: the FTS5/BM25 arm — external-content index + sync triggers,
+│   │   │                     #       matchExpression (sanitises text into a quoted OR-expr), LexicalStatus.
+│   │   ├── hybrid.go         #     LAYER 22: reciprocal-rank fusion of the two arms; shared row scanning.
 │   │   ├── salience.go       #     LAYER 17: lazy decay (effective salience at read time), Reinforce /
 │   │   │                     #       ReinforceFact (confidence only on independent evidence), forget floor.
 │   │   ├── supersede.go      #     LAYER 21: the TRUST MODEL (Supersedes — who may retire whom) + soft-supersede (migration 5).
@@ -85,6 +88,9 @@ Talunor/
 │   │   ├── salience_db_test.go #    Tests (reinforce bumps salience; confidence only on evidence; soft-forget).
 │   │   ├── evidence_test.go  #     Tests (evidence trail order/sources/NULL turn; MemoryByID).
 │   │   ├── supersede_test.go #     Tests (the trust model table; soft-supersede excludes from recall, self-supersede rejected).
+│   │   ├── hybrid_test.go    #     LAYER 22 tests (identifier vectors miss; supersession/soft-forget/forget
+│   │   │                     #       respected by the lexical arm; consolidation stays vector-only).
+│   │   ├── fusion_internal_test.go # Pure-fn tests (MATCH sanitising, RRF, one-arm compatibility) — no DB/ext.
 │   │   └── memory_test.go    #     Tests (semantic recall, thresholding, assistant-turn exclusion).
 │   │
 │   ├── llm/                  # LAYER 3 / 6: LLM provider abstraction + OpenAI-compatible adapter.
@@ -185,7 +191,8 @@ Talunor/
 │   │   └── version.go      #     Version const (0.MINOR.PATCH); Commit/Date injected via -ldflags.
 │   │
 │   └── testenv/            # Test-only: turn "I can't test this here" into a per-host decision.
-│       ├── testenv.go      #     Require(t,cap,err) — skips by default, FAILS when TALUNOR_REQUIRE names the capability.
+│       ├── testenv.go      #     Require(t,cap,err) — skips by default, FAILS when TALUNOR_REQUIRE names the
+│       │                   #       capability (ext / sandbox / docker / fts5).
 │       └── testenv_test.go #     Parsing of the TALUNOR_REQUIRE list (all/case/spaces/no-prefix-match).
 │
 ├── docs/                  # Documentation.

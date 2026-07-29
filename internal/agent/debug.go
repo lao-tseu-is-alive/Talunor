@@ -76,7 +76,27 @@ func (a *Agent) emitRecallDebug(ctx context.Context, out chan<- llm.Chunk, input
 	a.sendDebug(ctx, out, "recall: q=%q k=%d max≤%.2f → %d hit(s)",
 		oneLine(input, 50), a.cfg.RecallK, a.cfg.RecallMaxDistance, len(hits))
 	for _, h := range hits {
-		a.sendDebug(ctx, out, "    #%d d=%.4f score=%.3f sal=%.2f %s %q",
-			h.ID, h.Distance, h.Score, h.Salience, h.Kind, oneLine(h.Content, 50))
+		a.sendDebug(ctx, out, "    #%d %s score=%.3f sal=%.2f %s %q",
+			h.ID, recallArms(h), h.Score, h.Salience, h.Kind, oneLine(h.Content, 50))
 	}
+}
+
+// recallArms renders where a hit came from (LAYER 22). A hybrid result is only
+// readable if you can see which arm found what: "v#1 d=0.23" is a semantic
+// match, "l#2" is a wording match, and both together is corroboration.
+func recallArms(h memory.Hit) string {
+	var b strings.Builder
+	if h.HasVector() {
+		fmt.Fprintf(&b, "v#%d d=%.4f", h.VectorRank, h.Distance)
+	}
+	if h.FromLexical() {
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		fmt.Fprintf(&b, "l#%d", h.LexicalRank)
+	}
+	if b.Len() == 0 {
+		return "?"
+	}
+	return b.String()
 }

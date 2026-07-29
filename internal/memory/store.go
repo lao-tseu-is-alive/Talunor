@@ -49,7 +49,18 @@ type Config struct {
 	// ForgetFloor is the effective salience below which a memory is dropped from
 	// recall (soft forgetting — the row survives). 0 → a sensible package default.
 	ForgetFloor float64
+
+	// VectorOnly turns the lexical arm of recall off (LAYER 22), leaving pure
+	// KNN retrieval. The zero value is hybrid recall, which is what you want; set
+	// it from TALUNOR_RECALL=vector to reproduce Layer-17 behaviour, or when a
+	// corpus is so lexically noisy that BM25 hurts more than it helps.
+	VectorOnly bool
 }
+
+// hybridEnabled reports whether recall should run its lexical arm at all. It
+// answers the operator's intent only — whether the arm is actually usable is a
+// property of the build (see Store.initLexical).
+func (c Config) hybridEnabled() bool { return !c.VectorOnly }
 
 // DefaultConfig returns a Config pointing at the artifacts fetched by
 // `make deps`. Every path can be overridden by an environment variable so the
@@ -69,6 +80,8 @@ func DefaultConfig() Config {
 		// Retention knobs (Layer 17); 0 lets the store fall back to its defaults.
 		SalienceHalfLife: envDurationOr("TALUNOR_SALIENCE_HALFLIFE", 0),
 		ForgetFloor:      envFloatOr("TALUNOR_FORGET_FLOOR", 0),
+		// Retrieval mode (Layer 22): hybrid unless explicitly asked otherwise.
+		VectorOnly: strings.EqualFold(strings.TrimSpace(os.Getenv("TALUNOR_RECALL")), "vector"),
 	}
 }
 
@@ -132,6 +145,7 @@ type Store struct {
 	cfg        Config
 	dim        int              // embedding dimension, discovered from the model at open time.
 	provenance ProvenanceStatus // embedding-stack fingerprint check, set at Open.
+	lexical    LexicalStatus    // LAYER 22: state of the lexical (FTS5) arm, set at Open.
 }
 
 // registerDriver registers the custom driver exactly once. The ConnectHook
@@ -243,6 +257,11 @@ func (s *Store) bootstrap(ctx context.Context) error {
 	// detected instead of silently degrading recall (see provenance.go).
 	if err := s.initProvenance(ctx); err != nil {
 		return fmt.Errorf("provenance check: %w", err)
+	}
+	// LAYER 22: build the lexical index beside the vector one. A build without
+	// FTS5 leaves recall vector-only and says so — it does not fail to open.
+	if err := s.initLexical(ctx); err != nil {
+		return fmt.Errorf("lexical index: %w", err)
 	}
 	return nil
 }

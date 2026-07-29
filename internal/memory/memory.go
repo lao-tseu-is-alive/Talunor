@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
 	"time"
 )
 
@@ -106,9 +105,39 @@ type Memory struct {
 // (decayed) salience together (larger = ranked higher).
 type Hit struct {
 	Memory
+	// Distance is the cosine distance from the query embedding, or
+	// noVectorDistance when the vector arm did not retrieve this memory (LAYER
+	// 22) — ask HasVector rather than testing the number.
 	Distance float64
-	Score    float64
+	// Score ranks the hit within one recall: relevance × confidence × effective
+	// salience. What "relevance" means depends on which arms ran — see fuse.
+	Score float64
+
+	// LAYER 22 — which arm(s) found this memory, and where in each. Zero means
+	// "not retrieved by that arm"; both are 1-based. They are the honest way to
+	// read a hybrid result: a memory at rank 1 by meaning and rank 40 by wording
+	// is a different kind of hit from one both arms put first.
+	VectorRank  int
+	LexicalRank int
+	// BM25 is the lexical arm's raw score (negative; more negative = better).
+	BM25 float64
+
+	// effSalience is the decayed salience computed during this recall. Unexported:
+	// it is an intermediate of ranking, not part of the memory.
+	effSalience float64
 }
+
+// decayReference is the instant a memory's salience decays from: when it was
+// last recalled, or when it was created if it never has been.
+func (h Hit) decayReference() time.Time {
+	if h.LastAccessed.IsZero() {
+		return h.CreatedAt
+	}
+	return h.LastAccessed
+}
+
+// EffectiveSalience returns the decayed salience this hit was ranked with.
+func (h Hit) EffectiveSalience() float64 { return h.effSalience }
 
 // Remember stores a conversation turn (or doc chunk), deriving its provenance and
 // base confidence from the role (a user turn is user-stated; an assistant turn is
@@ -179,7 +208,7 @@ func (s *Store) remember(ctx context.Context, kind Kind, role, content string, p
 // which keeps it a pure read on the pinned single connection. This is the
 // semantic-retrieval step injected before each LLM call.
 func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance float64) ([]Hit, error) {
-	return s.recall(ctx, query, k, maxDistance, false)
+	return s.recall(ctx, query, k, maxDistance, recallOptions{lexical: true})
 }
 
 // RecallForConsolidation is Recall for the reflection/consolidation path: it is
@@ -191,14 +220,85 @@ func (s *Store) Recall(ctx context.Context, query string, k int, maxDistance flo
 // instead, contradicting the documented promise that "a restatement revives it".
 // Callers should reinforce whatever hit they get back (which resets the decay
 // clock and lifts the fact back above the floor).
+// It is also deliberately VECTOR-ONLY (LAYER 22). Hybrid recall answers "what
+// might help me answer this?", where a lexical match on an unusual word is a
+// welcome extra candidate. Consolidation asks a different question — "is this
+// the SAME fact as one I already hold?" — and that is a question about semantic
+// distance, which BM25 cannot answer: two sentences sharing the words "capital"
+// and "France" may state opposite things, and the caller's maxDistance is a
+// cosine radius that a lexical hit has no coordinate in. Letting word overlap
+// nominate consolidation candidates made reflection consolidate onto unrelated
+// facts instead of storing new ones. Retrieval is hybrid; IDENTITY stays metric.
 func (s *Store) RecallForConsolidation(ctx context.Context, query string, k int, maxDistance float64) ([]Hit, error) {
-	return s.recall(ctx, query, k, maxDistance, true)
+	return s.recall(ctx, query, k, maxDistance, recallOptions{includeForgotten: true})
 }
 
 // recall is the shared implementation of Recall and RecallForConsolidation.
 // includeForgotten decides whether memories below the forget floor are kept
 // (consolidation) or dropped (the prompt path — the default via Recall).
-func (s *Store) recall(ctx context.Context, query string, k int, maxDistance float64, includeForgotten bool) ([]Hit, error) {
+// LAYER 22: recall now has two arms. The vector arm below is unchanged; the
+// lexical arm (lexical.go) runs beside it and the two are fused (hybrid.go).
+// With no lexical arm — a build without FTS5, or TALUNOR_RECALL=vector — this is
+// exactly the Layer 17 path, including its ranking.
+func (s *Store) recall(ctx context.Context, query string, k int, maxDistance float64, opt recallOptions) ([]Hit, error) {
+	vector, err := s.vectorCandidates(ctx, query, k, maxDistance, opt.includeForgotten)
+	if err != nil {
+		return nil, err
+	}
+	var lexical []Hit
+	if opt.lexical {
+		lexical, err = s.lexicalCandidates(ctx, query, k*lexicalCandidateFactor)
+		if err != nil {
+			return nil, err
+		}
+		lexical = s.keepRecallable(lexical, opt.includeForgotten)
+	}
+	return fuse(vector, lexical, k), nil
+}
+
+// recallOptions are the two axes on which the callers of recall differ.
+type recallOptions struct {
+	// includeForgotten keeps memories whose salience decayed below the forget
+	// floor (the consolidation path — see RecallForConsolidation).
+	includeForgotten bool
+	// lexical runs the BM25 arm beside the vector one. On for the prompt path,
+	// off for anything asking whether two memories are the SAME.
+	lexical bool
+}
+
+// keepRecallable applies the filters that cannot be expressed in the arm's SQL:
+// assistant turns pollute recall, and a memory whose salience has decayed below
+// the forget floor is soft-forgotten (hidden from the prompt path, still visible
+// to consolidation). It also stamps each hit's effective salience, which the
+// ranking then reuses.
+//
+// The vector arm inlines these checks because it must also honour the distance
+// threshold as it streams; the lexical arm has no such threshold, so it filters
+// here. Both end up with the same guarantees — that is the point of one shared
+// helper: a memory the user soft-forgot must not come back through a side door
+// just because it happens to contain the word they typed.
+func (s *Store) keepRecallable(hits []Hit, includeForgotten bool) []Hit {
+	now := time.Now().UTC()
+	halfLife := s.resolvedHalfLife()
+	forgetFloor := s.resolvedForgetFloor()
+
+	kept := hits[:0]
+	for _, h := range hits {
+		if h.Role == roleAssistant {
+			continue
+		}
+		h.effSalience = effectiveSalience(h.Salience, h.decayReference(), now, halfLife)
+		if h.effSalience < forgetFloor && !includeForgotten {
+			continue
+		}
+		kept = append(kept, h)
+	}
+	return kept
+}
+
+// vectorCandidates is the KNN arm: the nearest neighbours of the query
+// embedding, gated by maxDistance.
+func (s *Store) vectorCandidates(ctx context.Context, query string, k int, maxDistance float64, includeForgotten bool) ([]Hit, error) {
 	qvec, err := s.Embed(ctx, query)
 	if err != nil {
 		return nil, err
@@ -221,21 +321,10 @@ func (s *Store) recall(ctx context.Context, query string, k int, maxDistance flo
 	}
 	defer rows.Close()
 
-	now := time.Now().UTC()
-	halfLife := s.resolvedHalfLife()
-	forgetFloor := s.resolvedForgetFloor()
-
 	candidates := make([]Hit, 0, k*recallCandidateFactor)
 	for rows.Next() {
-		var (
-			h            Hit
-			kind         string
-			prov         string
-			lastAccessed sql.NullString
-			createdAt    string
-		)
-		if err := rows.Scan(&h.ID, &kind, &h.Role, &h.Content, &prov, &h.Confidence,
-			&h.Salience, &lastAccessed, &h.AccessCount, &createdAt, &h.Distance); err != nil {
+		h, err := scanHit(rows, scanVector)
+		if err != nil {
 			return nil, err
 		}
 		// Rows are ordered nearest-first, so the first over-threshold hit means
@@ -243,46 +332,14 @@ func (s *Store) recall(ctx context.Context, query string, k int, maxDistance flo
 		if maxDistance > 0 && h.Distance > maxDistance {
 			break
 		}
-		// Skip assistant turns: they pollute recall (see roleAssistant).
-		if h.Role == roleAssistant {
-			continue
-		}
-		h.Kind = Kind(kind)
-		h.Provenance = Provenance(prov)
-		if ts, err := time.Parse(sqliteTimeLayout, createdAt); err == nil {
-			h.CreatedAt = ts
-		}
-		if lastAccessed.Valid {
-			if ts, err := time.Parse(sqliteTimeLayout, lastAccessed.String); err == nil {
-				h.LastAccessed = ts
-			}
-		}
-		// Decay salience lazily from when the memory was last touched, then drop it
-		// if it has faded below the forget floor (soft forgetting).
-		ref := h.LastAccessed
-		if ref.IsZero() {
-			ref = h.CreatedAt
-		}
-		eff := effectiveSalience(h.Salience, ref, now, halfLife)
-		if eff < forgetFloor && !includeForgotten {
-			continue // soft-forgotten: hidden from the prompt path, kept for consolidation.
-		}
-		// Combined recall score: relevance × trust × how-much-it-matters-now.
-		h.Score = (1 - h.Distance) * h.Confidence * eff
 		candidates = append(candidates, h)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	// Rank by combined score (relevance was the gate; salience/confidence break
-	// ties within the relevant neighbourhood), then keep the top k.
-	sort.SliceStable(candidates, func(i, j int) bool {
-		return candidates[i].Score > candidates[j].Score
-	})
-	if len(candidates) > k {
-		candidates = candidates[:k]
-	}
-	return candidates, nil
+	// Assistant turns, decay and soft forgetting are applied identically to both
+	// arms (see keepRecallable); ranking happens in fuse.
+	return s.keepRecallable(candidates, includeForgotten), nil
 }
 
 // Forget deletes the memory with the given id. It reports whether a row was

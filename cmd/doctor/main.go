@@ -68,6 +68,7 @@ func run() error {
 	}
 	fmt.Printf("• embedding model: %s (dim %d), provenance: %s\n",
 		store.EmbedModelName(), store.Dim(), store.Provenance())
+	fmt.Printf("• recall: %s\n", store.Lexical())
 
 	// Long-term memory: Remember embeds + stores in one call.
 	fmt.Println("• remembering corpus…")

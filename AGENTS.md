@@ -85,6 +85,22 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    named function deciding who may retire whom (default: user/Verified-tool
                    authoritative, model_inferred retires nothing; swap it for another agent).
                    Store.Supersede soft-marks superseded_by (migration 5); Recall excludes them.
+                   lexical.go + hybrid.go (LAYER 22): HYBRID RECALL. lexical.go owns the
+                   FTS5 arm — an external-content index (content='memories') created
+                   idempotently at Open (NOT a migration: it is derived data), kept in
+                   sync by SQL triggers, queried with bm25(); matchExpression sanitises
+                   user text into a quoted OR-expression (raw text would hit FTS5's own
+                   query syntax). LexicalStatus = ok/unavailable/disabled: a build
+                   without `-tags sqlite_fts5` has no fts5 module and degrades to
+                   vector-only, reported by doctor + /mem. hybrid.go fuses the arms by
+                   RECIPROCAL RANK FUSION (rrfK=60) because cosine distance and BM25
+                   share no scale; with one arm the Layer-17 formula
+                   (1-d)·confidence·eff-salience is kept verbatim, so a vector-only
+                   build ranks exactly as before. Hit carries VectorRank/LexicalRank.
+                   **Recall is hybrid; RecallForConsolidation stays VECTOR-ONLY** —
+                   consolidation/supersession ask "is this the SAME fact?", a metric
+                   question BM25 cannot answer (letting it in made reflection
+                   consolidate onto merely word-similar facts). TALUNOR_RECALL=vector.
 internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenRouter),
                    FromEnv() provider selection, NewOpenRouter
 internal/config/   minimal dependency-free .env loader (real env wins)
@@ -253,6 +269,7 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_SALIENCE_HALFLIFE` | Layer 17 decay half-life for un-recalled memories (Go duration) | `720h` (30d) |
 | `TALUNOR_FORGET_FLOOR` | effective salience below which a memory is soft-forgotten from recall | `0.05` |
 | `TALUNOR_SUPERSEDE_MAX_DISTANCE` | Layer 21 cosine radius the arbiter searches for a contradiction candidate (wider than dedup) | `0.35` |
+| `TALUNOR_RECALL` | Layer 22 retrieval mode: `hybrid` (vector ∪ FTS5/BM25) or `vector` (lexical arm off) | `hybrid` |
 | `TALUNOR_TOOLS` | `0` disables tools (model without tool-calling support) | `1` |
 | `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow/prompt/deny; `docs/policy.sample.yaml`); unset = default per-tool gate | — |
 | `TALUNOR_PLANNER` | `1` plans before acting (inspectable, approved plan → ReAct execution capped to the plan's tools) | `0` |
@@ -271,7 +288,7 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_DB` | database file | `$XDG_DATA_HOME/talunor/talunor.db` → `~/.local/share/talunor/talunor.db` |
 | `TALUNOR_VECTOR_EXT` / `TALUNOR_AI_EXT` / `TALUNOR_EMBED_MODEL` | ext/model paths | under `ext/` |
 | `CALIBRATION_KEY` | passphrase to decrypt / `calibrate encrypt` a private calibration suite (Layer 14) | — |
-| `TALUNOR_REQUIRE` | **tests only** (`internal/testenv`): capabilities this host must exercise — `ext`,`sandbox`,`docker`,`all`. A missing one FAILS instead of skipping. NOT read from `.env` (`go test` doesn't load it) — export it | — |
+| `TALUNOR_REQUIRE` | **tests only** (`internal/testenv`): capabilities this host must exercise — `ext`,`sandbox`,`docker`,`fts5`,`all`. A missing one FAILS instead of skipping. NOT read from `.env` (`go test` doesn't load it) — export it | — |
 
 Dev machine has Ollama running; `qwen3:latest` is a **thinking model** (see
 gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
@@ -294,6 +311,15 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
    storable and usable as a query vector. `embedding_type` is REQUIRED.
 5. **One connection.** Model/embedding-context/`vector_init` are per-connection
    state, so `Store` pins `db.SetMaxOpenConns(1)`.
+
+### SQLite driver build tags
+6b. **FTS5 is not in the default driver build.** `mattn/go-sqlite3` compiles SQLite
+    itself, and FTS5 only under **`-tags sqlite_fts5`** (the default build has FTS3/4,
+    no `fts5` module, no `bm25()`). Hybrid recall's lexical arm needs it, so the tag is
+    in the Makefile (`GOTAGS`), the Dockerfile, `release.yml` and CI. A build without it
+    still runs — `Store.Lexical()` reports `unavailable` and recall is vector-only. When
+    adding a `go` command anywhere, pass `$(GOFLAGS_TAGS)`: **the driver's build tags are
+    part of the feature contract, as load-bearing as the schema.**
 
 ### LLM
 6. **Thinking models split reasoning from answer.** Ollama returns qwen3's
@@ -646,5 +672,16 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   `web_fetch`/memory/env `###` sections, which the Quickstart move had orphaned) → What's new →
   Architecture → Status (**tables folded into `<details>`**). **Keep the banner to the current
   release** — it had accreted five versions of history; the archive is CHANGELOG.md.
-- **Next — open threads (documented, not started):** Layer 22 (hybrid recall, vector ∪ FTS5);
-  calibration→policy wiring. Same per-layer checkpoint rhythm.
+- **Layer 22 (done): v0.21.0** = **hybrid recall (vector ∪ FTS5/BM25)** — Iteration 5 continues.
+  `internal/memory/lexical.go` (FTS5 external-content index + triggers, created at Open, NOT a
+  migration — it is derived data that a build without the tag cannot honour; `matchExpression`
+  sanitises text into a quoted OR-expression; `LexicalStatus` ok/unavailable/disabled) +
+  `hybrid.go` (**reciprocal rank fusion**, rrfK=60 — cosine distance and BM25 share no scale, so
+  fuse the ORDERS; with a single arm the Layer-17 score is kept verbatim so vector-only builds
+  rank exactly as before). `Hit.VectorRank/LexicalRank/BM25` + `HasVector()/FromLexical()`;
+  `/debug` shows `v#1 d=0.23 l#2`, `/mem` + doctor show the mode. **Boundary that cost a
+  regression: `RecallForConsolidation` stays VECTOR-ONLY** — retrieval is hybrid, IDENTITY is
+  metric. Needs **`-tags sqlite_fts5`** (Makefile GOTAGS + Dockerfile + release.yml + CI, which
+  now also sets `TALUNOR_REQUIRE=ext,fts5`). Knob `TALUNOR_RECALL=hybrid|vector`. Lesson 23 to write.
+- **Next — open threads (documented, not started):** calibration→policy wiring;
+  the executed plan as a learning source. Same per-layer checkpoint rhythm.

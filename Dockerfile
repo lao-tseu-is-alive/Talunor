@@ -49,7 +49,11 @@ RUN mkdir -p /stage-data
 ARG COMMIT=docker
 ARG BUILD_DATE=unknown
 ENV CGO_ENABLED=1
-RUN go build \
+# -tags sqlite_fts5 compiles SQLite's FTS5 module into the driver: hybrid recall's
+# lexical arm (LAYER 22) needs fts5 + bm25. Without it the image would still run,
+# with recall silently reduced to vector-only — so the tag belongs in every
+# shipped build, exactly like the Makefile's GOTAGS.
+RUN go build -tags sqlite_fts5 \
       -ldflags "-s -w \
         -X github.com/lao-tseu-is-alive/Talunor/internal/version.Commit=${COMMIT} \
         -X github.com/lao-tseu-is-alive/Talunor/internal/version.Date=${BUILD_DATE}" \

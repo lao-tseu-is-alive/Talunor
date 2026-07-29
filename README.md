@@ -264,6 +264,7 @@ lives in the same directory.
 | `TALUNOR_SALIENCE_HALFLIFE` | how long an un-recalled memory takes to lose half its salience (Go duration, Layer 17) | `720h` (30d) |
 | `TALUNOR_FORGET_FLOOR` | effective salience below which a memory is soft-forgotten from recall (row survives) | `0.05` |
 | `TALUNOR_SUPERSEDE_MAX_DISTANCE` | cosine radius searched for a contradicting fact the new one may supersede (Layer 21; wider than dedup) | `0.35` |
+| `TALUNOR_RECALL` | retrieval mode: `hybrid` (vector + FTS5/BM25) or `vector` to disable the lexical arm (Layer 22) | `hybrid` |
 | `TALUNOR_TOOLS` | set `0` to disable tools (model without tool support) | `1` |
 | `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow / prompt / deny); unset = default per-tool gate | — |
 | `TALUNOR_PLANNER` | set `1` to plan before acting (inspectable, approved plan, then capped ReAct execution) | `0` |
@@ -282,7 +283,7 @@ lives in the same directory.
 | `TALUNOR_DB` | database file | per-user data dir (above) |
 | `TALUNOR_VECTOR_EXT` / `TALUNOR_AI_EXT` / `TALUNOR_EMBED_MODEL` | extension / model paths | under `ext/` |
 | `CALIBRATION_KEY` | passphrase to decrypt (and `calibrate encrypt`) a private calibration suite | — |
-| `TALUNOR_REQUIRE` | **tests only** — capabilities this host must be able to exercise (`ext`, `sandbox`, `docker`, `all`, comma-separated). A missing one then *fails* instead of skipping | — (skip) |
+| `TALUNOR_REQUIRE` | **tests only** — capabilities this host must be able to exercise (`ext`, `sandbox`, `docker`, `fts5`, `all`, comma-separated). A missing one then *fails* instead of skipping | — (skip) |
 
 See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
@@ -293,14 +294,14 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.20.5** — a README you can read top to bottom (demo → run it →
-> use it), with the layer history folded away. On **v0.20.4**, a machine can **declare
-> what it must be able to
-> test** (`TALUNOR_REQUIRE=all`, `make capabilities`), so a capability that used to skip
-> silently now fails on the host that claims it. Just before it: the sandbox re-exec is
-> [authenticated](internal/sandbox/namespaces_linux.go) rather than merely triggered
-> (v0.20.2), and its post-mortem became
-> [Lesson 22](docs/lessons/22-the-silent-suite/) — *a skipped test is not a passing test*.
+> Current version: **v0.21.0** — **Layer 22: hybrid recall.** Memory now retrieves with
+> two arms and fuses them: vector KNN for *meaning*, an FTS5/BM25 index for *wording*.
+> An embedding cannot tell `AFF-2024-113` from `AFF-2024-114`; a lexical index cannot
+> generalise but never confuses them — so the exact identifier, rare name or version
+> number you would otherwise lose becomes retrievable again. The two rankings are merged
+> by reciprocal-rank fusion, then still weighted by Layer 16/17 confidence and salience.
+> `TALUNOR_RECALL=vector` turns the lexical arm off; a build without `-tags sqlite_fts5`
+> degrades to vector-only and says so in `make doctor` and `/mem`.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
@@ -402,7 +403,7 @@ uncalibrated model should not silently gain the authority of an established one.
 |-------|------|--------|
 | 20 | **Learn from action + evidence trail** — reflection also learns from tool observations (tagged `model_inferred`, or `tool_observed` only from a `Verified` tool — honest by default), records an auditable evidence trail (which turns/sources support a fact; `/why <id>`), on an append-only migration | ✅ done (v0.19.0) |
 | 21 | **Contradiction & supersession** — a new fact supersedes an old, incompatible one, governed by an explicit, per-domain **trust model** (`memory.Supersedes`); the model never overrides the user, a `Verified` tool can retire a stale belief; soft (reversible, auditable) | ✅ done (v0.20.0) |
-| 22 | **Hybrid recall** — vector ∪ lexical (FTS5), so exact identifiers / rare terms aren't missed | ⏳ planned |
+| 22 | **Hybrid recall** — vector ∪ lexical (FTS5/BM25) fused by reciprocal rank, so an exact identifier or rare term is retrievable even though embeddings cannot tell two of them apart; still weighted by confidence & salience | ✅ done (v0.21.0) |
 
 The thesis: Iteration 4 made memory *learn, retain, and forget*; Iteration 5 makes it
 stay **true** — learn from its own actions, justify its beliefs, and correct itself.

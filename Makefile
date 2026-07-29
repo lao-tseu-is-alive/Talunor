@@ -45,6 +45,14 @@ CURL := curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors
 
 export CGO_ENABLED := 1
 
+# LAYER 22: mattn/go-sqlite3 compiles SQLite's FTS5 module in only under this
+# build tag, and hybrid recall's lexical arm needs it (fts5 + bm25). A binary
+# built without it still works — recall degrades to vector-only and reports it
+# (doctor, /mem) — but every supported build here carries the tag, so the driver's
+# build tags are part of the feature's contract. Keep GOTAGS on every go command.
+GOTAGS := sqlite_fts5
+GOFLAGS_TAGS := -tags $(GOTAGS)
+
 # Build metadata injected into internal/version at link time.
 VERSION_PKG := github.com/lao-tseu-is-alive/Talunor/internal/version
 GIT_COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -81,15 +89,15 @@ $(EMBED_MODEL):
 
 ## doctor: smoke-test the memory substrate (extensions + embedding + KNN)
 doctor: deps
-	go run -ldflags "$(LDFLAGS)" ./cmd/doctor
+	go run $(GOFLAGS_TAGS) -ldflags "$(LDFLAGS)" ./cmd/doctor
 
 ## build: compile all binaries into bin/
 build: deps
-	go build -ldflags "$(LDFLAGS)" -o bin/ ./...
+	go build $(GOFLAGS_TAGS) -ldflags "$(LDFLAGS)" -o bin/ ./...
 
 ## test: run the test suite (skips memory tests if deps are missing)
 test:
-	go test ./...
+	go test $(GOFLAGS_TAGS) ./...
 
 ## release-check: pre-release gate (run before `git tag`). Bundles the AGENTS.md
 ## ritual — gofmt, vet, tests — plus guards for the class of bug that only bites a
@@ -101,9 +109,9 @@ release-check: deps
 	@echo "==> gofmt (no diffs allowed)"
 	@bad="$$(gofmt -l .)"; [ -z "$$bad" ] || { echo "needs gofmt:"; echo "$$bad"; exit 1; }
 	@echo "==> go vet"
-	@go vet ./...
+	@go vet $(GOFLAGS_TAGS) ./...
 	@echo "==> go test"
-	@go test ./... -count=1
+	@go test $(GOFLAGS_TAGS) ./... -count=1
 	@echo "==> fetch targets intact (no asset silently dropped from 'deps')"
 	@[ -n "$(EMBED_MODEL)" ] || { echo "EMBED_MODEL is empty — a fetch target was dropped"; exit 1; }
 	@for a in ext/vector.so ext/ai.so $(EMBED_MODEL); do \
@@ -201,11 +209,11 @@ lessons-check:
 ## chat: stream one prompt to a local Ollama model (LLM provider smoke test)
 ##   usage: make chat PROMPT="explain vector search in one sentence"
 chat:
-	go run -ldflags "$(LDFLAGS)" ./cmd/chat "$(PROMPT)"
+	go run $(GOFLAGS_TAGS) -ldflags "$(LDFLAGS)" ./cmd/chat "$(PROMPT)"
 
 ## run: start the interactive agent REPL (persistent memory across sessions)
 run: deps
-	go run -ldflags "$(LDFLAGS)" ./cmd/talunor
+	go run $(GOFLAGS_TAGS) -ldflags "$(LDFLAGS)" ./cmd/talunor
 
 ## docker-build: build the self-contained image (binary + extensions + model)
 docker-build:

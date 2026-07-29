@@ -1021,7 +1021,19 @@ func (a *Agent) MemoryStats(ctx context.Context) (string, error) {
 	if a.store.Provenance() != memory.ProvenanceOK {
 		msg += "\n⚠ recall of older memories may be degraded — run `talunor --reembed` to realign"
 	}
+	// LAYER 22: say which arms recall is actually running on. A vector-only build
+	// still answers everything — it is just worse at exact identifiers — so this
+	// is a status line, not a warning.
+	msg += fmt.Sprintf("\nrecall: %s", recallMode(a.store.Lexical()))
 	return msg, nil
+}
+
+// recallMode describes the retrieval strategy in one line (LAYER 22).
+func recallMode(st memory.LexicalStatus) string {
+	if st == memory.LexicalOK {
+		return "hybrid (vector + lexical/BM25)"
+	}
+	return "vector only — " + st.String()
 }
 
 // ListMemories returns a formatted listing of the most recent n memories.
