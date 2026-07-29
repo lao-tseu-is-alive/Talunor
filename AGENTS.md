@@ -608,5 +608,15 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   Tests need neither userns nor root: an impostor table + a subprocess run of the test binary
   (`-test.run=^$`, so a regression cannot fork-bomb). Closes the `todo.md` "future patch:
   namespaces re-exec guard" item.
+- **v0.20.3 (docs)** = course **Lesson 22** — "The silent suite: a skipped test is not a passing
+  test" (`docs/lessons/22-the-silent-suite/`, bilingual). Pinned to `v0.20.1` → `v0.20.2`; the
+  third post-mortem (after L11, L14) and the first about a **fix**: severity-before-fixing, the
+  three defects of the proposed patch (`ExtraFiles` dup'd at `Start`, `"" == ""` authentication,
+  `ReadAll` on an un-owned fd) + `t.Skip` vs `//go:build`, then the real subject — four namespaces
+  tests skipping for weeks behind a reverted sysctl, and the design answer (extract the privileged
+  decision into a pure function so it stays testable). Competency matrix: evaluation/verification
+  becomes 07 · 15 · 16 · 22; course now 00–22 (23 lessons). **NOTE:** lesson numbering is
+  release-ordered, so course Lesson 22 is NOT Layer 22 (hybrid recall) — that layer's lesson will
+  be 23.
 - **Next — open threads (documented, not started):** Layer 22 (hybrid recall, vector ∪ FTS5);
   calibration→policy wiring. Same per-layer checkpoint rhythm.

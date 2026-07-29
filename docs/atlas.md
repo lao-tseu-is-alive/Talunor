@@ -215,7 +215,8 @@ Talunor/
 │       ├── 18-the-memory-of-the-gesture/README.md # 🔍 Salience, lazy decay, consolidation & the independence rule (Layer 17).
 │       ├── 19-off-the-critical-path/README.md    # 🔍 Async reflection: single-conn-as-lock, the drain contract (Layer 18).
 │       ├── 20-learn-from-action/README.md        # 🔍 Learn from tool observations honestly (model_inferred vs tool_observed), evidence trail (Layer 20).
-│       └── 21-whose-word-counts/README.md        # 🔍 Trust model as a design decision; supersession, the flat-earth vs attack-signature examples (Layer 21).
+│       ├── 21-whose-word-counts/README.md        # 🔍 Trust model as a design decision; supersession, the flat-earth vs attack-signature examples (Layer 21).
+│       └── 22-the-silent-suite/README.md         # 🔍 Post-mortem of a FIX: fd lifecycle, empty-string auth, build tags — and what a skipped test hides (v0.20.2).
 │
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.

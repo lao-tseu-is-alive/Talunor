@@ -231,9 +231,11 @@ mets cette décision dans un seul endroit que tu peux lire.** La réponse de Tal
 lignes dans `supersede.go` ; la tienne sera différente, parce que ton agent est pour autre
 chose. La leçon n'est pas les dix lignes. C'est que tu les as *écrites exprès*.
 
-Ensuite, l'Itération 5 passe de *à qui faire confiance* à *ce que tu peux trouver* : la
-**Leçon 22** (prévue) ajoute le rappel hybride — vectoriel *et* lexical — pour que
-l'identifiant exact, le nom rare, le nombre que tu raterais par le sens seul restent
-récupérables.
+Vient ensuite une interruption, et elle est méritée : la
+[**leçon 22**](../22-the-silent-suite/README.fr.md) quitte l'arc mémoire pour disséquer un
+*correctif* qui a cassé ce qu'il protégeait, et demander ce que vaut vraiment une suite de
+tests verte. L'Itération 5 passera ensuite de *à qui faire confiance* à *ce que tu peux
+trouver* : le rappel hybride — vectoriel *et* lexical — pour que l'identifiant exact, le
+nom rare, le nombre que tu raterais par le sens seul restent récupérables.
 
 Retour à l'[index du cours](../README.fr.md).

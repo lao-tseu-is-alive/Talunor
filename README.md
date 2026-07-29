@@ -13,7 +13,9 @@ reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
 
-> Current version: **v0.20.2** — a hardening patch: the sandbox's
+> Current version: **v0.20.3** — [Lesson 22](docs/lessons/22-the-silent-suite/)
+> ("The silent suite: a skipped test is not a passing test"), the post-mortem of the
+> v0.20.2 fix below. On **v0.20.2**, a hardening patch: the sandbox's
 > `/proc/self/exe` re-exec now **authenticates** the child (pid-1 + a per-run token on an
 > inherited pipe), so a stray `TALUNOR_SANDBOX_CHILD=1` in an environment can no longer
 > hijack any binary linking `internal/sandbox`. On **Iteration 5** ("truthful memory") + its
@@ -44,8 +46,8 @@ reads as a guided tour of how to build a full cognitive-loop agent
 > network opt-in). See [CHANGELOG.md](CHANGELOG.md) for the version-by-version
 > build log and lessons.
 >
-> 📚 a **[22-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
-> French, lessons 00–21) turns the tag-by-tag history into a guided path for Go
+> 📚 a **[23-lesson course](docs/lessons/)** (🇬🇧 English & 🇫🇷
+> French, lessons 00–22) turns the tag-by-tag history into a guided path for Go
 > beginners — start at [Lesson 00](docs/lessons/).
 
 ## Run without building

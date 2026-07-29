@@ -14,6 +14,44 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.20.3] - 2026-07-29 — Course: Lesson 22 ("The silent suite"), bilingual
+
+A docs-only release: the v0.20.2 fix gets its post-mortem — the course's third
+(after Lessons 11 and 14), and the first about a **fix** rather than a feature.
+
+### Added
+
+- **Lesson 22 — "The silent suite: a skipped test is not a passing test"**
+  (`docs/lessons/22-the-silent-suite/`, bilingual EN/FR). A ~70-min Level-3 🔍
+  exploration pinned to `v0.20.1` → `v0.20.2`. It dissects a proposed fix for the
+  re-exec hijack that was well-reasoned, well-commented, and disabled the sandbox
+  outright while the suite stayed green: measuring the finding's real severity
+  before fixing it (self-DoS, not `pivot_root` on the host); the three defects
+  (`ExtraFiles` dup'd at `Start`, an equality two empty strings satisfy, an
+  unbounded `ReadAll` on an fd you don't own) plus a fourth (`t.Skip` where a
+  `//go:build` tag was needed); and then the real subject — four namespaces tests
+  that had been skipping for weeks because a sysctl reverted. Ships a twenty-line
+  standalone fd experiment and a hands-on where the *same* code passes at
+  `apparmor_restrict_unprivileged_userns=1` and fails at `0`. Competency matrix:
+  "Trustworthy evaluation & verification" becomes 07 · 15 · 16 · 22; course now
+  00–22 (23 lessons).
+
+### Lessons learned
+
+1. **The most reusable part of a post-mortem is rarely the bug.** Three concrete
+   defects were worth a section each, but the durable lesson is one question —
+   *what did my green run actually execute?* — which applies to every suite the
+   reader will ever own. The bug is the vehicle; the habit is the payload.
+2. **A lesson about untrustworthy evidence must not ask for trust.** So the
+   hands-on has the student flip one sysctl and watch identical code pass and then
+   fail, rather than take the claim on the author's word. The same instinct as
+   Lesson 15, applied to a fix instead of a review.
+3. **Framing it as "AI wrote a bad patch" would have taught less.** A careful human
+   writing that code hits the `ExtraFiles` defect identically, and the green suite
+   lies to them just as convincingly — so the AI provenance is the anecdote, and the
+   lesson stays about evidence, not authorship. (It also avoids a third telling of
+   Lesson 15's moral.)
+
 ## [0.20.2] - 2026-07-29 — Fix: the sandbox re-exec is authenticated, not just triggered
 
 A small hardening patch on `internal/sandbox`, closing the last item of the

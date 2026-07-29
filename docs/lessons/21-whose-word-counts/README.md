@@ -218,8 +218,10 @@ decision in one place you can read.** Talunor's answer is ten lines in `supersed
 will be different, because your agent is for something different. The lesson is not the ten
 lines. It is that you *wrote them on purpose*.
 
-Next, Iteration 5 turns from *who to trust* to *what you can find*: **Lesson 22** (planned)
-adds hybrid recall — vector *and* lexical — so the exact identifier, the rare name, the
+Next comes an interruption, and a deserved one: [**Lesson 22**](../22-the-silent-suite/)
+leaves the memory arc to dissect a *fix* that broke the feature it protected, and asks what
+a green test suite is really worth. Iteration 5 then turns from *who to trust* to *what you
+can find* — hybrid recall, vector *and* lexical, so the exact identifier, the rare name, the
 number you'd miss by meaning alone can still be retrieved.
 
 Back to the [course index](../).
