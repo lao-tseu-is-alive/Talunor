@@ -283,7 +283,8 @@ func (s *Store) lexicalCandidates(ctx context.Context, query string, limit int) 
 	}
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT m.id, m.kind, COALESCE(m.role, ''), m.content,
-		       COALESCE(m.provenance, 'unspecified'), COALESCE(m.confidence, 1.0),
+		       COALESCE(m.provenance, 'unspecified'), COALESCE(m.subject, 'unspecified'),
+		       COALESCE(m.confidence, 1.0),
 		       COALESCE(m.salience, 1.0), m.last_accessed, COALESCE(m.access_count, 0),
 		       m.created_at, bm25(%[1]s)
 		FROM %[1]s

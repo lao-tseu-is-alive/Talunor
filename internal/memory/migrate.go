@@ -115,6 +115,24 @@ var migrations = []migration{
 			return err
 		},
 	},
+	{
+		version: 6,
+		name:    "fact subject (what it is about)",
+		apply: func(ctx context.Context, e execer) error {
+			// Layer 23: authority is per-domain, so the domain has to be data. A
+			// fact now records WHAT it is about beside WHO stated it (see
+			// subject.go); Supersedes reads both.
+			//
+			// Existing rows default to 'unspecified' and are deliberately NOT
+			// backfilled. Guessing the subject of already-stored text would be the
+			// model labelling data after the fact — the exact laundering this layer
+			// prevents. Unspecified rows keep the pre-Layer-23 guarantee (provenance
+			// alone); everything written from now on gets the stronger one.
+			_, err := e.ExecContext(ctx,
+				`ALTER TABLE memories ADD COLUMN subject TEXT NOT NULL DEFAULT 'unspecified'`)
+			return err
+		},
+	},
 	// Iteration 5 continues here, one migration per layer.
 }
 

@@ -582,24 +582,26 @@ func (a *Agent) reflect(ctx context.Context, job reflectJob) {
 	if a.extractor == nil {
 		return
 	}
-	// User message: the primary, highest-provenance source.
-	a.learnFrom(ctx, job.userInput, memory.ProvenanceUserStated, job.userTurnID)
-	// Tool observations: learn from what was observed. Verified tools yield
-	// tool_observed; everything else is model_inferred (the honest default).
+	// Each source gets its own question, and the question fixes the ATTRIBUTION:
+	// provenance (who said it, Layer 16/20) and subject (what it is about, Layer
+	// 23). Both are assigned here, by the system, from the source — never read back
+	// out of what the model wrote. See ADRs 0002 and 0004.
+	//
+	// User message: the primary, highest-provenance source, asked about the user.
+	a.learnFrom(ctx, job.userInput, memory.UserSaid(), job.userTurnID)
+	// Tool observations: asked about the WORLD, which is what a tool observes.
+	// Verified tools yield tool_observed; everything else is model_inferred (the
+	// honest default — an LLM reading a tool's text is still inference).
 	for _, o := range job.observations {
 		if !worthReflecting(o) {
 			continue
 		}
-		prov := memory.ProvenanceModelInferred
-		if o.verified {
-			prov = memory.ProvenanceToolObserved
-		}
-		a.learnFrom(ctx, truncateForReflect(o.result), prov, job.userTurnID)
+		a.learnFrom(ctx, truncateForReflect(o.result), memory.Observed(o.verified), job.userTurnID)
 	}
-	// Assistant answer: opt-in, model_inferred (EvidenceCredibility 0 → never raises
-	// confidence on its own; the echo-chamber guard from Layer 17).
+	// Assistant answer: opt-in, model_inferred about the world (EvidenceCredibility
+	// 0 → never raises confidence on its own; the echo-chamber guard from Layer 17).
 	if a.cfg.ReflectAssistant && job.assistantAnswer != "" {
-		a.learnFrom(ctx, job.assistantAnswer, memory.ProvenanceModelInferred, job.assistantTurnID)
+		a.learnFrom(ctx, job.assistantAnswer, memory.Observed(false), job.assistantTurnID)
 	}
 }
 
@@ -609,22 +611,26 @@ func (a *Agent) reflect(ctx context.Context, job reflectJob) {
 // is best-effort. confidence is scaled by the model's calibration; the
 // consolidation gain also folds in the source's credibility as INDEPENDENT evidence
 // (user/tool raise confidence; the model echoing itself does not — Layer 17).
-func (a *Agent) learnFrom(ctx context.Context, text string, prov memory.Provenance, turnID int64) {
+func (a *Agent) learnFrom(ctx context.Context, text string, attr memory.Attribution, turnID int64) {
 	if strings.TrimSpace(text) == "" {
 		return
 	}
-	facts, err := a.extractor.Extract(ctx, text)
+	// The subject selects the QUESTION asked of this text, and the answer is then
+	// stamped with that same subject — the model is never asked what its output is
+	// about (Layer 23).
+	facts, err := a.extractor.Extract(ctx, text, attr.Subject)
 	if err != nil {
-		a.trace("reflect.error", "source", string(prov), "err", err)
+		a.trace("reflect.error", "source", attr.String(), "err", err)
 		return
 	}
+	prov := attr.Provenance
 	conf := clamp01(memory.BaseConfidence(prov) * a.cfg.ModelConfidence)
 	gain := clamp01(consolidationGainBase * memory.EvidenceCredibility(prov) * a.cfg.ModelConfidence)
 	for _, f := range facts {
-		a.learnOneFact(ctx, f, prov, conf, gain, turnID)
+		a.learnOneFact(ctx, f, attr, conf, gain, turnID)
 	}
 	if len(facts) > 0 {
-		a.trace("reflect", "source", string(prov), "extracted", len(facts), "confidence", conf, "gain", gain)
+		a.trace("reflect", "source", attr.String(), "extracted", len(facts), "confidence", conf, "gain", gain)
 	}
 }
 
@@ -640,16 +646,23 @@ func (a *Agent) learnFrom(ctx context.Context, text string, prov memory.Provenan
 //	             authoritative enough to retire the old belief, store the new fact and
 //	             soft-supersede the old; otherwise DROP the new fact — the authoritative
 //	             old belief stands (e.g. the model must not overwrite what the user said).
-func (a *Agent) learnOneFact(ctx context.Context, f string, prov memory.Provenance, conf, gain float64, turnID int64) {
+//
+// LAYER 23: the candidate search is scoped to the fact's SUBJECT first. A claim about
+// the user and a claim about the world are not rivals — they coexist — so a
+// cross-subject neighbour is not a candidate at all: it never reaches the arbiter (one
+// model call saved) and cannot be retired by arithmetic that never runs. That check is
+// deterministic, which is the point: before it, the belief-vs-world separation existed
+// only in the arbiter's judgement and in the extraction prompt's wording.
+func (a *Agent) learnOneFact(ctx context.Context, f string, attr memory.Attribution, conf, gain float64, turnID int64) {
 	_, arbiterOff := a.arbiter.(noArbiter)
 
 	radius := a.cfg.SupersedeMaxDistance
 	if arbiterOff {
 		radius = a.cfg.DedupMaxDistance
 	}
-	cand, ok := a.knownFact(ctx, f, radius)
+	cand, ok := a.knownFact(ctx, f, radius, attr.Subject)
 	if !ok {
-		a.storeNewFact(ctx, f, prov, conf, turnID)
+		a.storeNewFact(ctx, f, attr, conf, turnID)
 		return
 	}
 
@@ -663,39 +676,40 @@ func (a *Agent) learnOneFact(ctx context.Context, f string, prov memory.Provenan
 		}
 	}
 
+	candAttr := memory.Attr(cand.Provenance, cand.Subject)
 	switch rel {
 	case RelSupersedes:
-		if memory.Supersedes(prov, cand.Provenance) {
-			m, err := a.store.RememberFact(ctx, f, prov, conf)
+		if memory.Supersedes(attr, candAttr) {
+			m, err := a.store.RememberFact(ctx, f, attr, conf)
 			if err != nil {
 				return
 			}
-			a.recordEvidence(ctx, m.ID, turnID, prov)
+			a.recordEvidence(ctx, m.ID, turnID, attr.Provenance)
 			if err := a.store.Supersede(ctx, cand.ID, m.ID); err != nil {
 				a.trace("supersede.error", "old", cand.ID, "new", m.ID, "err", err)
 				return
 			}
-			a.trace("supersede", "old", cand.ID, "oldProv", string(cand.Provenance),
-				"new", m.ID, "newProv", string(prov))
+			a.trace("supersede", "old", cand.ID, "oldAttr", candAttr.String(),
+				"new", m.ID, "newAttr", attr.String())
 		} else {
 			// The trust model forbids it — the old belief is more authoritative than
 			// this source. Drop the new fact rather than store a contradiction.
-			a.trace("supersede.denied", "newProv", string(prov), "oldProv", string(cand.Provenance),
+			a.trace("supersede.denied", "newAttr", attr.String(), "oldAttr", candAttr.String(),
 				"old", cand.ID)
 		}
 	case RelUnrelated:
-		a.storeNewFact(ctx, f, prov, conf, turnID)
+		a.storeNewFact(ctx, f, attr, conf, turnID)
 	default: // RelRestates
 		if err := a.store.ReinforceFact(ctx, cand.ID, gain); err == nil {
-			a.recordEvidence(ctx, cand.ID, turnID, prov)
+			a.recordEvidence(ctx, cand.ID, turnID, attr.Provenance)
 		}
 	}
 }
 
 // storeNewFact stores a fresh fact and records its first evidence row (best-effort).
-func (a *Agent) storeNewFact(ctx context.Context, f string, prov memory.Provenance, conf float64, turnID int64) {
-	if m, err := a.store.RememberFact(ctx, f, prov, conf); err == nil {
-		a.recordEvidence(ctx, m.ID, turnID, prov)
+func (a *Agent) storeNewFact(ctx context.Context, f string, attr memory.Attribution, conf float64, turnID int64) {
+	if m, err := a.store.RememberFact(ctx, f, attr, conf); err == nil {
+		a.recordEvidence(ctx, m.ID, turnID, attr.Provenance)
 	}
 }
 
@@ -858,7 +872,7 @@ func (a *Agent) traceRecall(input string, hits []memory.Hit) {
 			"distance", h.Distance,
 			"score", h.Score,
 			"kind", string(h.Kind),
-			"provenance", string(h.Provenance),
+			"attribution", memory.Attr(h.Provenance, h.Subject).String(),
 			"confidence", h.Confidence,
 			"salience", h.Salience,
 			"snippet", oneLine(h.Content, 60))
@@ -903,7 +917,7 @@ const consolidationGainBase = 0.34
 // happens to sit nearby must not block the first distillation of that turn. maxDist
 // is the caller's radius (tight DedupMaxDistance for consolidation, wider
 // SupersedeMaxDistance for contradictions).
-func (a *Agent) knownFact(ctx context.Context, fact string, maxDist float64) (memory.Hit, bool) {
+func (a *Agent) knownFact(ctx context.Context, fact string, maxDist float64, about memory.Subject) (memory.Hit, bool) {
 	// Use the consolidation-aware recall so a restatement of a long-neglected
 	// (soft-forgotten) fact still finds the old row and reinforces it, instead of
 	// silently inserting a near-duplicate the plain Recall would leave orphaned
@@ -913,7 +927,10 @@ func (a *Agent) knownFact(ctx context.Context, fact string, maxDist float64) (me
 		return memory.Hit{}, false
 	}
 	for _, h := range hits {
-		if h.Kind == memory.KindFact {
+		// Same subject or nothing (Layer 23): "User believes the earth is flat" and
+		// "The earth is round" embed close together, but they are claims about
+		// different things — neither consolidates onto nor retires the other.
+		if h.Kind == memory.KindFact && memory.SameSubject(about, h.Subject) {
 			return h, true
 		}
 	}
@@ -1091,8 +1108,10 @@ func (a *Agent) WhyMemory(ctx context.Context, id int64) (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "#%d [%s] %s\n", m.ID, m.Kind, oneLine(m.Content, 80))
 	if m.Kind == memory.KindFact {
-		fmt.Fprintf(&b, "  %s, confidence %.0f%%, salience %.1f (×%d)\n",
-			m.Provenance, m.Confidence*100, m.Salience, m.AccessCount)
+		// Attribution is provenance AND subject (Layer 23): "who said it" alone does
+		// not say whether it may correct anything — see memory.Supersedes.
+		fmt.Fprintf(&b, "  %s (about: %s), confidence %.0f%%, salience %.1f (×%d)\n",
+			m.Provenance, m.Subject, m.Confidence*100, m.Salience, m.AccessCount)
 	}
 	if m.SupersededBy > 0 {
 		fmt.Fprintf(&b, "  ⚠ superseded by #%d (retired from recall; kept for audit)\n", m.SupersededBy)
@@ -1124,12 +1143,14 @@ func FormatMemories(mems []memory.Memory) string {
 		if label == "" {
 			label = string(m.Kind)
 		}
-		// Facts carry a provenance + confidence (Layer 16) and a salience that grows
-		// with reinforcement (Layer 17); show both so the user can see how much the
-		// agent trusts a learned statement and how much it currently matters.
+		// Facts carry an attribution — provenance + subject (Layers 16 & 23) — a
+		// confidence, and a salience that grows with reinforcement (Layer 17); show
+		// them so the user can see how much the agent trusts a learned statement,
+		// what it takes that statement to be ABOUT, and how much it currently matters.
 		meta := ""
 		if m.Kind == memory.KindFact {
-			meta = fmt.Sprintf(" (%s %.0f%%, sal %.1f×%d)", m.Provenance, m.Confidence*100, m.Salience, m.AccessCount)
+			meta = fmt.Sprintf(" (%s %.0f%%, sal %.1f×%d)",
+				memory.Attr(m.Provenance, m.Subject), m.Confidence*100, m.Salience, m.AccessCount)
 		}
 		// A superseded fact is retired from recall but still listed (marked), so its
 		// history stays inspectable — /why <id> shows what replaced it (Layer 21).

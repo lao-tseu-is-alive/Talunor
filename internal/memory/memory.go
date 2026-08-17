@@ -85,7 +85,12 @@ type Memory struct {
 	Role       string // "user"/"assistant" for turns; "" for doc chunks.
 	Content    string
 	Provenance Provenance // where it came from (Layer 16)
-	Confidence float64    // [0,1], system-assigned from provenance (× model calibration)
+	// Subject is what the memory is ABOUT (Layer 23) — the other half of its
+	// credential. Provenance and Subject together form its Attribution, which is
+	// what the trust model reads; see subject.go. Turns and pre-Layer-23 rows are
+	// SubjectUnspecified.
+	Subject    Subject
+	Confidence float64 // [0,1], system-assigned from provenance (× model calibration)
 	// Retention bookkeeping (Layer 17). Salience is the stored value as of
 	// LastAccessed (or CreatedAt if never recalled); the effective salience at read
 	// time decays from there (see effectiveSalience). AccessCount is how many times
@@ -145,15 +150,20 @@ func (h Hit) EffectiveSalience() float64 { return h.effSalience }
 // provenance and a (calibration-scaled) confidence.
 func (s *Store) Remember(ctx context.Context, kind Kind, role, content string) (*Memory, error) {
 	prov := provenanceForTurn(kind, role)
-	return s.remember(ctx, kind, role, content, prov, BaseConfidence(prov))
+	// A turn is episodic text, not a claim about a subject: SubjectUnspecified.
+	return s.remember(ctx, kind, role, content, Attr(prov, SubjectUnspecified), BaseConfidence(prov))
 }
 
-// RememberFact stores a durable fact (KindFact) with an explicit provenance and
-// confidence. The caller assigns confidence — typically BaseConfidence(prov) scaled
-// by the model's calibration — so a fact learned from an unreliable model does not
-// silently gain the authority of an established one.
-func (s *Store) RememberFact(ctx context.Context, content string, prov Provenance, confidence float64) (*Memory, error) {
-	return s.remember(ctx, KindFact, "", content, prov, confidence)
+// RememberFact stores a durable fact (KindFact) with an explicit ATTRIBUTION — who
+// stated it and what it is about — and a confidence. The caller assigns confidence
+// (typically BaseConfidence(prov) scaled by the model's calibration) so a fact learned
+// from an unreliable model does not silently gain the authority of an established one.
+//
+// Taking an Attribution rather than a bare Provenance is deliberate (Layer 23): every
+// call site must now name the subject, because that is the field the trust model needs
+// and the one only the caller — which knows the SOURCE — is entitled to decide.
+func (s *Store) RememberFact(ctx context.Context, content string, attr Attribution, confidence float64) (*Memory, error) {
+	return s.remember(ctx, KindFact, "", content, attr, confidence)
 }
 
 // provenanceForTurn maps a stored turn to its provenance. A fact stored via the
@@ -170,7 +180,8 @@ func provenanceForTurn(kind Kind, role string) Provenance {
 
 // remember embeds content and inserts one memory row with its provenance and
 // confidence, returning the persisted row.
-func (s *Store) remember(ctx context.Context, kind Kind, role, content string, prov Provenance, confidence float64) (*Memory, error) {
+func (s *Store) remember(ctx context.Context, kind Kind, role, content string, attr Attribution, confidence float64) (*Memory, error) {
+	prov, subject := attr.Provenance, attr.Subject.normalize()
 	emb, err := s.Embed(ctx, content)
 	if err != nil {
 		return nil, err
@@ -181,10 +192,10 @@ func (s *Store) remember(ctx context.Context, kind Kind, role, content string, p
 	)
 	// RETURNING gives us the generated id and timestamp in a single round trip.
 	err = s.db.QueryRowContext(ctx,
-		`INSERT INTO memories(kind, role, content, embedding, provenance, confidence)
-		 VALUES(?, ?, ?, ?, ?, ?)
+		`INSERT INTO memories(kind, role, content, embedding, provenance, subject, confidence)
+		 VALUES(?, ?, ?, ?, ?, ?, ?)
 		 RETURNING id, created_at`,
-		string(kind), role, content, emb, string(prov), confidence).Scan(&id, &createdAt)
+		string(kind), role, content, emb, string(prov), string(subject), confidence).Scan(&id, &createdAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert memory: %w", err)
 	}
@@ -193,7 +204,8 @@ func (s *Store) remember(ctx context.Context, kind Kind, role, content string, p
 		return nil, fmt.Errorf("parse created_at %q: %w", createdAt, err)
 	}
 	// A fresh row starts fully salient and unaccessed (the column defaults).
-	return &Memory{ID: id, Kind: kind, Role: role, Content: content, Provenance: prov, Confidence: confidence, Salience: 1.0, CreatedAt: ts}, nil
+	return &Memory{ID: id, Kind: kind, Role: role, Content: content, Provenance: prov,
+		Subject: subject, Confidence: confidence, Salience: 1.0, CreatedAt: ts}, nil
 }
 
 // Recall returns up to k long-term memories most relevant to query. Relevance is
@@ -309,7 +321,8 @@ func (s *Store) vectorCandidates(ctx context.Context, query string, k int, maxDi
 	// see : https://docs.sqlitecloud.io/docs/sqlite-vector-api-reference
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT m.id, m.kind, COALESCE(m.role, ''), m.content,
-		       COALESCE(m.provenance, 'unspecified'), COALESCE(m.confidence, 1.0),
+		       COALESCE(m.provenance, 'unspecified'), COALESCE(m.subject, 'unspecified'),
+		       COALESCE(m.confidence, 1.0),
 		       COALESCE(m.salience, 1.0), m.last_accessed, COALESCE(m.access_count, 0),
 		       m.created_at, v.distance
 		FROM vector_full_scan('memories', 'embedding', ?, ?) AS v
@@ -375,7 +388,8 @@ func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, kind, COALESCE(role, ''), content,
-		       COALESCE(provenance, 'unspecified'), COALESCE(confidence, 1.0),
+		       COALESCE(provenance, 'unspecified'), COALESCE(subject, 'unspecified'),
+		       COALESCE(confidence, 1.0),
 		       COALESCE(salience, 1.0), last_accessed, COALESCE(access_count, 0), created_at,
 		       COALESCE(superseded_by, 0)
 		FROM memories
@@ -392,15 +406,17 @@ func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
 			m            Memory
 			kind         string
 			prov         string
+			subject      string
 			lastAccessed sql.NullString
 			createdAt    string
 		)
-		if err := rows.Scan(&m.ID, &kind, &m.Role, &m.Content, &prov, &m.Confidence,
+		if err := rows.Scan(&m.ID, &kind, &m.Role, &m.Content, &prov, &subject, &m.Confidence,
 			&m.Salience, &lastAccessed, &m.AccessCount, &createdAt, &m.SupersededBy); err != nil {
 			return nil, err
 		}
 		m.Kind = Kind(kind)
 		m.Provenance = Provenance(prov)
+		m.Subject = Subject(subject).normalize()
 		if ts, err := time.Parse(sqliteTimeLayout, createdAt); err == nil {
 			m.CreatedAt = ts
 		}

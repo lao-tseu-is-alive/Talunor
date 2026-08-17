@@ -50,16 +50,18 @@ func scanHit(rows *sql.Rows, src scanSource) (Hit, error) {
 		h            Hit
 		kind         string
 		prov         string
+		subject      string
 		lastAccessed sql.NullString
 		createdAt    string
 		relevance    float64
 	)
-	if err := rows.Scan(&h.ID, &kind, &h.Role, &h.Content, &prov, &h.Confidence,
+	if err := rows.Scan(&h.ID, &kind, &h.Role, &h.Content, &prov, &subject, &h.Confidence,
 		&h.Salience, &lastAccessed, &h.AccessCount, &createdAt, &relevance); err != nil {
 		return Hit{}, err
 	}
 	h.Kind = Kind(kind)
 	h.Provenance = Provenance(prov)
+	h.Subject = Subject(subject).normalize()
 	if ts, err := time.Parse(sqliteTimeLayout, createdAt); err == nil {
 		h.CreatedAt = ts
 	}

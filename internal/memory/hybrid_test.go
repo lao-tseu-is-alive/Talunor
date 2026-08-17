@@ -49,7 +49,7 @@ func TestHybridRecallFindsAnIdentifierVectorsMiss(t *testing.T) {
 		"Travel expenses must be submitted before the end of the quarter.",
 	}
 	for _, c := range corpus {
-		if _, err := store.RememberFact(ctx, c, memory.ProvenanceUserStated, 0.9); err != nil {
+		if _, err := store.RememberFact(ctx, c, memory.UserSaid(), 0.9); err != nil {
 			t.Fatalf("remember: %v", err)
 		}
 	}
@@ -81,7 +81,7 @@ func TestHybridKeepsSemanticRecall(t *testing.T) {
 		"SQLite stores an entire relational database in a single file.",
 		"The Eiffel Tower was completed in Paris in 1889.",
 	} {
-		if _, err := store.RememberFact(ctx, c, memory.ProvenanceUserStated, 0.9); err != nil {
+		if _, err := store.RememberFact(ctx, c, memory.UserSaid(), 0.9); err != nil {
 			t.Fatalf("remember: %v", err)
 		}
 	}
@@ -104,11 +104,11 @@ func TestLexicalArmRespectsSupersession(t *testing.T) {
 	store := requireHybrid(t)
 	ctx := context.Background()
 
-	old, err := store.RememberFact(ctx, "The deployment token is DEPL-OLD-77.", memory.ProvenanceUserStated, 0.9)
+	old, err := store.RememberFact(ctx, "The deployment token is DEPL-OLD-77.", memory.UserSaid(), 0.9)
 	if err != nil {
 		t.Fatalf("remember: %v", err)
 	}
-	fresh, err := store.RememberFact(ctx, "The deployment token is DEPL-NEW-91.", memory.ProvenanceUserStated, 0.9)
+	fresh, err := store.RememberFact(ctx, "The deployment token is DEPL-NEW-91.", memory.UserSaid(), 0.9)
 	if err != nil {
 		t.Fatalf("remember: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestLexicalArmRespectsSoftForgetting(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := store.RememberFact(ctx, "Legacy ticket ZZ-4242 was closed years ago.",
-		memory.ProvenanceUserStated, 0.9); err != nil {
+		memory.UserSaid(), 0.9); err != nil {
 		t.Fatalf("remember: %v", err)
 	}
 	hits, err := store.Recall(ctx, "ZZ-4242", 5, 0.75)
@@ -170,7 +170,7 @@ func TestConsolidationLookupIgnoresLexicalOverlap(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := store.RememberFact(ctx, "The Lausanne office network switch is model NX-9000.",
-		memory.ProvenanceUserStated, 0.9); err != nil {
+		memory.UserSaid(), 0.9); err != nil {
 		t.Fatalf("remember: %v", err)
 	}
 	// Shares the rare token "NX-9000" — the lexical arm would rank it first — but
@@ -213,7 +213,7 @@ func TestForgetRemovesFromLexicalIndex(t *testing.T) {
 	ctx := context.Background()
 
 	m, err := store.RememberFact(ctx, "Serial number QX-8891 belongs to the old printer.",
-		memory.ProvenanceUserStated, 0.9)
+		memory.UserSaid(), 0.9)
 	if err != nil {
 		t.Fatalf("remember: %v", err)
 	}

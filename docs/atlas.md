@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.21.2` (executable course claims + a truthful runtime probe)
+- **Version:** `v0.22.0` (Layer 23 — subject as data: authority is per-domain, mechanically)
 - **Generated:** 2026-08-17
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -78,6 +78,8 @@ Talunor/
 │   │   ├── salience.go       #     LAYER 17: lazy decay (effective salience at read time), Reinforce /
 │   │   │                     #       ReinforceFact (confidence only on independent evidence), forget floor.
 │   │   ├── supersede.go      #     LAYER 21: the TRUST MODEL (Supersedes — who may retire whom) + soft-supersede (migration 5).
+│   │   ├── subject.go        #     LAYER 23: WHAT a fact is about, as data (migration 6) — Subject +
+│   │   │                     #       Attribution + SameSubject; different subjects never supersede (ADR 0004).
 │   │   ├── evidence.go       #     LAYER 20: the evidence trail (migration 4) — RecordEvidence / EvidenceFor
 │   │   │                     #       (which turns+sources support a fact) + MemoryByID (for /why).
 │   │   ├── shortterm.go      #     Bounded ring buffer of the most recent turns (immediate context).
@@ -202,7 +204,8 @@ Talunor/
 │   ├── decisions/         #   Architecture Decision Records (append-only, EN, contributor-facing).
 │   │   ├── 0001-memory-backends.md # ADR 1: the Embedder/VectorIndex seams + backend profiles (proposed/deferred).
 │   │   ├── 0002-provenance-from-source.md # ADR 2: learned-fact provenance from the source, not eagerness (Layer 20).
-│   │   └── 0003-trust-model-for-supersession.md # ADR 3: a memory's trust model is an explicit per-domain policy (Layer 21).
+│   │   ├── 0003-trust-model-for-supersession.md # ADR 3: a memory's trust model is an explicit per-domain policy (Layer 21).
+│   │   └── 0004-subject-as-data.md # ADR 4: authority = (who spoke, what it is about) — the subject becomes data (Layer 23).
 │   ├── policy.sample.yaml #   Commented example TALUNOR_POLICY rule file (allow / prompt / deny per tool).
 │   ├── calibration.seed.yaml #  LAYER 14: public example calibration suite (deterministic, threat-model header).
 │   ├── ollama-networking.md # Reaching a loopback Ollama from inside the container, securely.

@@ -90,16 +90,18 @@ func (s *Store) MemoryByID(ctx context.Context, id int64) (Memory, bool, error) 
 		m            Memory
 		kind         string
 		prov         string
+		subject      string
 		lastAccessed sql.NullString
 		createdAt    string
 	)
 	err := s.db.QueryRowContext(ctx, `
 		SELECT id, kind, COALESCE(role, ''), content,
-		       COALESCE(provenance, 'unspecified'), COALESCE(confidence, 1.0),
+		       COALESCE(provenance, 'unspecified'), COALESCE(subject, 'unspecified'),
+		       COALESCE(confidence, 1.0),
 		       COALESCE(salience, 1.0), last_accessed, COALESCE(access_count, 0), created_at,
 		       COALESCE(superseded_by, 0)
 		FROM memories
-		WHERE id = ?`, id).Scan(&m.ID, &kind, &m.Role, &m.Content, &prov, &m.Confidence,
+		WHERE id = ?`, id).Scan(&m.ID, &kind, &m.Role, &m.Content, &prov, &subject, &m.Confidence,
 		&m.Salience, &lastAccessed, &m.AccessCount, &createdAt, &m.SupersededBy)
 	if err == sql.ErrNoRows {
 		return Memory{}, false, nil
@@ -109,6 +111,7 @@ func (s *Store) MemoryByID(ctx context.Context, id int64) (Memory, bool, error) 
 	}
 	m.Kind = Kind(kind)
 	m.Provenance = Provenance(prov)
+	m.Subject = Subject(subject).normalize()
 	if ts, err := time.Parse(sqliteTimeLayout, createdAt); err == nil {
 		m.CreatedAt = ts
 	}

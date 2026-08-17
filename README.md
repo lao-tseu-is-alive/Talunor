@@ -294,18 +294,18 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.21.2** — *the course is executable too.* Three fixes, one
-> theme: a claim nobody checks goes stale. **(1)** [Lesson 15](docs/lessons/15-dont-trust-the-review/)
-> — the lesson about verifying AI claims — was itself stale: it had readers prove
-> Talunor has no FTS5, three releases after hybrid recall shipped. That claim is now
-> *half*-true, which turned out to be the better lesson, and `make lessons-assert`
-> ([`docs/lessons/assertions.sh`](docs/lessons/assertions.sh)) re-derives every claim a
-> lesson asks you to reproduce, on every release. **(2)** A container runtime is now
-> *probed*, not merely found on `PATH`: a Rancher Desktop shim whose VM is down used to
-> make the sandbox tests **fail** instead of skip, and `TALUNOR_SANDBOX` auto-detection
-> now falls back to the namespaces backend instead of choosing a runtime that cannot
-> start a container. **(3)** Go 1.26.6 + goldmark 1.7.17 clear every `govulncheck`
-> finding.
+> Current version: **v0.22.0** — **Layer 23: a fact now records what it is ABOUT, not just
+> who said it.** Layer 21 gave Talunor a trust model for retiring outdated memories, and its
+> [ADR](docs/decisions/0003-trust-model-for-supersession.md) said authority is *per-domain*:
+> you are the authority on yourself, a verified tool on what it observed, neither on
+> everything. But the code saw only *who spoke* — the per-domain half lived in a prompt and
+> in a model's judgement. When both misbehaved, an unattributed "the earth is flat" could
+> retire a verified tool's observation. Now the domain is **data**
+> ([`subject.go`](internal/memory/subject.go), migration 6): claims about different subjects
+> can never retire each other, by arithmetic rather than by an LLM's verdict, and the
+> subject is assigned by *which question reflection asked* — never read back out of what the
+> model wrote. Your view of the world is still remembered, as a fact about **you**. See
+> [ADR 0004](docs/decisions/0004-subject-as-data.md).
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
@@ -408,6 +408,7 @@ uncalibrated model should not silently gain the authority of an established one.
 | 20 | **Learn from action + evidence trail** — reflection also learns from tool observations (tagged `model_inferred`, or `tool_observed` only from a `Verified` tool — honest by default), records an auditable evidence trail (which turns/sources support a fact; `/why <id>`), on an append-only migration | ✅ done (v0.19.0) |
 | 21 | **Contradiction & supersession** — a new fact supersedes an old, incompatible one, governed by an explicit, per-domain **trust model** (`memory.Supersedes`); the model never overrides the user, a `Verified` tool can retire a stale belief; soft (reversible, auditable) | ✅ done (v0.20.0) |
 | 22 | **Hybrid recall** — vector ∪ lexical (FTS5/BM25) fused by reciprocal rank, so an exact identifier or rare term is retrievable even though embeddings cannot tell two of them apart; still weighted by confidence & salience | ✅ done (v0.21.0) |
+| 23 | **Subject as data** — a fact records what it is *about* (`user`/`world`) beside who stated it, assigned by which question reflection asked; claims about different subjects never retire each other, so the per-domain trust model of Layer 21 holds without depending on a prompt or an arbiter's verdict | ✅ done (v0.22.0) |
 
 The thesis: Iteration 4 made memory *learn, retain, and forget*; Iteration 5 makes it
 stay **true** — learn from its own actions, justify its beliefs, and correct itself.

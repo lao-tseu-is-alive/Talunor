@@ -23,22 +23,46 @@ import (
 //     retire a stale, model-inferred belief about that signature.
 //
 // A single global rank ("user > tool > model") satisfies neither. What both share:
-// authority is *per-domain*, and the source's provenance is a PROXY for its authority.
-// Supersedes below is the whole trust model in one place — the ~10 lines you decide.
-// A different agent (security, ops, research) replaces THIS function and nothing else.
-
-// supersedeAuthority ranks a source's authority for the purpose of retiring a belief,
-// under the DEFAULT (personal-assistant) trust model:
+// authority is *per-domain*, and the source's provenance is a PROXY for its authority
+// IN THAT DOMAIN. Supersedes below is the whole trust model in one place — the ~15
+// lines you decide. A different agent (security, ops, research) replaces THIS function
+// and nothing else.
 //
-//	2  user_stated / tool_observed — authoritative: the user about themselves, a
-//	   Verified tool about what it observed. Either may retire a belief in its domain.
+// LAYER 23 closed the gap between that paragraph and the code. Until then this
+// function saw only provenance, so "per-domain" was enforced nowhere: it relied on the
+// reflection prompt attributing user facts ("User …") and on the arbiter calling a
+// belief and a world fact UNRELATED. Two model calls, no deterministic backstop — and
+// when both failed, Supersedes(user_stated, tool_observed) was true, so an
+// unattributed "the earth is flat" retired a Verified tool's observation. The domain is
+// now DATA (see subject.go), and the gate reads it. ADR 0004.
+
+// supersedeAuthority ranks a source's authority for the purpose of retiring a belief
+// ABOUT A GIVEN SUBJECT, under the DEFAULT (personal-assistant) trust model:
+//
+//	2  user_stated about the USER — you are the authority on yourself.
+//	0  user_stated about the WORLD — you are not. Saying it does not make it so, and
+//	   memory must not let conviction retire an observation. (Your world-claims are
+//	   still remembered — as facts about you; see SubjectUser.)
+//	2  tool_observed — a Verified tool is authoritative about what it observed,
+//	   whichever subject it observed it about.
 //	1  unspecified — legacy/unknown: may retire only the non-authoritative model.
 //	0  model_inferred — never authoritative enough to retire a belief on the strength
 //	   of the model's own guess (the humility rule, extended from Layer 17's confidence
 //	   guard to truth itself).
-func supersedeAuthority(p Provenance) int {
-	switch p {
-	case ProvenanceUserStated, ProvenanceToolObserved:
+//
+// Note the user_stated/world row is unreachable from today's sources — reflection only
+// ever asks the user's message for facts about the user. It is stated anyway, because
+// a trust model is read as a POLICY: the matrix must say what it would do, so that
+// whoever adds a source (a "correct my knowledge base" mode, an imported document)
+// reads the answer instead of discovering it.
+func supersedeAuthority(a Attribution) int {
+	switch a.Provenance {
+	case ProvenanceUserStated:
+		if a.Subject.normalize() == SubjectWorld {
+			return 0
+		}
+		return 2
+	case ProvenanceToolObserved:
 		return 2
 	case ProvenanceUnspecified:
 		return 1
@@ -47,19 +71,30 @@ func supersedeAuthority(p Provenance) int {
 	}
 }
 
-// Supersedes is the memory's TRUST MODEL: may a NEW fact from provenance `newer`
-// retire an existing, incompatible fact from provenance `older`? It answers only the
-// *authority* question — the arbiter has already decided the two facts are the same
-// subject and incompatible (see internal/agent). A model inference never supersedes;
-// otherwise a source may retire beliefs of its own authority level or lower.
+// Supersedes is the memory's TRUST MODEL: may a NEW fact with attribution `newer`
+// retire an existing, incompatible fact attributed `older`?
+//
+// It answers the *authority* question in two steps, and the first is the one Layer 23
+// added:
+//
+//  1. DIFFERENT SUBJECTS NEVER SUPERSEDE. A claim about the user and a claim about the
+//     world cannot contradict each other — they coexist. This is the flat-earth carve-out
+//     of ADR 0003, moved out of the arbiter's judgement and into arithmetic: it now holds
+//     even when the extractor drops the attribution AND the arbiter wrongly answers
+//     SUPERSEDES, which is exactly the case that was reachable before.
+//  2. Within one subject, authority decides: a model inference never supersedes;
+//     otherwise a source may retire beliefs of its own authority level or lower.
 //
 // THIS is the function to change for a different agent. Its being one small, named,
 // documented place — rather than scattered comparisons — is the point: a trust model
-// you can read, test, and consciously own. (Layer 21; see ADR 0003.)
-func Supersedes(newer, older Provenance) bool {
+// you can read, test, and consciously own. (Layers 21 & 23; ADRs 0003 and 0004.)
+func Supersedes(newer, older Attribution) bool {
+	if !SameSubject(newer.Subject, older.Subject) {
+		return false // different domains: not a contradiction, so nothing to retire.
+	}
 	na := supersedeAuthority(newer)
 	if na == 0 {
-		return false // the model's own inference retires nothing.
+		return false // the model's own inference — and your world-claims — retire nothing.
 	}
 	return na >= supersedeAuthority(older)
 }

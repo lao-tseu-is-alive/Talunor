@@ -315,7 +315,9 @@ func TestScreenDebugStreamsRecall(t *testing.T) {
 // reflection path deterministically without an LLM.
 type fakeExtractor struct{ facts []string }
 
-func (f fakeExtractor) Extract(context.Context, string) ([]string, error) { return f.facts, nil }
+func (f fakeExtractor) Extract(context.Context, string, memory.Subject) ([]string, error) {
+	return f.facts, nil
+}
 
 // TestParseFacts checks the model-output parser without any model or store.
 func TestParseFacts(t *testing.T) {
@@ -512,7 +514,7 @@ func TestCloseDrainsPendingReflection(t *testing.T) {
 // a reflection call stuck on an unresponsive provider.
 type blockingExtractor struct{}
 
-func (blockingExtractor) Extract(ctx context.Context, _ string) ([]string, error) {
+func (blockingExtractor) Extract(ctx context.Context, _ string, _ memory.Subject) ([]string, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()
 }
@@ -637,7 +639,7 @@ func (f factTool) Execute(context.Context, json.RawMessage) (string, error) {
 // provenance can be traced to which source it was distilled from.
 type sourceExtractor struct{}
 
-func (sourceExtractor) Extract(_ context.Context, text string) ([]string, error) {
+func (sourceExtractor) Extract(_ context.Context, text string, _ memory.Subject) ([]string, error) {
 	switch {
 	case strings.Contains(text, "USERMSG"):
 		return []string{"User asked about France."}, nil
@@ -767,13 +769,13 @@ func newLearner(t *testing.T, store *memory.Store, rel Relation) *Agent {
 func TestSupersedeUserRetiresModel(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)
-	old, err := store.RememberFact(ctx, "User lives in Lausanne.", memory.ProvenanceModelInferred, 0.5)
+	old, err := store.RememberFact(ctx, "User lives in Lausanne.", memory.Attr(memory.ProvenanceModelInferred, memory.SubjectUser), 0.5)
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	ag := newLearner(t, store, RelSupersedes)
 
-	ag.learnOneFact(ctx, "User lives in Geneva.", memory.ProvenanceUserStated, 0.9, 0.3, 7)
+	ag.learnOneFact(ctx, "User lives in Geneva.", memory.UserSaid(), 0.9, 0.3, 7)
 
 	got, _, _ := store.MemoryByID(ctx, old.ID)
 	if got.SupersededBy == 0 {
@@ -794,13 +796,13 @@ func TestSupersedeUserRetiresModel(t *testing.T) {
 func TestSupersedeGateProtectsUser(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)
-	old, err := store.RememberFact(ctx, "User loves Go.", memory.ProvenanceUserStated, 0.9)
+	old, err := store.RememberFact(ctx, "User loves Go.", memory.UserSaid(), 0.9)
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	ag := newLearner(t, store, RelSupersedes)
 
-	ag.learnOneFact(ctx, "User dislikes Go.", memory.ProvenanceModelInferred, 0.5, 0, 8)
+	ag.learnOneFact(ctx, "User dislikes Go.", memory.Attr(memory.ProvenanceModelInferred, memory.SubjectUser), 0.5, 0, 8)
 
 	if got, _, _ := store.MemoryByID(ctx, old.ID); got.SupersededBy != 0 {
 		t.Error("a model inference was allowed to supersede a user-stated fact")
@@ -815,12 +817,12 @@ func TestSupersedeGateProtectsUser(t *testing.T) {
 func TestUnrelatedStoresNew(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)
-	if _, err := store.RememberFact(ctx, "User lives in Lausanne.", memory.ProvenanceUserStated, 0.9); err != nil {
+	if _, err := store.RememberFact(ctx, "User lives in Lausanne.", memory.UserSaid(), 0.9); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	ag := newLearner(t, store, RelUnrelated)
 
-	ag.learnOneFact(ctx, "User lives in Geneva.", memory.ProvenanceUserStated, 0.9, 0.3, 9)
+	ag.learnOneFact(ctx, "User lives in Geneva.", memory.UserSaid(), 0.9, 0.3, 9)
 
 	if !factExists(t, ctx, store, "User lives in Lausanne.") {
 		t.Error("the original fact was wrongly retired/merged")
@@ -1185,5 +1187,155 @@ func quiesce(t *testing.T, ag *Agent) {
 	defer cancel()
 	if err := ag.Quiesce(ctx); err != nil {
 		t.Fatalf("quiesce: %v", err)
+	}
+}
+
+// --- LAYER 23: adversarial trust-model tests -------------------------------
+//
+// These are the cases the layer exists for, and they are written the way a
+// security test should be: both LLM steps that used to carry the belief-vs-world
+// separation are made to FAIL AT ONCE. The extractor is assumed to have dropped
+// the "User …" attribution (so the fact reads as a bare world claim), and the
+// arbiter is scripted to answer SUPERSEDES. Before Layer 23 each of these retired
+// the world fact; now nothing but arithmetic stands in the way, and it holds.
+
+// TestUserWorldClaimCannotRetireVerifiedObservation is the sharp one: the trust
+// model used to rank user_stated and tool_observed equally (2 >= 2), so a user's
+// claim retired a Verified tool's observation — the exact fact ADR 0003 holds up
+// as authoritative in its domain.
+func TestUserWorldClaimCannotRetireVerifiedObservation(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	observed, err := store.RememberFact(ctx, "Signature X is mitigated by behaviour Y.",
+		memory.Observed(true), 0.95)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ag := newLearner(t, store, RelSupersedes) // the arbiter wrongly says SUPERSEDES
+
+	// What the user said, distilled WITHOUT its attribution — a bare world claim
+	// carrying user authority. This is the laundering the layer blocks.
+	ag.learnOneFact(ctx, "Signature X is harmless.", memory.UserSaid(), 0.9, 0, 11)
+
+	if got, _, _ := store.MemoryByID(ctx, observed.ID); got.SupersededBy != 0 {
+		t.Fatalf("a user's world-claim retired a Verified tool observation (superseded_by=%d)",
+			got.SupersededBy)
+	}
+	// It coexists rather than being dropped: it IS a fact about the user, and the
+	// agent should remember the user's view without adopting it as the world's.
+	if !factExists(t, ctx, store, "Signature X is harmless.") {
+		t.Error("the user's claim should be kept as a user-subject fact, not discarded")
+	}
+}
+
+// TestUnattributedWorldClaimCannotRetireWorldFact is the flat earth, mechanically:
+// same shape, against a model-inferred world fact.
+func TestUnattributedWorldClaimCannotRetireWorldFact(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	world, err := store.RememberFact(ctx, "The earth is round.", memory.Observed(false), 0.6)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ag := newLearner(t, store, RelSupersedes)
+
+	ag.learnOneFact(ctx, "The earth is flat.", memory.UserSaid(), 0.9, 0, 12)
+
+	if got, _, _ := store.MemoryByID(ctx, world.ID); got.SupersededBy != 0 {
+		t.Fatalf("an unattributed user world-claim retired a world fact (superseded_by=%d)",
+			got.SupersededBy)
+	}
+}
+
+// TestCrossSubjectSkipsTheArbiter pins the mechanism, not just the outcome: a
+// candidate in another domain is not a candidate at all, so the arbiter — the
+// fragile, model-dependent step — is never consulted. Cheaper, and one less place
+// for a wrong verdict to matter.
+func TestCrossSubjectSkipsTheArbiter(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	if _, err := store.RememberFact(ctx, "The earth is round.", memory.Observed(false), 0.6); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	counting := &countingArbiter{rel: RelSupersedes}
+	cfg := DefaultConfig()
+	cfg.Extractor = DisableReflection()
+	cfg.Arbiter = counting
+	cfg.SupersedeMaxDistance = 0.9 // wide enough that the neighbour is certainly found
+	ag := New(store, &fakeProvider{reply: "x"}, cfg)
+	t.Cleanup(func() { ag.Close() })
+
+	ag.learnOneFact(ctx, "The earth is flat.", memory.UserSaid(), 0.9, 0, 13)
+
+	if counting.calls != 0 {
+		t.Errorf("arbiter consulted %d times for a cross-subject neighbour; want 0", counting.calls)
+	}
+	if !factExists(t, ctx, store, "The earth is flat.") {
+		t.Error("the user-subject fact should have been stored alongside the world fact")
+	}
+}
+
+// TestSameSubjectStillSupersedes guards the other direction — the layer must not
+// have made memory unable to correct itself. Within one subject, Layer 21's
+// behaviour is unchanged.
+func TestSameSubjectStillSupersedes(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	stale, err := store.RememberFact(ctx, "Signature X is unmitigated.", memory.Observed(false), 0.5)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ag := newLearner(t, store, RelSupersedes)
+
+	// A Verified tool observes the correction: same subject, higher authority.
+	ag.learnOneFact(ctx, "Signature X is mitigated by behaviour Y.", memory.Observed(true), 0.95, 0, 14)
+
+	got, _, _ := store.MemoryByID(ctx, stale.ID)
+	if got.SupersededBy == 0 {
+		t.Fatal("a Verified tool observation failed to retire a stale inference in its own domain")
+	}
+}
+
+// countingArbiter records how often it was asked, so a test can assert that a
+// decision was made WITHOUT the model.
+type countingArbiter struct {
+	rel   Relation
+	calls int
+}
+
+func (c *countingArbiter) Classify(context.Context, string, string) (Relation, error) {
+	c.calls++
+	return c.rel, nil
+}
+
+// TestExtractorAsksOneQuestionPerSubject pins the mechanism that makes a fact's
+// subject KNOWN rather than guessed: the system picks the question from the source,
+// and the answer inherits that subject. If both sources shared one prompt, the
+// subject stamped on the result would be an assumption again (ADR 0004).
+func TestExtractorAsksOneQuestionPerSubject(t *testing.T) {
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{Content: "User likes Go."}},
+		{{Content: "Signature X is mitigated by behaviour Y."}},
+	}}
+	ex := newLLMExtractor(prov, llm.Options{})
+
+	if _, err := ex.Extract(context.Background(), "I like Go", memory.SubjectUser); err != nil {
+		t.Fatalf("extract(user): %v", err)
+	}
+	userPrompt := prov.lastMsgs[0].Content
+
+	if _, err := ex.Extract(context.Background(), "scan output …", memory.SubjectWorld); err != nil {
+		t.Fatalf("extract(world): %v", err)
+	}
+	worldPrompt := prov.lastMsgs[0].Content
+
+	if userPrompt == worldPrompt {
+		t.Fatal("both subjects were asked the same question — the subject would be an assumption")
+	}
+	if !strings.Contains(userPrompt, "about the user") {
+		t.Errorf("user prompt does not ask about the user: %q", oneLine(userPrompt, 80))
+	}
+	if !strings.Contains(worldPrompt, "about the world") {
+		t.Errorf("world prompt does not ask about the world: %q", oneLine(worldPrompt, 80))
 	}
 }

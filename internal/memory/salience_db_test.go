@@ -33,7 +33,7 @@ func TestReinforceBumpsSalience(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 
 	const fact = "User lives in Lausanne."
-	m, err := store.RememberFact(ctx, fact, memory.ProvenanceUserStated, 0.9)
+	m, err := store.RememberFact(ctx, fact, memory.UserSaid(), 0.9)
 	if err != nil {
 		t.Fatalf("remember fact: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestReinforceFactRaisesConfidenceOnlyOnEvidence(t *testing.T) {
 	// Independent evidence (gain > 0): both salience and confidence rise, and
 	// confidence stays below the ceiling.
 	const indep = "User's favourite editor is Neovim."
-	mi, err := store.RememberFact(ctx, indep, memory.ProvenanceUserStated, 0.9)
+	mi, err := store.RememberFact(ctx, indep, memory.UserSaid(), 0.9)
 	if err != nil {
 		t.Fatalf("remember: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestReinforceFactRaisesConfidenceOnlyOnEvidence(t *testing.T) {
 	// No independent evidence (gain == 0, e.g. the model echoing itself): salience
 	// still rises, but confidence must not move.
 	const echo = "User prefers tabs over spaces."
-	me, err := store.RememberFact(ctx, echo, memory.ProvenanceModelInferred, 0.5)
+	me, err := store.RememberFact(ctx, echo, memory.Attr(memory.ProvenanceModelInferred, memory.SubjectUser), 0.5)
 	if err != nil {
 		t.Fatalf("remember: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestRecallForgetFloorAndRevival(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 
 	const fact = "User drives a red bicycle."
-	m, err := store.RememberFact(ctx, fact, memory.ProvenanceUserStated, 0.9)
+	m, err := store.RememberFact(ctx, fact, memory.UserSaid(), 0.9)
 	if err != nil {
 		t.Fatalf("remember: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestRecallForConsolidationSeesForgotten(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 
 	const fact = "User's cat is named Pixel."
-	if _, err := store.RememberFact(ctx, fact, memory.ProvenanceUserStated, 0.9); err != nil {
+	if _, err := store.RememberFact(ctx, fact, memory.UserSaid(), 0.9); err != nil {
 		t.Fatalf("remember: %v", err)
 	}
 	const q = "what is the name of the user's cat?"
@@ -198,7 +198,7 @@ func TestReinforcementRaisesRecallScore(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 
 	const fact = "User plays the cello."
-	m, err := store.RememberFact(ctx, fact, memory.ProvenanceUserStated, 0.9)
+	m, err := store.RememberFact(ctx, fact, memory.UserSaid(), 0.9)
 	if err != nil {
 		t.Fatalf("remember: %v", err)
 	}

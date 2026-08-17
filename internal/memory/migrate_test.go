@@ -35,7 +35,7 @@ func TestFactProvenanceAndConfidence(t *testing.T) {
 	defer s.Close()
 
 	// A fact stored with an explicit provenance and a (calibration-scaled) confidence.
-	if _, err := s.RememberFact(ctx, "User's name is Carlos", ProvenanceUserStated, 0.63); err != nil {
+	if _, err := s.RememberFact(ctx, "User's name is Carlos", Attr(ProvenanceUserStated, SubjectUser), 0.63); err != nil {
 		t.Fatalf("remember fact: %v", err)
 	}
 	hits, err := s.Recall(ctx, "what is my name?", 5, 0)
@@ -125,7 +125,7 @@ func TestMigrateBaselinesLegacy(t *testing.T) {
 	}
 	// Look like a truly pre-versioning DB: the baseline schema, no version stamp and
 	// none of the columns later migrations add. Reopening must migrate it forward
-	// (baseline via migration 1's no-op, then the column-adding migrations 2, 3 & 5)
+	// (baseline via migration 1's no-op, then the column-adding migrations 2, 3, 5 & 6)
 	// losing nothing. NOTE: add a DROP here for every future column-adding migration.
 	for _, stmt := range []string{
 		`ALTER TABLE memories DROP COLUMN provenance`,
@@ -134,6 +134,7 @@ func TestMigrateBaselinesLegacy(t *testing.T) {
 		`ALTER TABLE memories DROP COLUMN last_accessed`,
 		`ALTER TABLE memories DROP COLUMN access_count`,
 		`ALTER TABLE memories DROP COLUMN superseded_by`,
+		`ALTER TABLE memories DROP COLUMN subject`,
 		`DELETE FROM meta WHERE key = '` + metaSchemaVersion + `'`,
 	} {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {

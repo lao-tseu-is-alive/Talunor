@@ -20,7 +20,7 @@ func TestEvidenceTrail(t *testing.T) {
 		t.Fatalf("schema version = %d, want >= 4 (evidence migration)", v)
 	}
 
-	f, err := store.RememberFact(ctx, "User lives in Lausanne.", memory.ProvenanceUserStated, 0.9)
+	f, err := store.RememberFact(ctx, "User lives in Lausanne.", memory.UserSaid(), 0.9)
 	if err != nil {
 		t.Fatalf("remember fact: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestEvidenceTrail(t *testing.T) {
 	}
 
 	// A fact with no recorded evidence has an empty trail (e.g. a legacy fact).
-	f2, _ := store.RememberFact(ctx, "User likes cheese.", memory.ProvenanceUserStated, 0.9)
+	f2, _ := store.RememberFact(ctx, "User likes cheese.", memory.UserSaid(), 0.9)
 	if ev2, _ := store.EvidenceFor(ctx, f2.ID); len(ev2) != 0 {
 		t.Errorf("fresh fact evidence = %d, want 0", len(ev2))
 	}
@@ -72,7 +72,7 @@ func TestMemoryByID(t *testing.T) {
 	}
 	t.Cleanup(func() { store.Close() })
 
-	f, _ := store.RememberFact(ctx, "User plays chess.", memory.ProvenanceUserStated, 0.9)
+	f, _ := store.RememberFact(ctx, "User plays chess.", memory.UserSaid(), 0.9)
 	got, ok, err := store.MemoryByID(ctx, f.ID)
 	if err != nil {
 		t.Fatalf("by id: %v", err)

@@ -89,6 +89,16 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    named function deciding who may retire whom (default: user/Verified-tool
                    authoritative, model_inferred retires nothing; swap it for another agent).
                    Store.Supersede soft-marks superseded_by (migration 5); Recall excludes them.
+                   subject.go (LAYER 23): WHAT a fact is about, as DATA (migration 6) —
+                   Subject user|world|unspecified + Attribution{Provenance,Subject}; Supersedes
+                   now takes Attributions and checks SameSubject FIRST (different subjects never
+                   supersede — the flat-earth carve-out becomes arithmetic instead of an
+                   arbiter verdict), then per-subject authority (user_stated about the WORLD
+                   scores 0). Subject is system-assigned FROM THE SOURCE via UserSaid()/
+                   Observed(verified) — never read back out of the model's text. Legacy rows
+                   stay `unspecified` (NOT backfilled) and keep the old provenance-only
+                   guarantee: SameSubject treats unspecified as comparable with everything.
+                   See ADR 0004.
                    lexical.go + hybrid.go (LAYER 22): HYBRID RECALL. lexical.go owns the
                    FTS5 arm — an external-content index (content='memories') created
                    idempotently at Open (NOT a migration: it is derived data), kept in
@@ -140,7 +150,15 @@ internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/obs
                    PROPOSES via the arbiter, then the memory.Supersedes trust model GATES: a
                    model inference is dropped, not allowed to overwrite the user; a Verified
                    tool can retire a stale belief. Candidate radius = wider SupersedeMaxDistance.
-                   See ADR 0003. Optional Config.Debug (slog) traces
+                   See ADR 0003. LAYER 23: reflect asks ONE QUESTION PER SUBJECT —
+                   userFactPrompt for the user's message, worldFactPrompt for a tool
+                   observation / the assistant answer (FactExtractor.Extract now takes
+                   `about memory.Subject`) — so the answer's subject is known from the
+                   QUESTION, never read back out of the model's text. learnFrom/learnOneFact
+                   carry a memory.Attribution; knownFact only accepts SAME-SUBJECT
+                   candidates, so a cross-subject neighbour never reaches the arbiter (it
+                   coexists, and one model call is saved). Adversarial tests fail both LLM
+                   steps at once. See ADR 0004. Optional Config.Debug (slog) traces
                    recall/tools/reflection. debug.go: the /debug runtime toggle
                    (screenDebug) streams recall rankings inline as dimmed Reasoning
                    notes (reflection notes now go to the log, being async). Slash-command helpers too.
@@ -719,5 +737,24 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   tests FAIL instead of skip, and auto-detect now falls back to namespaces; `make capabilities`
   reports `docker=no(nerdctl on PATH, daemon unreachable)`. Plus Go 1.26.6 + goldmark 1.7.17 →
   `govulncheck` clean. No schema/behaviour change beyond the sandbox selection.
+- **Iteration 5 continues — Layer 23 (done): v0.22.0** = **subject as data: authority is a
+  function of (who spoke, what it is about)**. Layer 21 shipped a trust model whose own ADR
+  said "authority is per-domain", but `Supersedes` saw only provenance, so the per-domain
+  half lived in a PROMPT ("write facts starting with User") and an ARBITER verdict
+  (belief ≠ world fact). Both are LLM steps, `parseFacts` enforced neither, and when both
+  failed the deterministic gate had nothing to say: `Supersedes(user_stated, tool_observed)`
+  was `2>=2` → **an unattributed "the earth is flat" retired a Verified tool's observation**
+  (reproduced before the fix; now a regression test). Layer 23: `memory/subject.go` —
+  `Subject` (user|world|unspecified, **migration 6**) + `Attribution{Provenance,Subject}`;
+  `Supersedes(newer, older Attribution)` checks `SameSubject` **first** (different subjects
+  never supersede — the flat-earth carve-out becomes arithmetic) then per-subject authority
+  (`user_stated`+world = 0). Subject is **system-assigned from the source** by asking ONE
+  QUESTION PER SUBJECT (`userFactPrompt` / `worldFactPrompt`) — ADR 0002's invariant applied
+  to the second half of the credential; this also made ADR 0003's attack-signature case
+  REACHABLE (every source used to be asked the user-facts question). `knownFact` scopes
+  candidates by subject, so the arbiter is never consulted cross-subject. Legacy rows stay
+  `unspecified` (not backfilled) and keep the old guarantee. `/list` + `/why` show the
+  attribution. See **ADR 0004**. Lesson 24 to write.
 - **Next — open threads (documented, not started):** calibration→policy wiring;
-  the executed plan as a learning source. Same per-layer checkpoint rhythm.
+  the executed plan as a learning source; the planner's silent ReAct fallback (it drops the
+  plan's tool cap — wants an explicit fail_closed|ask|react mode). Same per-layer checkpoint rhythm.

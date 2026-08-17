@@ -14,6 +14,112 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.22.0] - 2026-08-17 — LAYER 23: subject as data (authority is per-domain, mechanically)
+
+Layer 21 shipped a trust model for retiring outdated memories, and ADR 0003 stated
+its principle plainly: **authority is per-domain.** The user is authoritative about
+themselves, a Verified tool about what it observed, neither about everything.
+
+The code did not enforce that. `memory.Supersedes` saw only *provenance* — who
+spoke — so the per-domain half lived in two LLM steps: an extraction prompt asking
+for facts phrased "User …", and an arbiter expected to rule that a belief and a
+world fact are different subjects. `parseFacts` accepted any non-empty line, so the
+first was never checked, and the gate had no representation of a domain, so the
+second had no backstop. This release makes the domain **data**, and the guarantee
+arithmetic.
+
+### Fixed
+
+- **A user's unattributed world-claim could retire a world fact — including a
+  Verified tool's observation.** Reproduced before the fix, both cases:
+
+  | Existing fact | New fact (from the user's message) | Before |
+  |---|---|---|
+  | `The earth is round.` · model_inferred | `The earth is flat.` · user_stated | retired |
+  | `Signature X is mitigated by Y.` · **tool_observed** | `Signature X is harmless.` · user_stated | retired |
+
+  The second is the sharp one: `supersedeAuthority` ranked `user_stated` and
+  `tool_observed` equally, and `2 >= 2` allowed the retirement — so an assertion
+  retired exactly the observation ADR 0003 holds up as authoritative in its domain.
+  It takes both model steps failing at once, which is unlikely per turn and
+  inevitable over a long enough memory.
+
+### Added
+
+- **`internal/memory/subject.go` — `Subject` + `Attribution` (migration 6).** A fact
+  now records what it is *about* (`user` / `world` / `unspecified`) beside who stated
+  it. `Attribution{Provenance, Subject}` is the pair the trust model reads;
+  `RememberFact` takes one, so every call site must name the subject.
+- **`Supersedes` is subject-aware, and checks the subject FIRST.** Different subjects
+  never supersede — a claim about the user and a claim about the world are not rivals,
+  so neither can retire the other, with no model in the loop. Within a subject, Layer
+  21 is unchanged. The policy also states `user_stated` about the `world` = authority 0
+  ("saying it does not make it so"), a cell today's sources cannot reach: a trust model
+  is read as a policy and must say what it *would* do.
+- **One extraction question per subject** (`userFactPrompt` / `worldFactPrompt`;
+  `FactExtractor.Extract` takes `about memory.Subject`). The subject is assigned by the
+  system from the source — not by trusting an instruction, but by asking a question
+  whose answer can only be of one kind, then stamping the answer with the question.
+  ADR 0002's invariant, applied to the second half of the credential.
+- **`agent.knownFact` scopes candidates by subject**, so a cross-subject neighbour is
+  not a consolidation candidate at all and the arbiter is never consulted for it — the
+  fragile step is bypassed rather than trusted (and one model call is saved).
+- **Adversarial tests** (the ones the external review asked for): both LLM steps are
+  made to fail at once — the attribution is dropped *and* the arbiter is scripted to
+  answer SUPERSEDES. All five new assertions fail if `SameSubject` is neutralised
+  (verified by neutralising it).
+- **ADR 0004** records the decision and what it refines in ADR 0003.
+
+### Changed
+
+- `/list` and `/why` show a fact's full attribution (`user_stated/user`); the `/debug`
+  recall trace likewise.
+- **Tool observations are now asked a world-facts question.** Previously every source —
+  including a security tool's output — was asked "what durable facts about the *user*?",
+  which meant ADR 0003's own attack-signature example had no path by which such a fact
+  could be learned. It does now.
+- Legacy rows are **not** backfilled: they stay `unspecified` and keep the old
+  provenance-only guarantee (`SameSubject` treats `unspecified` as comparable with
+  everything). Guessing their subject would be the model labelling stored data.
+
+### Lessons learned
+
+1. **A guarantee that holds only while two LLM calls behave is a habit, not a
+   guarantee.** ADR 0003's containment of the flat-earth case was correct as *design*
+   and absent as *mechanism*: prompt wording plus an arbiter verdict, with the
+   deterministic gate blind to the very distinction the design turned on. The tell was
+   visible in the ADR's own prose — "the reflection prompt already frames facts as
+   User …" — a safety property stated in terms of what a prompt asks for. When a
+   security argument's load-bearing step is a sentence in a prompt, the argument has a
+   hole whether or not anyone has walked through it.
+2. **The system can assign a label honestly only by controlling the question.** ADR 0002
+   established that provenance is assigned from the source, never self-reported. The
+   same reasoning applies to the subject, but it only *works* because reflection asks a
+   different question per source: the answer inherits the subject of the question, so a
+   model that ignores the framing cannot launder a world-claim into user authority. Had
+   we instead parsed the model's wording ("does it start with User?"), safety would have
+   rested on string surgery over prose — strictly worse information than the source we
+   already had.
+3. **Ask what a mechanism makes UNREACHABLE, not only what it allows.** Digging into
+   the gate turned up a second defect nobody had reported: every source was asked the
+   user-facts question, so a tool's observation about a system could not be learned at
+   all — ADR 0003's attack-signature example was unreachable in the shipped code. A
+   worked example in a document is not a test; it had been read many times and run
+   never.
+4. **Put the deterministic check before the expensive judgement, not after it.** Scoping
+   candidates by subject in `knownFact` means a cross-subject neighbour never reaches
+   the arbiter. That is cheaper, but the real gain is structural: a step that cannot run
+   cannot be wrong. Ordering guards by *reliability* — arithmetic first, model last — is
+   the general form of the lesson.
+5. **State the unreachable cells of a policy anyway.** `user_stated` about the `world`
+   scores 0 though nothing today can produce that pair. A trust model is read by whoever
+   adds the next source; a matrix with holes makes them infer the answer, and inference
+   is how the original gap appeared.
+6. **A migration that refuses to backfill is making a claim about honesty.** Guessing
+   the subject of already-stored text would be the model labelling data after the fact —
+   the exact laundering this layer prevents — so old rows keep their weaker guarantee
+   and say so. "Unknown" is a value; inventing a better-looking one is not an upgrade.
+
 ## [0.21.2] - 2026-08-17 — "The course is executable too": a stale lesson, a lying capability probe
 
 A correction batch before the next layer. Three findings from an external review,
