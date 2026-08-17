@@ -724,6 +724,17 @@ func TestReflectLearnsFromToolObservation(t *testing.T) {
 			if um := findStoredFact(t, ctx, store, "User asked about France."); um.Provenance != memory.ProvenanceUserStated {
 				t.Errorf("user fact provenance = %s, want user_stated", um.Provenance)
 			}
+			// LAYER 23: the SUBJECT is per-source too, and it is the half the trust
+			// model reads. Without this assertion the whole layer rests on six
+			// unchecked lines in reflect(): a tool observation silently attributed to
+			// SubjectUser would let a tool's text be corrected by (and correct) the
+			// user's own facts, and every other test would stay green.
+			if m.Subject != memory.SubjectWorld {
+				t.Errorf("tool-derived subject = %s, want world", m.Subject)
+			}
+			if um := findStoredFact(t, ctx, store, "User asked about France."); um.Subject != memory.SubjectUser {
+				t.Errorf("user fact subject = %s, want user", um.Subject)
+			}
 		})
 	}
 }

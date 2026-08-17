@@ -79,6 +79,25 @@ assert "15/C5 blockedIP is still pure (net.IP in, bool out)" \
 assert "15/C5 blockedIP is still table-tested" \
 	'grep -q "blockedIP" internal/webfetch/webfetch_test.go'
 
+echo "==> lesson 24 (the ADR that didn't bind) — the mechanism it teaches"
+
+# The lesson's hands-on names these symbols and tests on current main. Historical
+# reading is pinned to immutable tags and cannot rot; the exercises can.
+assert "24 SameSubject is still the cross-subject rule" \
+	'grep -q "func SameSubject" internal/memory/subject.go'
+assert "24 Supersedes still checks the subject BEFORE authority" \
+	'sed -n "/^func Supersedes/,/^}/p" internal/memory/supersede.go | head -3 | grep -q "SameSubject"'
+assert "24 the policy still denies user_stated authority over the world" \
+	'sed -n "/^func supersedeAuthority/,/^}/p" internal/memory/supersede.go | grep -q "SubjectWorld"'
+assert "24 hands-on 1 test names still exist" \
+	'grep -q "TestUserWorldClaimCannotRetireVerifiedObservation" internal/agent/agent_test.go &&
+	 grep -q "TestCrossSubjectSkipsTheArbiter" internal/agent/agent_test.go &&
+	 grep -q "TestSupersedesTrustModel" internal/memory/supersede_test.go'
+assert "24 hands-on 3: the subject is asserted at the point of assignment" \
+	'sed -n "/func TestReflectLearnsFromToolObservation/,/^}/p" internal/agent/agent_test.go | grep -q "SubjectWorld"'
+assert "24 reflection still asks one question per subject" \
+	'grep -q "userFactPrompt" internal/agent/reflect.go && grep -q "worldFactPrompt" internal/agent/reflect.go'
+
 if [ "$fail" != 0 ]; then
 	echo "lessons-assert: FAILED — a lesson's expected result no longer holds."
 	echo "  Fix the lesson (EN + FR) and this file in the same commit."

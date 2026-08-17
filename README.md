@@ -12,7 +12,7 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> 📚 The tag-by-tag history is also a **[24-lesson course](docs/lessons/)** (🇬🇧 English
+> 📚 The tag-by-tag history is also a **[25-lesson course](docs/lessons/)** (🇬🇧 English
 > & 🇫🇷 Français) for Go beginners — start at [Lesson 00](docs/lessons/).
 
 ## Philosophy — and why it's different
@@ -294,18 +294,15 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.22.0** — **Layer 23: a fact now records what it is ABOUT, not just
-> who said it.** Layer 21 gave Talunor a trust model for retiring outdated memories, and its
-> [ADR](docs/decisions/0003-trust-model-for-supersession.md) said authority is *per-domain*:
-> you are the authority on yourself, a verified tool on what it observed, neither on
-> everything. But the code saw only *who spoke* — the per-domain half lived in a prompt and
-> in a model's judgement. When both misbehaved, an unattributed "the earth is flat" could
-> retire a verified tool's observation. Now the domain is **data**
-> ([`subject.go`](internal/memory/subject.go), migration 6): claims about different subjects
-> can never retire each other, by arithmetic rather than by an LLM's verdict, and the
-> subject is assigned by *which question reflection asked* — never read back out of what the
-> model wrote. Your view of the world is still remembered, as a fact about **you**. See
-> [ADR 0004](docs/decisions/0004-subject-as-data.md).
+> Current version: **v0.22.1** — course **[Lesson 24](docs/lessons/24-the-adr-that-didnt-bind/)**
+> ("The ADR that didn't bind"), the bilingual lesson for **Layer 23** (v0.22.0). It is a
+> post-mortem of this repo's own architecture decision record: ADR 0003 said *authority is
+> per-domain*, but the code could only see **who** spoke, never **what about** — so the
+> per-domain half lived in a prompt's wording and an LLM's judgement. The lesson has you
+> reproduce the resulting hole at `v0.21.2` with a twelve-line test (an unattributed "the
+> earth is flat" retiring a verified tool's observation), then read the fix that made the
+> claim arithmetic. Its transferable rule: **find the load-bearing step of every safety
+> claim — if it is a prompt, you have a habit, not a guarantee.**
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

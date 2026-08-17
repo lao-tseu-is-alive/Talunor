@@ -14,6 +14,69 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.22.1] - 2026-08-17 — Course: Lesson 24 ("The ADR that didn't bind"), bilingual
+
+Layer 23 gets its lesson. The course's fourth post-mortem, and the first about a
+**decision record** rather than about code: ADR 0003 stated a rule the
+implementation could not represent, and the document read true the whole time.
+
+### Added
+
+- **Lesson 24 — "The ADR that didn't bind: a decision the code never enforced"**
+  (`docs/lessons/24-the-adr-that-didnt-bind/`, bilingual EN/FR). ~80-min Level-3
+  🔍 post-mortem, read across `v0.21.2` → `v0.22.0`. The reader:
+  1. re-reads ADR 0003's flat-earth argument and **marks what each sentence
+     depends on** — discovering that two of its three steps are model behaviour
+     (a prompt's wording, an arbiter's verdict) and that `parseFacts` enforces
+     neither;
+  2. **reproduces the hole** at `v0.21.2` with a twelve-line probe that fails both
+     model steps at once, and works the arithmetic (`2 >= 2`) that let a user's
+     assertion retire a Verified tool's observation;
+  3. reasons about why enforcing the "User …" wording would have been the *worse*
+     fix, then reads `subject.go` and the `SameSubject` short-circuit;
+  4. learns the transferable move — **a system can label a model's output honestly
+     only in terms of what it controls: the source, the question, the tool. Never
+     the answer.**
+  Parts 5–7 cover guard ordering by reliability, the ADR example that was
+  unreachable in shipped code, and the migration that refuses to guess. Hands-on:
+  neutralise `SameSubject` (5 tests fail), flip a policy cell (only some fail —
+  explain which), and make the subject dishonest, then delete the two assertions
+  that catch it and watch a fully green suite. Competency matrix: agent safety
+  becomes 09 · 10 · 12 · 14 · 21 · 24, agentic memory gains 24. Course now 00–24
+  (25 lessons).
+- **Two assertions pinning the SUBJECT per source** in
+  `TestReflectLearnsFromToolObservation`. Writing the lesson's hands-on exposed a
+  real coverage gap: a Layer-20 test had pinned a tool-derived fact's *provenance*
+  since v0.19.0, but nothing pinned its *subject* — so attributing a tool
+  observation to `SubjectUser` passed the entire suite. Verified by mutation
+  (the assertions fail under exactly that change).
+
+### Lessons learned
+
+1. **Writing the lesson found the bug the layer's own tests missed.** Hands-on 3
+   was drafted as "change this and observe that nothing fails" — a rhetorical
+   point about where trust bottoms out. Running it first (as the course demands of
+   its readers) showed the claim was *wrong* in one variant and *right* in
+   another, and the right one exposed an unasserted field. Explaining a mechanism
+   to a beginner is a distinct test of that mechanism: it forces you to state what
+   is guaranteed, and stating it invites checking it.
+2. **The field you just added is the field your tests are blind to.** Every
+   existing assertion was written against the world before the new data existed,
+   so they all pass regardless of its value. New data needs an assertion at the
+   **point of assignment**, not only where it is consumed — consumption tests pass
+   as long as the value is *self-consistent*, which a mislabelled one is.
+3. **A post-mortem lesson should make the reader reproduce the bug, not read about
+   it.** The probe runs at the pre-fix tag in about a minute, and `2 >= 2` is more
+   convincing when you watch it print `superseded_by = 2` than when a paragraph
+   asserts it. That is only possible because the repo keeps immutable tags — the
+   course's oldest structural decision (Lesson 00) paying off again.
+4. **Three post-mortems now share one skeleton** (14: an approval bound names not
+   arguments; 22: a suite reported `ok` for tests it never ran; 24: an ADR stated
+   a rule the code could not represent). In each, nothing was broken — every
+   component did what it said — and the guarantee lived *between* components.
+   Naming the recurrence is itself a teaching artefact: it gives the reader a
+   place to look that no individual lesson could.
+
 ## [0.22.0] - 2026-08-17 — LAYER 23: subject as data (authority is per-domain, mechanically)
 
 Layer 21 shipped a trust model for retiring outdated memories, and ADR 0003 stated

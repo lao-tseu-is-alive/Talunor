@@ -3,7 +3,7 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.22.0` (Layer 23 — subject as data: authority is per-domain, mechanically)
+- **Version:** `v0.22.1` (course Lesson 24 — the ADR that didn't bind)
 - **Generated:** 2026-08-17
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
@@ -238,7 +238,8 @@ Talunor/
 │       ├── 20-learn-from-action/README.md        # 🔍 Learn from tool observations honestly (model_inferred vs tool_observed), evidence trail (Layer 20).
 │       ├── 21-whose-word-counts/README.md        # 🔍 Trust model as a design decision; supersession, the flat-earth vs attack-signature examples (Layer 21).
 │       ├── 22-the-silent-suite/README.md         # 🔍 Post-mortem of a FIX: fd lifecycle, empty-string auth, build tags — and what a skipped test hides (v0.20.2).
-│       └── 23-two-ways-to-find-a-memory/README.md # 🔍 Hybrid recall: what embeddings can't index, BM25, rank fusion, retrieval vs identity (Layer 22).
+│       ├── 23-two-ways-to-find-a-memory/README.md # 🔍 Hybrid recall: what embeddings can't index, BM25, rank fusion, retrieval vs identity (Layer 22).
+│       └── 24-the-adr-that-didnt-bind/README.md  # 🔍 Post-mortem: a decision record the code couldn't enforce; subject as data (Layer 23).
 │
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.

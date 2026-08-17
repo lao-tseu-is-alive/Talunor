@@ -754,7 +754,17 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   REACHABLE (every source used to be asked the user-facts question). `knownFact` scopes
   candidates by subject, so the arbiter is never consulted cross-subject. Legacy rows stay
   `unspecified` (not backfilled) and keep the old guarantee. `/list` + `/why` show the
-  attribution. See **ADR 0004**. Lesson 24 to write.
+  attribution. See **ADR 0004**.
+- **v0.22.1 (docs)** = course **Lesson 24** — "The ADR that didn't bind: a decision the code
+  never enforced" (`docs/lessons/24-the-adr-that-didnt-bind/`, bilingual). Read across
+  `v0.21.2` → `v0.22.0`; the course's 4th post-mortem and the first about a **decision
+  record**: mark what each sentence of ADR 0003 depends on (2 of 3 steps are model
+  behaviour), REPRODUCE the hole at the pre-fix tag with a 12-line probe, then read the fix.
+  Transferable rule: *a system can label a model's output honestly only in terms of what it
+  controls — the source, the question, the tool; never the answer.* Writing the hands-on
+  exposed a real coverage gap (subject was unasserted at the point of assignment) → two new
+  assertions in `TestReflectLearnsFromToolObservation`. Competency matrix: safety becomes
+  09 · 10 · 12 · 14 · 21 · 24; course now 00–24 (25 lessons).
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; the planner's silent ReAct fallback (it drops the
   plan's tool cap — wants an explicit fail_closed|ask|react mode). Same per-layer checkpoint rhythm.
