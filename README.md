@@ -294,25 +294,28 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.21.1** — [Lesson 23](docs/lessons/23-two-ways-to-find-a-memory/)
-> ("Two ways to find a memory"), the bilingual lesson for **Layer 22: hybrid recall**
-> (v0.21.0). Recall runs two arms and fuses them: vector KNN for *meaning*, an FTS5/BM25
-> index for *wording*. An embedding cannot tell `AFF-2024-113` from `AFF-2024-114`; a
-> lexical index cannot generalise but never confuses them — so the exact identifier, rare
-> name or version number you would otherwise lose becomes retrievable again. Ranks are
-> merged by reciprocal-rank fusion, then still weighted by Layer 16/17 confidence and
-> salience. `TALUNOR_RECALL=vector` turns the lexical arm off; a build without
-> `-tags sqlite_fts5` degrades to vector-only and says so in `make doctor` and `/mem`.
+> Current version: **v0.21.2** — *the course is executable too.* Three fixes, one
+> theme: a claim nobody checks goes stale. **(1)** [Lesson 15](docs/lessons/15-dont-trust-the-review/)
+> — the lesson about verifying AI claims — was itself stale: it had readers prove
+> Talunor has no FTS5, three releases after hybrid recall shipped. That claim is now
+> *half*-true, which turned out to be the better lesson, and `make lessons-assert`
+> ([`docs/lessons/assertions.sh`](docs/lessons/assertions.sh)) re-derives every claim a
+> lesson asks you to reproduce, on every release. **(2)** A container runtime is now
+> *probed*, not merely found on `PATH`: a Rancher Desktop shim whose VM is down used to
+> make the sandbox tests **fail** instead of skip, and `TALUNOR_SANDBOX` auto-detection
+> now falls back to the namespaces backend instead of choosing a runtime that cannot
+> start a container. **(3)** Go 1.26.6 + goldmark 1.7.17 clear every `govulncheck`
+> finding.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
 Layer 14 added **model calibration**; Iteration 4 taught it to *learn* (schema
 migrations, per-fact provenance & confidence, salience/decay/consolidation, async
-reflection). **Iteration 5 — "truthful memory" — is in progress:** a fact now carries an
-auditable **evidence trail** (`/why`) and can be **superseded** by a newer one under an
-explicit, per-domain [trust model](internal/memory/supersede.go), so a model's guess
-never overwrites what you said. Layer by layer, with the reasoning:
-[CHANGELOG.md](CHANGELOG.md).
+reflection). **Iteration 5 — "truthful memory" — is complete:** a fact now carries an
+auditable **evidence trail** (`/why`), can be **superseded** by a newer one under an
+explicit, per-domain [trust model](internal/memory/supersede.go) so a model's guess
+never overwrites what you said, and is retrievable by **meaning or by wording**
+(hybrid recall). Layer by layer, with the reasoning: [CHANGELOG.md](CHANGELOG.md).
 
 ## Architecture (target)
 

@@ -62,7 +62,7 @@ LDFLAGS     := -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(B
 # Container image (local builds). IMAGE overridable; nerdctl for Rancher Desktop.
 IMAGE ?= talunor:local
 
-.PHONY: deps doctor build test release-check capabilities atlas-check readme-check lessons-check tidy clean distclean \
+.PHONY: deps doctor build test release-check capabilities atlas-check readme-check lessons-check lessons-assert tidy clean distclean \
         docker-build docker-run nerdctl-build nerdctl-run
 
 ## deps: download the SQLite extensions and the embedding model into ext/
@@ -128,6 +128,8 @@ release-check: deps
 	@$(MAKE) --no-print-directory readme-check
 	@echo "==> lessons reference valid tags / links / files"
 	@$(MAKE) --no-print-directory lessons-check
+	@echo "==> lesson claims still hold against the source"
+	@$(MAKE) --no-print-directory lessons-assert
 	@echo "release-check: OK"
 
 ## capabilities: state what this host can actually exercise, so a green suite is
@@ -137,6 +139,8 @@ release-check: deps
 ## kernel.apparmor_restrict_unprivileged_userns=1 on update. Export
 ## TALUNOR_REQUIRE (ext,sandbox,docker or all) to turn a missing capability from a
 ## silent skip into a test failure; this line reports what you declared.
+## docker=yes means a runtime that ANSWERS (`nerdctl info`), not merely a CLI on
+## PATH — a Rancher Desktop shim exists while its VM is down.
 capabilities:
 	@ext=no; [ -f ext/vector.so ] && [ -f ext/ai.so ] && [ -f "$(EMBED_MODEL)" ] && ext=yes; \
 	 userns=yes; \
@@ -144,7 +148,13 @@ capabilities:
 	 [ "$$(cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || echo 1)" = "0" ] && userns=no; \
 	 [ "$$(cat /proc/sys/user/max_user_namespaces 2>/dev/null || echo 1)" = "0" ] && userns=no; \
 	 [ "$$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)" = "1" ] && userns=no; \
-	 docker=no; { command -v nerdctl >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; } && docker=yes; \
+	 tmo=""; command -v timeout >/dev/null 2>&1 && tmo="timeout 5"; \
+	 docker=no; \
+	 for rt in nerdctl docker; do \
+	   command -v $$rt >/dev/null 2>&1 || continue; \
+	   if $$tmo $$rt info >/dev/null 2>&1; then docker=yes; break; fi; \
+	   docker="no($$rt on PATH, daemon unreachable)"; \
+	 done; \
 	 echo "==> capabilities: ext=$$ext sandbox=$$userns docker=$$docker | TALUNOR_REQUIRE=$${TALUNOR_REQUIRE:-<unset, missing ones will SKIP>}"
 
 ## atlas-check: fail if docs/atlas.md doesn't reference every tracked file, so a
@@ -205,6 +215,16 @@ lessons-check:
 	done < "$$tmp"; rm -f "$$tmp"; \
 	[ "$$fail" = 0 ] || { echo "lessons-check: FAILED"; exit 1; }; \
 	echo "lessons-check: OK"
+
+## lessons-assert: re-derive the claims a lesson asks the reader to REPRODUCE.
+## lessons-check guards structure (tags/links/paths) and is blind to prose — which
+## is how Lesson 15, the lesson about verifying AI claims, kept telling readers that
+## `grep fts5 internal/` finds nothing three releases after Layer 22 added an FTS5
+## index. A failing assertion means either the code changed under a lesson or the
+## assertion is stale; fix the lesson (EN + FR) and the script together.
+lessons-assert:
+	@test -x docs/lessons/assertions.sh || { echo "lessons-assert: docs/lessons/assertions.sh missing or not executable"; exit 1; }
+	@docs/lessons/assertions.sh
 
 ## chat: stream one prompt to a local Ollama model (LLM provider smoke test)
 ##   usage: make chat PROMPT="explain vector search in one sentence"

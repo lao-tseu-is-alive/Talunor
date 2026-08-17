@@ -14,6 +14,106 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.21.2] - 2026-08-17 — "The course is executable too": a stale lesson, a lying capability probe
+
+A correction batch before the next layer. Three findings from an external review,
+each verified against the code first — and all three turned out to be the *same*
+failure in different places: **a claim nobody re-checks goes stale.** The course
+claimed something about the code that stopped being true; the build claimed a
+capability the host could not actually exercise; the dependency file claimed
+versions with known fixes available.
+
+### Fixed
+
+- **Lesson 15 was itself stale — in the lesson about not believing confident text.**
+  `docs/lessons/15-dont-trust-the-review/` (EN + FR) asks the reader to falsify five
+  claims from a real AI review *on `main`*. Claim **C2** ("recall is a hybrid search
+  combining FTS5 with `sqlite-vec`") was answered "false — twice", with the command
+  `grep -rin "fts5" internal/ # → nothing`. Layer 22 (v0.21.0) shipped an FTS5
+  lexical arm three releases earlier, so the exercise had been steering readers to a
+  **false conclusion** ever since.
+
+  Rather than pin the exercise to an older tag, C2 is now taught as **half-true**,
+  which is the better lesson: hybrid recall is real today, `sqlite-vec` is still the
+  wrong library (the project uses `sqlite-vector` — the confusion `AGENTS.md` warns
+  about), and *the review did not predict anything* — it guessed a plausible
+  architecture that the project later chose for its own reasons. **A guess that
+  later comes true was never evidence when it was made.** Two rules were added to
+  the lesson: a claim is true or false *against a commit*, and a verification
+  exercise rots exactly like code. Verdict counts and the completion checklist
+  updated in both languages.
+- **A container CLI on `PATH` was mistaken for a container runtime.**
+  `internal/sandbox` selected the OCI backend on `exec.LookPath` alone. With Rancher
+  Desktop the `nerdctl` shim exists while its VM is down (it exits 1 with "Rancher
+  Desktop is not running"), so a host that declared `TALUNOR_REQUIRE=docker` got a
+  **failing** suite where it should have got a skip — the capability contract of
+  v0.20.4 reporting a capability that could not run anything.
+  - `findRuntimeBinary` (PATH) is now separate from `runtimeAvailable` (`<bin> info`
+    answers within 5s). `classifyProbe` and `probeDiagnostic` are pure, so the
+    daemon-down and hung-daemon cases are table-testable on a host with no runtime;
+    `probeRuntime` is additionally driven end-to-end against a stub CLI.
+  - `sandbox.FromEnv` auto-detection now falls back to the namespaces backend when
+    the runtime is unusable, instead of picking a backend that fails every later
+    `bash` call; an explicit `TALUNOR_SANDBOX=nerdctl` fails at startup with the
+    client's own diagnostic rather than at the first tool call.
+  - `make capabilities` probes the daemon too: `docker=no(nerdctl on PATH, daemon
+    unreachable)`.
+- **Dependency vulnerabilities cleared.** `go` directive 1.26.5 → **1.26.6** (five
+  reachable standard-library findings; CI reads the toolchain from `go.mod`) and
+  goldmark 1.7.13 → **1.7.17** (one reachable finding through the Glamour/TUI
+  stack). `govulncheck ./...` is clean.
+
+### Added
+
+- **`make lessons-assert` — the course contract** (`docs/lessons/assertions.sh`, run
+  by `release-check`). `lessons-check` guards *structure* (pinned tags exist, links
+  resolve, referenced paths are real) and is blind to prose — which is precisely how
+  the Lesson 15 drift survived a release. The new script re-derives the claims a
+  lesson asks the reader to **reproduce**: twelve assertions covering Lesson 15's
+  C1–C5, including both halves of the now-half-true C2, so a drift back in either
+  direction blocks a release. Offline, grep-only, and named by lesson/claim so a
+  failure says which page to fix.
+
+### Lessons learned
+
+1. **Documentation drift has a severity, and "the exercise now teaches the wrong
+   answer" is the top of it.** A stale package comment misleads; a stale
+   *verification exercise* trains the reader to conclude something false using the
+   exact method the course is selling. The lesson about verifying AI claims was the
+   worst possible place to keep an unverified claim — and it survived every drift
+   guard the repo has, because all of them check structure.
+2. **A guard that cannot fail on prose will not protect prose.** `lessons-check`
+   never had a chance: nothing in "does `docs/lessons/15-…/README.md` link to a real
+   file?" can notice that the file's *conclusion* inverted. The fix was not a
+   smarter linter but a change of category — turn the claims into commands and run
+   them. That is the same move the course teaches about AI reviews (demand the
+   command, not the assertion), applied to the course itself.
+3. **When code overtakes a lesson, prefer teaching the change over pinning it away.**
+   Pinning C2 to a pre-Layer-22 tag would have restored correctness and thrown away
+   the most interesting thing that happened: a fabricated claim that partly came
+   true. Keeping it on `main` forced the sharper distinction — *a guess is not
+   evidence, even in retrospect* — and gave the lesson a rule it lacked (verify
+   against a commit, and record which one).
+4. **"Installed" is not a capability; "answers" is.** v0.20.4 made a missing
+   capability loud, but its *detection* still asked the easy question. `LookPath`
+   answers "is there a file named nerdctl?" when the question is "can this host run
+   a container?" — and the two diverge exactly when a VM-backed runtime is booting,
+   i.e. at the least convenient moment. Any capability that depends on a daemon,
+   socket or VM has to be probed by *use*, with a timeout.
+5. **Keeping the verdict pure is what made the bug testable.** The probe splits into
+   an impure part (run `info`) and a pure part (`classifyProbe`: exit code, output,
+   context error → verdict). Only the second holds the decision that was wrong, and
+   it runs anywhere — the same shape as `verifyChildIdentity` in v0.20.2 and
+   `userNSAvailable` before it. Third time this pattern has paid for itself in this
+   package; treat it as the house rule for privileged or host-dependent decisions.
+6. **An external review earns its keep as a list of things to *check*, not to do.**
+   Of the findings acted on here, one was already fixed (the "20 lessons → 24"
+   count), one had half-fixed itself (the Go patch was in the local toolchain but not
+   in `go.mod`), and one — the runtime probe — was reproduced live *during* this
+   session when the daemon happened to be down for the first test run and up for the
+   second. Verify each item against the code before scheduling any of them; the
+   review is a claim too.
+
 ## [0.21.1] - 2026-07-29 — Course: Lesson 23 ("Two ways to find a memory"), bilingual
 
 A docs-only release: Layer 22 gets its lesson, and the course closes the

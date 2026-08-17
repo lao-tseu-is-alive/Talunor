@@ -29,19 +29,103 @@ type ociRuntime struct {
 	image string
 }
 
-// newRuntime finds a container runtime on PATH, preferring nerdctl (the user
-// runs Rancher Desktop) and falling back to docker.
-func newRuntime() (Sandbox, error) {
-	for _, name := range []string{"nerdctl", "docker"} {
-		if bin, err := exec.LookPath(name); err == nil {
-			img := strings.TrimSpace(os.Getenv("TALUNOR_SANDBOX_IMAGE"))
-			if img == "" {
-				img = defaultImage
-			}
-			return &ociRuntime{bin: bin, name: name, image: img}, nil
+// runtimeProbeTimeout bounds the daemon probe. `info` talks to the daemon, so it
+// can hang (a VM still booting) rather than fail — short enough not to stall
+// startup, long enough for a cold client.
+const runtimeProbeTimeout = 5 * time.Second
+
+// findRuntimeBinary returns the first container runtime CLI on PATH, preferring
+// nerdctl (the user runs Rancher Desktop) and falling back to docker.
+//
+// Finding the binary is NOT the same as being able to run a container: with
+// Rancher Desktop, `nerdctl` is a shim that exists whether or not its VM is
+// up. See runtimeAvailable.
+func findRuntimeBinary() (bin, name string, err error) {
+	for _, n := range []string{"nerdctl", "docker"} {
+		if b, err := exec.LookPath(n); err == nil {
+			return b, n, nil
 		}
 	}
-	return nil, errors.New("neither nerdctl nor docker is on PATH")
+	return "", "", errors.New("neither nerdctl nor docker is on PATH")
+}
+
+// runtimeAvailable reports whether this host can actually RUN a container: a CLI
+// on PATH *and* a daemon that answers. nil means usable; the error says which
+// half is missing.
+//
+// The distinction is the point. A capability check that stops at exec.LookPath
+// reports a runtime that cannot execute anything, which turns a test that should
+// SKIP into a test that FAILS (docs/lessons/22-the-silent-suite).
+func runtimeAvailable(ctx context.Context) error {
+	bin, name, err := findRuntimeBinary()
+	if err != nil {
+		return err
+	}
+	return probeRuntime(ctx, bin, name)
+}
+
+// probeRuntime asks the runtime for its daemon-side state and classifies the
+// answer. `info` is the cheapest command that fails when the daemon is down and
+// succeeds when a container could be started.
+func probeRuntime(ctx context.Context, bin, name string) error {
+	probeCtx, cancel := context.WithTimeout(ctx, runtimeProbeTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(probeCtx, bin, "info").CombinedOutput()
+	return classifyProbe(name, out, err, probeCtx.Err())
+}
+
+// classifyProbe turns the outcome of `<runtime> info` into the capability
+// answer. Kept pure — no exec, no env — so the case that actually bit us (binary
+// present, daemon unreachable) is table-testable on any host, including one with
+// no container runtime at all.
+func classifyProbe(name string, out []byte, runErr, ctxErr error) error {
+	if ctxErr != nil {
+		return fmt.Errorf("%s is on PATH but did not answer within %s (daemon starting or wedged?)",
+			name, runtimeProbeTimeout)
+	}
+	if runErr != nil {
+		return fmt.Errorf("%s is on PATH but its daemon is not usable: %s",
+			name, probeDiagnostic(string(out)))
+	}
+	return nil
+}
+
+// probeDiagnostic extracts the line explaining a failing probe. Both clients
+// print their own "Client:" block first and the failure LAST (docker after a
+// "Server:" header, the Rancher shim as its only line), so the last meaningful
+// line is the diagnostic — no guessing at wording.
+func probeDiagnostic(out string) string {
+	const maxLen = 200
+	diagnostic := ""
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasSuffix(line, ":") {
+			continue // blank, or a section header like "Server:"
+		}
+		diagnostic = line
+	}
+	if diagnostic == "" {
+		return "no output"
+	}
+	if len(diagnostic) > maxLen {
+		return diagnostic[:maxLen] + "…"
+	}
+	return diagnostic
+}
+
+// newRuntime builds the OCI backend around the runtime CLI found on PATH. It
+// does not probe the daemon: callers that need to know whether a container can
+// actually run ask runtimeAvailable.
+func newRuntime() (Sandbox, error) {
+	bin, name, err := findRuntimeBinary()
+	if err != nil {
+		return nil, err
+	}
+	img := strings.TrimSpace(os.Getenv("TALUNOR_SANDBOX_IMAGE"))
+	if img == "" {
+		img = defaultImage
+	}
+	return &ociRuntime{bin: bin, name: name, image: img}, nil
 }
 
 func (r *ociRuntime) Name() string { return r.name }

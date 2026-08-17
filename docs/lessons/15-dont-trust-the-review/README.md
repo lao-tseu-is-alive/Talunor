@@ -106,20 +106,52 @@ at `internal/memory/cgo_link.go` — a file whose very name is cgo — as eviden
 **C2 — FTS5 and the vector extension.**
 
 ```bash
-grep -rin "fts5" internal/          # → nothing
-grep -n "vector_full_scan\|CREATE TABLE" internal/memory/*.go
+grep -rln "fts5" internal/memory/
+grep -n "vector_full_scan" internal/memory/*.go
+grep -rn "sqlite-vec\b" go.mod Makefile internal/
 ```
 
-Recall is a single KNN over `vector_full_scan('memories','embedding', …)`; there is
-**no FTS5** anywhere, and one flat `memories` table. Now open the ground truth the
-review should have read — the gotchas in `AGENTS.md`:
+This is the most interesting of the five, because **its answer changed after the
+review was written.**
+
+When the review was produced, recall was a single KNN over
+`vector_full_scan('memories','embedding', …)`, and `grep -rin "fts5" internal/`
+returned *nothing*. The claim was flatly false. Today the same grep returns
+`internal/memory/lexical.go` (an FTS5 index over the memories) and `hybrid.go` (which
+fuses it with the vector arm): Talunor really does do hybrid recall now — that is
+Layer 22, and [Lesson 23](../23-two-ways-to-find-a-memory/) is its lesson.
+
+So half the claim now describes the code. The other half is still false, in the most
+instructive way. Read the gotcha in `AGENTS.md`:
 
 > *"`sqlite-vector` is NOT the `vec0` virtual-table API (that's the separate
 > `asg017/sqlite-vec`)."*
 
 The project uses **`sqlite-vector`**; the review named **`sqlite-vec`**, the
-*different* library the docs explicitly warn against confusing it with. **C2 is
-false — twice.**
+*different* library the docs explicitly warn against confusing it with — and the
+third grep finds no such dependency. **C2 is half-true today, and was false when it
+was written.**
+
+Now the uncomfortable part, and the reason this claim stayed in the lesson: the review
+did not know any of this. It did not predict hybrid recall — it guessed a plausible
+architecture for a memory system, and eight minor releases later the project chose
+that architecture for reasons of its own (a real recall failure, Lesson 23). **A guess
+that later comes true was never evidence when it was made.** Had you "verified" C2 by
+waiting to be proven right, you would have learned nothing about whether that reviewer
+read your code.
+
+Two working rules follow:
+
+- **A claim is true or false against a commit, not in the abstract.** Record what you
+  verified against — `git rev-parse --short HEAD` — the way you would record the units
+  of a measurement.
+- **A verification exercise rots exactly like code.** This section was stale for one
+  release after Layer 22 shipped: it still told readers that `grep fts5` returns
+  nothing, in the one lesson about not believing confident text. `make lessons-check`
+  never caught it — it guards tags, links and file paths, never prose. So the claims
+  above are now executable: `docs/lessons/assertions.sh` re-derives them from the
+  source on every `make release-check`. Run it yourself after Part 2 and compare its
+  verdicts with your own.
 
 **C3 — the SSRF guard's timing.** Read the top of `internal/webfetch/webfetch.go`:
 
@@ -155,8 +187,9 @@ grep -c "blockedIP\|TestBlocked\|classif" internal/webfetch/webfetch_test.go
 and the test file drives it through a table of addresses. **C5 is true.**
 
 That last one matters as much as the false ones: **the answer to "AI reviews lie" is
-not "distrust everything".** It is "verify *each* claim independently." Four of these
-five were false; blanket cynicism would have wrongly thrown out the true one too.
+not "distrust everything".** It is "verify *each* claim independently." Three of these
+five were plainly false and one was half-true; blanket cynicism would have wrongly
+thrown out the true one too.
 
 ## Part 3 — the method, and the tells
 
@@ -220,7 +253,8 @@ An AI's output is a claim; only what you can verify is evidence.
 ## Completion checklist
 
 - [ ] I falsified C1 by quoting the real `go.mod` line and the `CGO_ENABLED` flags.
-- [ ] I showed C2 is false using `grep` and the `AGENTS.md` `sqlite-vector` gotcha.
+- [ ] I showed C2 is *half*-true today — hybrid recall exists, `sqlite-vec` does not —
+      and can say why a guess that later came true was still not evidence.
 - [ ] I can explain why C3 describes the SSRF *anti-pattern* the code avoids.
 - [ ] I confirmed C4 from `doctor`'s own header comment.
 - [ ] I verified C5 is **true** — and can say why "distrust everything" is also wrong.

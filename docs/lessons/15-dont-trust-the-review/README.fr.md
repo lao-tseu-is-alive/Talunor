@@ -112,20 +112,55 @@ preuve d'un design « sans CGO ».
 **C2 — FTS5 et l'extension vectorielle.**
 
 ```bash
-grep -rin "fts5" internal/          # → rien
-grep -n "vector_full_scan\|CREATE TABLE" internal/memory/*.go
+grep -rln "fts5" internal/memory/
+grep -n "vector_full_scan" internal/memory/*.go
+grep -rn "sqlite-vec\b" go.mod Makefile internal/
 ```
 
-Le recall est un unique KNN sur `vector_full_scan('memories','embedding', …)` ; il n'y
-a **aucun FTS5** nulle part, et une seule table plate `memories`. Ouvre maintenant la
-vérité terrain que la revue aurait dû lire — les gotchas d'`AGENTS.md` :
+C'est la plus intéressante des cinq, parce que **sa réponse a changé après l'écriture
+de la revue.**
+
+À l'époque de la revue, le recall était un unique KNN sur
+`vector_full_scan('memories','embedding', …)` et `grep -rin "fts5" internal/` ne
+renvoyait *rien*. L'affirmation était platement fausse. Aujourd'hui le même grep
+renvoie `internal/memory/lexical.go` (un index FTS5 sur les mémoires) et `hybrid.go`
+(qui le fusionne avec le bras vectoriel) : Talunor fait bel et bien du recall hybride
+— c'est le Layer 22, et la [Leçon 23](../23-two-ways-to-find-a-memory/README.fr.md)
+en est la leçon.
+
+Donc la moitié de l'affirmation décrit maintenant le code. L'autre moitié reste
+fausse, de la manière la plus instructive. Lis le gotcha d'`AGENTS.md` :
 
 > *« `sqlite-vector` is NOT the `vec0` virtual-table API (that's the separate
 > `asg017/sqlite-vec`). »*
 
 Le projet utilise **`sqlite-vector`** ; la revue a nommé **`sqlite-vec`**, la
-bibliothèque *différente* que la doc met explicitement en garde de ne pas confondre.
-**C2 est faux — deux fois.**
+bibliothèque *différente* que la doc met explicitement en garde de ne pas confondre —
+et le troisième grep ne trouve aucune dépendance de ce nom. **C2 est à moitié vrai
+aujourd'hui, et était faux quand il a été écrit.**
+
+Vient maintenant la partie inconfortable, et la raison pour laquelle cette
+affirmation est restée dans la leçon : la revue ne savait rien de tout cela. Elle n'a
+pas *prédit* le recall hybride — elle a deviné une architecture plausible pour un
+système de mémoire, et huit versions mineures plus tard le projet a choisi cette
+architecture pour ses propres raisons (un vrai échec de recall, Leçon 23). **Une
+supposition qui se réalise plus tard n'était pas une preuve au moment où elle a été
+faite.** Si tu avais « vérifié » C2 en attendant qu'on te donne raison, tu n'aurais
+rien appris sur le fait que cette revue avait lu ton code ou non.
+
+Deux règles de travail en découlent :
+
+- **Une affirmation est vraie ou fausse *contre un commit*, pas dans l'absolu.** Note
+  ce contre quoi tu as vérifié — `git rev-parse --short HEAD` — comme tu noterais
+  l'unité d'une mesure.
+- **Un exercice de vérification se périme exactement comme du code.** Cette section
+  est restée périmée pendant une version après le Layer 22 : elle disait encore que
+  `grep fts5` ne renvoie rien, dans la seule leçon qui apprend à ne pas croire un
+  texte confiant. `make lessons-check` ne l'a jamais attrapé — il garde les tags, les
+  liens et les chemins, jamais la prose. Les affirmations ci-dessus sont donc
+  désormais exécutables : `docs/lessons/assertions.sh` les redérive depuis les
+  sources à chaque `make release-check`. Lance-le après la Partie 2 et compare ses
+  verdicts aux tiens.
 
 **C3 — le moment de la garde SSRF.** Lis le haut de `internal/webfetch/webfetch.go` :
 
@@ -162,8 +197,8 @@ d'état — et le fichier de test le pilote via une table d'adresses. **C5 est v
 
 Cette dernière compte autant que les fausses : **la réponse à « les revues IA
 mentent » n'est pas « se méfier de tout ».** C'est « vérifier *chaque* affirmation
-indépendamment ». Quatre de ces cinq étaient fausses ; un cynisme global aurait rejeté
-à tort la vraie aussi.
+indépendamment ». Trois de ces cinq étaient franchement fausses et une à moitié vraie ;
+un cynisme global aurait rejeté à tort la vraie aussi.
 
 ## Partie 3 — la méthode, et les signes
 
@@ -233,7 +268,9 @@ La sortie d'une IA est une affirmation ; seul ce que tu peux vérifier est une p
 ## Checklist de fin
 
 - [ ] J'ai falsifié C1 en citant la vraie ligne de `go.mod` et les flags `CGO_ENABLED`.
-- [ ] J'ai montré que C2 est faux avec `grep` et le gotcha `sqlite-vector` d'`AGENTS.md`.
+- [ ] J'ai montré que C2 est *à moitié* vrai aujourd'hui — le recall hybride existe,
+      `sqlite-vec` non — et je sais dire pourquoi une supposition qui s'est réalisée
+      n'était pas pour autant une preuve.
 - [ ] Je sais expliquer pourquoi C3 décrit l'*anti-pattern* SSRF que le code évite.
 - [ ] J'ai confirmé C4 depuis le commentaire de tête de `doctor`.
 - [ ] J'ai vérifié que C5 est **vrai** — et je sais dire pourquoi « se méfier de tout »

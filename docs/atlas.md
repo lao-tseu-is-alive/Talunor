@@ -3,8 +3,8 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.18.1` (course Lesson 19 — off the critical path)
-- **Generated:** 2026-07-22
+- **Version:** `v0.21.2` (executable course claims + a truthful runtime probe)
+- **Generated:** 2026-08-17
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
   (`.env`), personal notes (`todo.md`), and review output (`/reports`). Rebuild
@@ -209,6 +209,9 @@ Talunor/
 │   └── lessons/           #   Hands-on course: a guided path through the tag-by-tag history.
 │       │                  #     Each lesson is fully bilingual: README.md (EN, canonical) + README.fr.md (FR).
 │       ├── README.md      #     Course index + prerequisites + the two-badge convention.
+│       ├── assertions.sh  #     The course contract: re-derives the claims lessons ask readers to
+│       │                  #       reproduce (make lessons-assert, in release-check) — prose drift
+│       │                  #       lessons-check is blind to.
 │       ├── 00-how-to-use-this-course/README.md  # Navigation: tags, detached HEAD, the reference docs.
 │       ├── 01-first-contact/README.md           # First offline win (make doctor) + the v0.1.0 seed.
 │       ├── 02-persistent-memory/README.md       # The SQLite store lifecycle at v0.2.0; short vs long term.

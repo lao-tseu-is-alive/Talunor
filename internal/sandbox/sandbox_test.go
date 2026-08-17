@@ -3,7 +3,8 @@ package sandbox
 import (
 	"context"
 	"errors"
-	"os/exec"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -27,12 +28,13 @@ func requireNamespaces(t *testing.T) Sandbox {
 }
 
 // requireRuntime returns the OCI backend under the same contract
-// (TALUNOR_REQUIRE=docker).
+// (TALUNOR_REQUIRE=docker). The availability question is "can this host run a
+// container?", not "is there a CLI on PATH?" — a Rancher Desktop shim answers
+// yes to the second while its VM is down, which used to fail these tests
+// instead of skipping them.
 func requireRuntime(t *testing.T) Sandbox {
 	t.Helper()
-	if !hasRuntime() {
-		testenv.Require(t, testenv.CapDocker, errors.New("no nerdctl/docker on PATH"))
-	}
+	testenv.Require(t, testenv.CapDocker, runtimeAvailable(context.Background()))
 	sb, err := newRuntime()
 	if err != nil {
 		t.Fatalf("newRuntime: %v", err)
@@ -47,13 +49,66 @@ func smallLimits() Limits {
 	return l
 }
 
-func hasRuntime() bool {
-	for _, n := range []string{"nerdctl", "docker"} {
-		if _, err := exec.LookPath(n); err == nil {
-			return true
-		}
+// TestClassifyProbeSeparatesPresenceFromUsability pins the decision that used to
+// be implicit in exec.LookPath: a runtime is available only when its daemon
+// answers. Pure inputs, so it runs on a host with no container runtime at all.
+func TestClassifyProbeSeparatesPresenceFromUsability(t *testing.T) {
+	cases := []struct {
+		name    string
+		out     string
+		runErr  error
+		ctxErr  error
+		wantErr bool
+		wantSub string
+	}{
+		{name: "usable", out: "Client:\n Server Version: v2.3.2\n", wantErr: false},
+		{
+			name: "daemon down", out: "Rancher Desktop is not running. Please start Rancher Desktop to use nerdctl\n",
+			runErr: errors.New("exit status 1"), wantErr: true, wantSub: "Rancher Desktop is not running",
+		},
+		{
+			name: "docker socket missing",
+			out: "Client:\n Version: 29.6.2-rd\n\nServer:\n" +
+				"failed to connect to the docker API at unix:///var/run/docker.sock: no such file\n",
+			runErr: errors.New("exit status 1"), wantErr: true, wantSub: "failed to connect",
+		},
+		{
+			name: "hung daemon", ctxErr: context.DeadlineExceeded,
+			runErr: context.DeadlineExceeded, wantErr: true, wantSub: "did not answer",
+		},
 	}
-	return false
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := classifyProbe("nerdctl", []byte(tc.out), tc.runErr, tc.ctxErr)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("classifyProbe = %v; wantErr %v", err, tc.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), tc.wantSub) {
+				t.Errorf("classifyProbe = %q; want it to mention %q", err, tc.wantSub)
+			}
+		})
+	}
+}
+
+// TestProbeRuntimeReportsAFailingClient drives the exec path itself against a
+// stub that behaves like a runtime CLI whose daemon is down: present, exits
+// non-zero, explains why. No container runtime needed.
+func TestProbeRuntimeReportsAFailingClient(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stub is a shell script")
+	}
+	stub := filepath.Join(t.TempDir(), "fakectl")
+	script := "#!/bin/sh\necho 'Rancher Desktop is not running. Please start it'\nexit 1\n"
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err := probeRuntime(context.Background(), stub, "fakectl")
+	if err == nil {
+		t.Fatal("probeRuntime succeeded against a stub whose daemon is down")
+	}
+	if !strings.Contains(err.Error(), "not running") {
+		t.Errorf("probeRuntime error = %q; want the client's own explanation", err)
+	}
 }
 
 // runBackend runs one script through sb and returns the output, failing on an

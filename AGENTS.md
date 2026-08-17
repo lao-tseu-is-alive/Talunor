@@ -34,7 +34,11 @@ Module: `github.com/lao-tseu-is-alive/Talunor` · Go 1.26 · **cgo required**.
      README "Current version" banner matches `internal/version` (`readme-check`),
      and `docs/lessons/` references only valid tags/links/files (`lessons-check`).
      (These drift alarms can't judge whether prose is *accurate*, only that it's
-     not stale/missing.) For a networked, clean-room proof also run `make nerdctl-build`.
+     not stale/missing — which is why **`lessons-assert`** was added in v0.21.2:
+     `docs/lessons/assertions.sh` re-derives the claims a lesson asks the reader to
+     REPRODUCE. If a layer changes what a lesson's commands print, update the lesson
+     (EN + FR) and its assertion in the same commit.) For a networked, clean-room
+     proof also run `make nerdctl-build`.
   5. Commit, then `git tag -a vX.Y.Z`, then push branch **and** tag to `origin`.
      The tag is the public release trigger, so run step 4 *before* tagging — green
      CI is not enough (CI does not exercise the release bundle step).
@@ -174,6 +178,10 @@ internal/sandbox/  runs an untrusted script under limits; Sandbox iface + FromEn
                    re-exec (pid 1 + per-run token on fd 3) before childMain mounts
                    anything — an ambient TALUNOR_SANDBOX_CHILD=1 can no longer
                    hijack a binary linking this package (gotcha 11)
+                   v0.21.2: a runtime is PROBED, not just found — findRuntimeBinary
+                   (PATH) vs runtimeAvailable (`<bin> info` answers, 5s cap) +
+                   pure classifyProbe/probeDiagnostic; FromEnv auto-detect falls back
+                   to namespaces when the daemon is down (gotcha 16)
 internal/webfetch/ guarded HTTP fetcher for web_fetch: SSRF guard in the dialer
                    Control hook (blockedIP, DNS-rebinding-safe, re-checked per
                    redirect), timeout/MaxBytes/redirect limits, text-only bodies
@@ -368,6 +376,14 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
     it after `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`.
 15. **No seccomp in the namespaces backend** — it's defense-in-depth/teaching, not
     a boundary for hostile code. Say so; use the OCI runtime for real isolation.
+16. **`exec.LookPath("nerdctl")` is not a container runtime.** Rancher Desktop
+    installs a shim that exists while its VM is down (it exits 1 with "Rancher
+    Desktop is not running"), and `docker info` likewise fails with the socket
+    missing — so presence-based detection reports a capability that cannot execute
+    anything, turning a test that should SKIP into one that FAILS (v0.21.2). Probe
+    with `<bin> info` and a timeout (`runtimeAvailable`); keep the verdict logic in
+    a pure function (`classifyProbe`) so the daemon-down case is testable on a host
+    with no runtime at all. Same rule in `make capabilities`.
 
 ## Testing conventions
 
@@ -689,5 +705,19 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   stopword incident, RRF + its single-arm trap, retrieval-vs-identity, and build-tag capability.
   Competency matrix: persistence/retrieval becomes 02 · 03 · 23; course now 00–23 (24 lessons).
   **Iteration 5 is fully built AND fully lessoned.**
+- **v0.21.2 (fixes)** = **"the course is executable too"** — a correction batch before the next
+  layer, all three items the same failure: *a claim nobody re-checks goes stale.* (1) **Lesson 15
+  was itself stale** — the lesson on verifying AI claims had readers prove `grep fts5 internal/`
+  finds nothing, three releases after Layer 22. Rewritten: C2 is now **half-true** (hybrid recall
+  is real; `sqlite-vec` is still the wrong library) — the better lesson, because *a guess that
+  later comes true was never evidence when it was made*; new rule: a claim is true against a
+  COMMIT. (2) **`make lessons-assert`** (`docs/lessons/assertions.sh`, in `release-check`)
+  re-derives the claims a lesson asks the reader to reproduce — `lessons-check` guards structure
+  and is blind to prose, which is exactly how (1) survived. (3) **Container capability is probed,
+  not assumed**: `runtimeAvailable` runs `<bin> info` (5s cap) so "binary on PATH" stops meaning
+  "can run a container" — a Rancher Desktop shim with its VM down made `TALUNOR_REQUIRE=docker`
+  tests FAIL instead of skip, and auto-detect now falls back to namespaces; `make capabilities`
+  reports `docker=no(nerdctl on PATH, daemon unreachable)`. Plus Go 1.26.6 + goldmark 1.7.17 →
+  `govulncheck` clean. No schema/behaviour change beyond the sandbox selection.
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source. Same per-layer checkpoint rhythm.

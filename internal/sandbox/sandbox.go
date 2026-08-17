@@ -61,24 +61,37 @@ type Sandbox interface {
 
 // FromEnv selects a backend. TALUNOR_SANDBOX may be "nerdctl" (or its alias
 // "docker" / "runtime") or "namespaces". When unset it auto-detects: a container
-// runtime if one is on PATH, otherwise the namespaces backend on Linux. It
+// runtime if one is *usable*, otherwise the namespaces backend on Linux. It
 // returns a clear error when the requested (or only available) backend cannot be
 // used on this host.
+//
+// "Usable" means the daemon answers, not merely that a CLI is on PATH: a
+// Rancher Desktop shim exists while its VM is down, and selecting a runtime that
+// cannot start a container would fail every later bash call instead of falling
+// back here (the probe costs one `info` round-trip, once, at startup).
 func FromEnv() (Sandbox, error) {
+	ctx := context.Background()
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("TALUNOR_SANDBOX"))) {
 	case "nerdctl", "docker", "runtime", "container":
+		if err := runtimeAvailable(ctx); err != nil {
+			return nil, fmt.Errorf("TALUNOR_SANDBOX requests the container runtime, but: %w", err)
+		}
 		return newRuntime()
 	case "namespaces", "ns", "userns":
 		return newNamespaces()
 	case "":
 		// Auto-detect: prefer a real runtime; fall back to namespaces.
-		if sb, err := newRuntime(); err == nil {
-			return sb, nil
+		runtimeErr := runtimeAvailable(ctx)
+		if runtimeErr == nil {
+			if sb, err := newRuntime(); err == nil {
+				return sb, nil
+			}
 		}
 		sb, err := newNamespaces()
 		if err != nil {
-			return nil, fmt.Errorf("no container runtime (nerdctl/docker) found and the "+
-				"namespaces backend is unavailable: %w; install nerdctl or set TALUNOR_SANDBOX", err)
+			return nil, fmt.Errorf("no usable container runtime (%v) and the "+
+				"namespaces backend is unavailable: %w; install nerdctl or set TALUNOR_SANDBOX",
+				runtimeErr, err)
 		}
 		return sb, nil
 	default:
