@@ -269,6 +269,7 @@ lives in the same directory.
 | `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow / prompt / deny); unset = default per-tool gate | — |
 | `TALUNOR_PLANNER` | set `1` to plan before acting (inspectable, approved plan, then capped ReAct execution) | `0` |
 | `TALUNOR_APPROVAL` | plan approval mode: `plan` (approve the plan; high-risk steps still re-confirm live args), `step` (plan + every risky step), `highrisk` (advisory plan) | `plan` |
+| `TALUNOR_PLANNER_FALLBACK` | what happens when planning **fails**: `fail_closed` (answer without tools — the plan's cap is gone, so acting is not permitted), `ask` (the human decides, per turn), `react` (plain ReAct loop, every tool offered) | `fail_closed` |
 | `TALUNOR_BASH` | set `1` to enable the sandboxed, approval-gated `bash` tool | `0` |
 | `TALUNOR_DEBUG` | trace recall/tools/reflection: `1` → log file next to DB, `stderr`, or a path | off |
 | `TALUNOR_SANDBOX` | bash backend: `nerdctl` or `namespaces` (unset = auto-detect) | auto |
@@ -294,15 +295,15 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.22.1** — course **[Lesson 24](docs/lessons/24-the-adr-that-didnt-bind/)**
-> ("The ADR that didn't bind"), the bilingual lesson for **Layer 23** (v0.22.0). It is a
-> post-mortem of this repo's own architecture decision record: ADR 0003 said *authority is
-> per-domain*, but the code could only see **who** spoke, never **what about** — so the
-> per-domain half lived in a prompt's wording and an LLM's judgement. The lesson has you
-> reproduce the resulting hole at `v0.21.2` with a twelve-line test (an unattributed "the
-> earth is flat" retiring a verified tool's observation), then read the fix that made the
-> claim arithmetic. Its transferable rule: **find the load-bearing step of every safety
-> claim — if it is a prompt, you have a habit, not a guarantee.**
+> Current version: **v0.22.2** — **a planning failure no longer quietly re-arms the
+> agent.** Turning the planner on is a request to be *bounded*: the approved plan is what
+> caps which tools the executor may offer. Until now, if planning itself failed, the turn
+> fell through to the plain loop — every tool back on the table at exactly the moment the
+> mechanism you opted into stopped working. (Each call was still policy-gated, so nothing
+> ran unchecked; but *gated* is not *capped*.) The behaviour is now an explicit choice,
+> `TALUNOR_PLANNER_FALLBACK`: **`fail_closed`** (default) answers without tools and says so,
+> **`ask`** lets you decide per turn, **`react`** restores the old behaviour — announced.
+> An unrecognised value resolves to `fail_closed`.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

@@ -14,6 +14,72 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.22.2] - 2026-08-18 — The planner's silent fallback becomes an explicit contract
+
+The last "Important" finding of the 2026-08-14 external review, verified against
+the code and closed. Enabling the planner is a request to be *bounded*: the plan
+is what caps which tools the executor may offer. When planning failed, the turn
+fell through to the plain ReAct loop — handing every tool back at exactly the
+moment the mechanism the user opted into stopped working.
+
+### Fixed
+
+- **A planning failure no longer changes the execution contract silently.**
+  `runPlanned` called `reactLoop(…, execCtx{})` on a planner error: policy and
+  per-call approval still applied (so this was never an unrestricted bypass), but
+  the plan's `allowTools` cap and whole-plan inspectability were gone, and the only
+  trace was a `/debug` line nobody sees with debug off. **"Still gated" is not
+  "still capped."**
+
+  New `Config.PlannerFallback` / `TALUNOR_PLANNER_FALLBACK`:
+  - **`fail_closed` (default)** — the turn answers with an **empty** `allowTools`
+    set: it streams, stores and reflects like any turn, but offers no tools, so the
+    model cannot request an action no approved plan bounds. A `noPlanPrompt` tells
+    it to say what it cannot do rather than pretend to have done it, and the failure
+    is surfaced to the user, not just to the trace.
+  - **`ask`** — an `llm.ApprovalRequest("(no plan)")` states plainly that tools
+    would no longer be capped; approving grants the plain loop for that turn,
+    declining behaves as `fail_closed`. The *change of contract* is what gets
+    consented to.
+  - **`react`** — the previous behaviour, now opt-in and announced ("tools are not
+    capped this turn").
+
+  Unknown values resolve to `fail_closed`, matching the existing `ApprovalMode`
+  rule: a typo in the setting that governs *what happens when the safety mechanism
+  breaks* must never widen what the agent may do.
+
+### Changed
+
+- **Default behaviour change** (intended): with `TALUNOR_PLANNER=1`, a turn whose
+  planning fails no longer runs tools. Set `TALUNOR_PLANNER_FALLBACK=react` to
+  restore the old behaviour. The startup notice now reports both settings
+  (`planner enabled (approval: plan, on planning failure: fail_closed)`).
+- `scriptedProvider` in the tests records `lastOpts`, so a test can assert **which
+  tools a turn was allowed to offer** — the property that actually matters here.
+
+### Lessons learned
+
+1. **A fallback is a policy decision wearing an implementation's clothes.** The
+   original line read like plumbing — "planning failed, run the normal loop, the
+   turn still answers" — and every word of that is true. What it omits is that the
+   normal loop is the *unbounded* one. Whenever a mechanism degrades, ask what it
+   was protecting and whether the degraded path still protects it; "it still works"
+   is about liveness, and the question was about authority.
+2. **Fail-closed does not have to mean fail-silent.** The safe answer here is not
+   refusing the turn: it is answering *without the ability to act*. Expressing that
+   as an empty (non-nil) `allowTools` set reused the plan cap's own machinery
+   instead of adding a special case — the mechanism that bounds a successful plan
+   also bounds the absence of one.
+3. **When the safe and the permissive paths differ, the config typo must land on
+   the safe one.** Both `ApprovalMode` and now `PlannerFallback` normalise unknown
+   values to their most conservative option. Cheap, and it removes a whole class of
+   "we thought that was set" incidents.
+4. **Assert the capability, not the outcome.** The regression test does not check
+   that the answer looks right; it counts the tools the provider was offered. An
+   outcome test would have passed against the old code whenever the model simply
+   chose not to call anything — which is most of the time, and is precisely how a
+   silent widening survives a green suite.
+
 ## [0.22.1] - 2026-08-17 — Course: Lesson 24 ("The ADR that didn't bind"), bilingual
 
 Layer 23 gets its lesson. The course's fourth post-mortem, and the first about a

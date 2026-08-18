@@ -196,7 +196,9 @@ func buildAgentConfig(store *memory.Store, provider llm.Provider) (agent.Config,
 	if envBool("TALUNOR_PLANNER", false) {
 		cfg.Planner = agent.NewLLMPlanner(provider, cfg.Options)
 		cfg.ApprovalMode = planApprovalMode()
-		fmt.Fprintf(os.Stderr, "talunor: planner enabled (approval: %s)\n", cfg.ApprovalMode)
+		cfg.PlannerFallback = plannerFallbackMode()
+		fmt.Fprintf(os.Stderr, "talunor: planner enabled (approval: %s, on planning failure: %s)\n",
+			cfg.ApprovalMode, cfg.PlannerFallback)
 	}
 
 	return cfg, dbgClose, nil
@@ -214,6 +216,21 @@ func planApprovalMode() string {
 		return agent.ApprovalHighRisk
 	default:
 		return agent.ApprovalPlan
+	}
+}
+
+// plannerFallbackMode reads TALUNOR_PLANNER_FALLBACK, defaulting to fail_closed:
+// when planning breaks, the turn answers but does not act. An unrecognised value
+// resolves to the default as well — a typo in the setting that governs "what
+// happens when the plan cap is unavailable" must never widen what the agent may do.
+func plannerFallbackMode() string {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("TALUNOR_PLANNER_FALLBACK"))) {
+	case agent.FallbackAsk:
+		return agent.FallbackAsk
+	case agent.FallbackReact:
+		return agent.FallbackReact
+	default:
+		return agent.FallbackFailClosed
 	}
 }
 

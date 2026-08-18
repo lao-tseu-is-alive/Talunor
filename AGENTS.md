@@ -130,7 +130,12 @@ internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/obs
                    runs tools; opt-in Config.Planner/TALUNOR_PLANNER). execute.go =
                    runPlanned: plan→policy pre-screen→whole-plan approval
                    (Config.ApprovalMode plan|step|highrisk)→reactLoop capped to the
-                   plan's tools→learn; /plan shows the last plan. reflect.go =
+                   plan's tools→learn; /plan shows the last plan. planFallback
+                   (v0.22.2) owns the PLANNING-FAILURE path: Config.PlannerFallback
+                   fail_closed (default — answer with an EMPTY allowTools set, i.e.
+                   no tools) | ask (approval request, then react-or-fail-closed) |
+                   react (the old plain loop, announced). Rationale: the plan IS the
+                   tool cap, so falling through silently widened the contract. reflect.go =
                    FactExtractor (LLM distils facts into KindFact;
                    DisableReflection()). LAYER 17: reflect CONSOLIDATES a restated
                    fact (knownFact → store.ReinforceFact) instead of skipping; Turn
@@ -300,6 +305,7 @@ real env wins). See `.env_sample` for the full list.
 | `TALUNOR_POLICY` | path to a YAML rule file gating tool calls (allow/prompt/deny; `docs/policy.sample.yaml`); unset = default per-tool gate | — |
 | `TALUNOR_PLANNER` | `1` plans before acting (inspectable, approved plan → ReAct execution capped to the plan's tools) | `0` |
 | `TALUNOR_APPROVAL` | plan approval mode: `plan` / `step` / `highrisk` (ignored when planner off) | `plan` |
+| `TALUNOR_PLANNER_FALLBACK` | what a turn may do when PLANNING FAILS: `fail_closed` (answer, no tools), `ask` (human decides), `react` (plain loop, cap dropped) | `fail_closed` |
 | `TALUNOR_DEBUG` | trace recall/tools/reflection: `1` → log file next to DB, `stderr`, or a path | off |
 | `TALUNOR_BASH` | `1` enables the sandboxed, approval-gated `bash` tool | `0` |
 | `TALUNOR_SANDBOX` | bash backend: `nerdctl`/`docker` or `namespaces` (unset = auto) | auto |
@@ -765,6 +771,16 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   exposed a real coverage gap (subject was unasserted at the point of assignment) → two new
   assertions in `TestReflectLearnsFromToolObservation`. Competency matrix: safety becomes
   09 · 10 · 12 · 14 · 21 · 24; course now 00–24 (25 lessons).
+- **v0.22.2 (fix)** = **the planner's silent fallback is now an explicit contract**. On a planning
+  failure `runPlanned` fell through to `reactLoop(execCtx{})` — handing back EVERY tool at the moment
+  the mechanism the user opted into stopped working. Policy/approval still applied, so it was never
+  an unrestricted bypass, but "still gated" ≠ "still capped", and the change was silent (a `/debug`
+  line). New `Config.PlannerFallback` (`TALUNOR_PLANNER_FALLBACK`): **`fail_closed` (default)** answers
+  with an empty `allowTools` set — the turn responds, streams, stores and reflects, but cannot act —
+  plus a `noPlanPrompt` so the model says what it can't do instead of pretending; `ask` emits an
+  `llm.ApprovalRequest("(no plan)")` and binds the answer; `react` is the old behaviour, opt-in and
+  ANNOUNCED. Unknown values resolve to `fail_closed` (a typo must never widen authority). Regression
+  tests assert the offered tool set per mode (scriptedProvider now records `lastOpts`).
 - **Next — open threads (documented, not started):** calibration→policy wiring;
-  the executed plan as a learning source; the planner's silent ReAct fallback (it drops the
-  plan's tool cap — wants an explicit fail_closed|ask|react mode). Same per-layer checkpoint rhythm.
+  the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
+  tests; calibration output 0600 + KDF. Same per-layer checkpoint rhythm.

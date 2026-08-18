@@ -3,8 +3,8 @@
 A guided map of the Talunor codebase: every tracked directory and file, each with
 a one-line note on what it is and what it does.
 
-- **Version:** `v0.22.1` (course Lesson 24 — the ADR that didn't bind)
-- **Generated:** 2026-08-17
+- **Version:** `v0.22.2` (the planner's failure path becomes an explicit contract)
+- **Generated:** 2026-08-18
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
   (`.env`), personal notes (`todo.md`), and review output (`/reports`). Rebuild
@@ -111,6 +111,8 @@ Talunor/
 │   │   │                     #       never runs tools); opt-in Config.Planner / TALUNOR_PLANNER.
 │   │   ├── execute.go        #     LAYER 13: runPlanned — plan → policy pre-screen → whole-plan approval
 │   │   │                     #       → reactLoop capped to the plan's tools → learn; FormatPlan, /plan.
+│   │   │                     #       planFallback (v0.22.2): the planning-FAILURE contract —
+│   │   │                     #       fail_closed (default, no tools) | ask | react.
 │   │   ├── reflect.go        #     FactExtractor: the LLM distils durable facts into semantic memory.
 │   │   ├── arbiter.go        #     LAYER 21: FactArbiter — classifies a new fact vs a neighbour (restates/supersedes/unrelated).
 │   │   ├── debug.go          #     LAYER 11: /debug runtime toggle — streams recall rankings + reflection

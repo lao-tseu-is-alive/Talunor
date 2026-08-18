@@ -44,12 +44,17 @@ type scriptedProvider struct {
 	steps    [][]llm.Chunk
 	call     int
 	lastMsgs []llm.Message
+	// lastOpts records the options of the most recent call — notably Tools, which
+	// is how a test asserts WHICH tools a turn was allowed to offer (the plan cap,
+	// and the planner-fallback contract that depends on it).
+	lastOpts llm.Options
 }
 
 func (p *scriptedProvider) Name() string { return "scripted" }
 
-func (p *scriptedProvider) Chat(_ context.Context, msgs []llm.Message, _ llm.Options) (<-chan llm.Chunk, error) {
+func (p *scriptedProvider) Chat(_ context.Context, msgs []llm.Message, opts llm.Options) (<-chan llm.Chunk, error) {
 	p.lastMsgs = msgs
+	p.lastOpts = opts
 	step := p.steps[p.call]
 	p.call++
 	ch := make(chan llm.Chunk, len(step))

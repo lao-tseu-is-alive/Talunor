@@ -17,8 +17,8 @@ import (
 // out.
 //
 // The phases mirror the cognition model: plan → gate → execute → learn. A planning
-// failure is not fatal — it falls back to the plain ReAct loop so the turn still
-// answers.
+// failure is not fatal, but it is not silent either: see planFallback, which decides
+// what a turn may do when no approved plan exists to bound it.
 func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string, userTurnID int64, hits []memory.Hit, out chan<- llm.Chunk) {
 	defer close(out)
 	a.emitRecallDebug(ctx, out, input, hits)
@@ -33,9 +33,7 @@ func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string
 	// preferences) instead of re-discovering it.
 	pl, err := a.planner.Plan(ctx, input, fencedMemories(hits), toolDefs)
 	if err != nil {
-		a.trace("plan.failed", "err", err)
-		a.sendDebug(ctx, out, "plan: failed (%v) — falling back to ReAct", err)
-		a.reactLoop(ctx, msgs, input, userTurnID, out, execCtx{})
+		a.planFallback(ctx, msgs, input, userTurnID, out, err)
 		return
 	}
 	a.lastPlan.Store(pl)
@@ -104,6 +102,67 @@ func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string
 	}
 	a.reactLoop(ctx, msgs, input, userTurnID, out, exec)
 }
+
+// planFallback runs the turn when planning failed, under Config.PlannerFallback.
+// It owns the rest of the turn (the caller returns straight after) but does NOT
+// close out — runPlanned's defer does.
+//
+// Why this is not just `reactLoop(…, execCtx{})`: the plan is what caps which tools
+// the executor may offer (execCtx.allowTools). Falling through to the plain loop
+// therefore hands back every tool at the exact moment the mechanism the user opted
+// into stopped working — a silent, upward change of the turn's execution contract.
+// The policy and per-call approval still apply, so it was never an unrestricted
+// bypass; but "still gated" is not "still capped", and only the human can trade one
+// for the other. Hence: fail closed by default, and never change the contract
+// without either an explicit config or an explicit yes.
+func (a *Agent) planFallback(ctx context.Context, msgs []llm.Message, input string, userTurnID int64, out chan<- llm.Chunk, planErr error) {
+	mode := a.cfg.PlannerFallback
+	a.trace("plan.failed", "err", planErr, "fallback", mode)
+
+	if mode == FallbackAsk {
+		req := llm.NewApprovalRequest("(no plan)", fmt.Sprintf(
+			"Planning failed: %v\n\nProceed WITHOUT a plan? The tools would no longer be "+
+				"capped to an approved set (each call is still policy-gated).", planErr))
+		if !a.send(ctx, out, llm.Chunk{Approval: req}) {
+			return
+		}
+		if req.Decision(ctx) {
+			mode = FallbackReact
+		} else {
+			if ctx.Err() != nil {
+				return
+			}
+			mode = FallbackFailClosed
+		}
+		a.trace("plan.fallback.decided", "mode", mode)
+	}
+
+	if mode == FallbackReact {
+		// Explicitly chosen (config or a live yes): the pre-v0.22.2 behaviour, but
+		// announced rather than assumed.
+		a.send(ctx, out, llm.Chunk{Reasoning: fmt.Sprintf(
+			"⚠ planning failed (%v) — continuing without a plan; tools are not capped this turn.\n", planErr)})
+		a.reactLoop(ctx, msgs, input, userTurnID, out, execCtx{})
+		return
+	}
+
+	// FallbackFailClosed: answer, but do not act. A non-nil EMPTY allowTools set is
+	// what expresses that — toolSpecs offers nothing, so the model cannot request a
+	// call it would then be gated on. The turn is still a real turn: it streams,
+	// stores and reflects like any other.
+	a.send(ctx, out, llm.Chunk{Reasoning: fmt.Sprintf(
+		"⚠ planning failed (%v) — answering without tools (planner fallback: fail_closed).\n", planErr)})
+	msgs = append(msgs, llm.Message{Role: llm.RoleSystem, Content: noPlanPrompt})
+	a.reactLoop(ctx, msgs, input, userTurnID, out, execCtx{allowTools: map[string]bool{}})
+}
+
+// noPlanPrompt tells the model it has no tools this turn, so it explains what it
+// cannot do instead of inventing a result it could not obtain — the failure mode a
+// tool-less turn actually has.
+const noPlanPrompt = "No executable plan could be produced for this turn, so you have NO tools " +
+	"available. Answer from what you already know. If the request genuinely requires an action or " +
+	"a lookup you cannot perform, say so plainly and suggest what the user could ask next — do not " +
+	"pretend to have performed it."
 
 // finishAnswer streams a canned final answer and runs the same learn step
 // (short-term + long-term store, then reflection) the ReAct core would — so an

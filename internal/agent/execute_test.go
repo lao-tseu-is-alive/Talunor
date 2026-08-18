@@ -307,23 +307,108 @@ func TestPlannerReceivesRecalledMemory(t *testing.T) {
 	}
 }
 
-func TestPlannerFailureFallsBackToReact(t *testing.T) {
+// --- planner-failure contract (v0.22.2) -----------------------------------
+//
+// A planning failure used to fall through to the plain ReAct loop, which handed
+// back every tool at the moment the mechanism the user opted into stopped working.
+// These pin the three modes, and in particular that the DEFAULT no longer does it.
+
+// planFailureTurn drives one turn whose planner always fails, with a tool
+// registered, and returns the provider (for the tools it was offered) plus the
+// turn's full output.
+func planFailureTurn(t *testing.T, fallback string, approve *bool) (*scriptedProvider, string) {
+	t.Helper()
 	store := testStore(t)
-	prov := &scriptedProvider{steps: [][]llm.Chunk{{{Content: "fallback answer"}}}}
+	prov := &scriptedProvider{steps: [][]llm.Chunk{{{Content: "answer"}}}}
+	ran := false
 	cfg := DefaultConfig()
 	cfg.Planner = fakePlanner{err: errors.New("boom")}
+	cfg.PlannerFallback = fallback
+	cfg.Tools = tools.NewRegistry(fakeTool{ran: &ran})
 	cfg.Extractor = DisableReflection()
 	ag := New(store, prov, cfg)
+	t.Cleanup(func() { ag.Close() })
 
-	out, err := ag.Turn(context.Background(), "hello")
+	out, err := ag.Turn(context.Background(), "do something")
 	if err != nil {
 		t.Fatalf("turn: %v", err)
 	}
 	var b strings.Builder
 	for c := range out {
 		b.WriteString(c.Content)
+		b.WriteString(c.Reasoning)
+		if c.Approval != nil {
+			if approve == nil {
+				t.Errorf("unexpected approval request in %s mode", fallback)
+				c.Approval.Respond(false)
+				continue
+			}
+			b.WriteString("[approval:" + c.Approval.Tool + "]")
+			c.Approval.Respond(*approve)
+		}
 	}
-	if !strings.Contains(b.String(), "fallback answer") {
-		t.Errorf("a planner failure should fall back to a normal turn, got %q", b.String())
+	return prov, b.String()
+}
+
+// TestPlannerFailureFailsClosedByDefault is the regression: with no plan there is
+// no approved cap, so the turn answers with NO tools rather than with all of them.
+func TestPlannerFailureFailsClosedByDefault(t *testing.T) {
+	prov, got := planFailureTurn(t, "", nil) // "" → the default
+	if n := len(prov.lastOpts.Tools); n != 0 {
+		t.Errorf("fail_closed offered %d tools; want 0 (no plan = no approved cap)", n)
+	}
+	if !strings.Contains(got, "answer") {
+		t.Errorf("the turn should still answer, got %q", got)
+	}
+	// Silence is the actual defect being fixed: the user must see the contract change.
+	if !strings.Contains(got, "planning failed") {
+		t.Errorf("the planning failure was not surfaced to the user: %q", got)
+	}
+}
+
+// TestPlannerFailureReactModeIsOptIn: the old behaviour is still available, but
+// only when asked for — and it announces itself.
+func TestPlannerFailureReactModeIsOptIn(t *testing.T) {
+	prov, got := planFailureTurn(t, FallbackReact, nil)
+	if len(prov.lastOpts.Tools) == 0 {
+		t.Error("react mode should offer the tools (that is what it opts into)")
+	}
+	if !strings.Contains(got, "not capped") {
+		t.Errorf("react mode must say the cap is gone, got %q", got)
+	}
+}
+
+// TestPlannerFailureAskModeNeedsAYes: in ask mode the human decides, and the
+// decision actually binds — approving grants tools, declining keeps them away.
+func TestPlannerFailureAskModeNeedsAYes(t *testing.T) {
+	for _, approve := range []bool{true, false} {
+		t.Run(map[bool]string{true: "approved", false: "declined"}[approve], func(t *testing.T) {
+			prov, got := planFailureTurn(t, FallbackAsk, &approve)
+			if !strings.Contains(got, "[approval:(no plan)]") {
+				t.Fatalf("ask mode did not request approval: %q", got)
+			}
+			n := len(prov.lastOpts.Tools)
+			if approve && n == 0 {
+				t.Error("an approved unplanned turn should offer the tools")
+			}
+			if !approve && n != 0 {
+				t.Errorf("a declined unplanned turn offered %d tools; want 0", n)
+			}
+		})
+	}
+}
+
+// TestUnknownPlannerFallbackResolvesToFailClosed: a typo in the setting that
+// governs "what happens when the cap is unavailable" must never widen what the
+// agent may do.
+func TestUnknownPlannerFallbackResolvesToFailClosed(t *testing.T) {
+	store := testStore(t)
+	cfg := DefaultConfig()
+	cfg.Extractor = DisableReflection()
+	cfg.PlannerFallback = "react " // trailing space: not one of the constants
+	ag := New(store, &fakeProvider{reply: "x"}, cfg)
+	t.Cleanup(func() { ag.Close() })
+	if ag.cfg.PlannerFallback != FallbackFailClosed {
+		t.Errorf("unknown fallback resolved to %q, want %q", ag.cfg.PlannerFallback, FallbackFailClosed)
 	}
 }

@@ -43,6 +43,27 @@ const (
 	ApprovalHighRisk = "highrisk"
 )
 
+// Planner-failure modes for Config.PlannerFallback. When planning fails (the model
+// cannot produce a valid plan.Plan, even after the planner's retry), the turn must
+// still do *something* — and the choice is a safety decision, not an implementation
+// detail: the plan is what caps which tools the executor may offer, so falling back
+// to the plain ReAct loop silently returns the very freedom the user asked to
+// remove by enabling the planner.
+const (
+	// FallbackFailClosed answers WITHOUT tools (the default). The turn still
+	// responds — a plan failure is not a reason to say nothing — but it cannot act,
+	// because no approved plan bounds what acting would mean.
+	FallbackFailClosed = "fail_closed"
+	// FallbackAsk asks the human whether to proceed with no plan. Approving grants
+	// the plain ReAct loop for this turn; declining behaves as FallbackFailClosed.
+	// The point is that the *change of execution contract* is what gets consented to.
+	FallbackAsk = "ask"
+	// FallbackReact runs the plain ReAct loop (the pre-v0.22.2 behaviour): every
+	// tool offered, policy and per-call approval still applied. Explicit opt-in, so
+	// the loss of the plan's cap is a choice someone made rather than a default.
+	FallbackReact = "react"
+)
+
 // execCtx carries the per-turn constraints the planner imposes on the ReAct loop.
 // Its zero value is the pre-planner behaviour: every tool offered, the policy's own
 // per-step approval applied.
@@ -143,6 +164,12 @@ type Config struct {
 	// (no whole-plan prompt; the plan is advisory and per-call policy prompts as
 	// usual). Empty defaults to ApprovalPlan. Ignored when Planner is nil.
 	ApprovalMode string
+	// PlannerFallback governs what happens when planning FAILS, one of
+	// FallbackFailClosed (default: answer without tools), FallbackAsk (ask the human
+	// whether to proceed unplanned) or FallbackReact (the plain ReAct loop, every
+	// tool offered). Empty defaults to FallbackFailClosed. Ignored when Planner is
+	// nil. cmd/talunor wires it from TALUNOR_PLANNER_FALLBACK.
+	PlannerFallback string
 
 	// Debug, when non-nil, receives a structured trace of the loop's otherwise
 	// invisible decisions: which memories were recalled (id + distance), which
@@ -292,6 +319,15 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 	case ApprovalPlan, ApprovalStep, ApprovalHighRisk:
 	default:
 		cfg.ApprovalMode = ApprovalPlan
+	}
+	// Same rule for the planner-failure mode: an unknown value must resolve to the
+	// SAFEST option, never to the most permissive one. A typo in a config that
+	// governs "what happens when the safety mechanism breaks" is exactly when you
+	// want the conservative default.
+	switch cfg.PlannerFallback {
+	case FallbackFailClosed, FallbackAsk, FallbackReact:
+	default:
+		cfg.PlannerFallback = FallbackFailClosed
 	}
 	a := &Agent{
 		store:        store,
