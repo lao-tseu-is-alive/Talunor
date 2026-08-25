@@ -1,5 +1,7 @@
 # Vision — vers une architecture cognitive épistémiquement traçable
 
+> English version: [epistemic-reasoning-vision.md](epistemic-reasoning-vision.md)
+
 > Document de travail — août 2026  
 > Statut : **vision de recherche**, non décision d’implémentation.
 

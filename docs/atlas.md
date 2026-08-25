@@ -4,7 +4,7 @@ A guided map of the Talunor codebase: every tracked directory and file, each wit
 a one-line note on what it is and what it does.
 
 - **Version:** `v0.22.2` (the planner's failure path becomes an explicit contract)
-- **Generated:** 2026-08-18
+- **Generated:** 2026-08-25
 - **Scope:** *tracked files only.* Git-ignored paths are deliberately excluded —
   built binaries (`/bin`, `*.so`, `*.db`), fetched assets (`/ext`), local secrets
   (`.env`), personal notes (`todo.md`), and review output (`/reports`). Rebuild
@@ -203,6 +203,9 @@ Talunor/
 │   ├── atlas.md           #   THIS FILE — the repository map.
 │   ├── architecture.md    #   The mental model: one-turn flow + package DAG (Mermaid) + load-bearing decisions.
 │   ├── architecture.fr.md #   French translation of architecture.md (bilingual, EN canonical).
+│   ├── epistemic-reasoning-vision.md    # Research vision (EN): an epistemically traceable cognitive
+│   │                                  #   architecture — claims with genealogy, not bare values. Not a roadmap.
+│   ├── epistemic-reasoning-vision.fr.md #   French original of the vision document.
 │   ├── decisions/         #   Architecture Decision Records (append-only, EN, contributor-facing).
 │   │   ├── 0001-memory-backends.md # ADR 1: the Embedder/VectorIndex seams + backend profiles (proposed/deferred).
 │   │   ├── 0002-provenance-from-source.md # ADR 2: learned-fact provenance from the source, not eagerness (Layer 20).
