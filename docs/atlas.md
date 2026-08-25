@@ -27,7 +27,7 @@ Talunor/
 ├── AGENTS.md                 # Contributor guide (AI/human): architecture, conventions, release ritual, gotchas.
 ├── CLAUDE.md                 # Symlink → AGENTS.md, so Claude Code auto-loads the guide every session.
 ├── LICENSE                   # Project license.
-├── go.mod / go.sum           # Go module definition and dependency checksums (Go 1.26, cgo).
+├── go.mod / go.sum           # Go module definition and dependency checksums (Go 1.27, cgo).
 │
 ├── Makefile                  # deps / doctor / build / test / run / docker-* + release-check gate.
 │                             #   `deps` fetches + SHA256-verifies the SQLite extensions and GGUF model.

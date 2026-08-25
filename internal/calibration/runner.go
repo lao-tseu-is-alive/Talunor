@@ -14,8 +14,13 @@ type Options struct {
 	// its own Runs. More runs sharpen the pass-rate (and expose flakiness). 0 → 1.
 	DefaultRuns int
 	// Temperature is the sampling temperature for scenarios that do not override
-	// it. 0 leaves the provider default. Higher values surface consistency, not
-	// just accuracy.
+	// it. Higher values surface consistency, not just accuracy.
+	//
+	// 0 is SENT EXPLICITLY, it does not mean "provider default": a reliability
+	// canary that silently sampled at the provider's temperature would measure
+	// something other than what it reports. Run sends llm.Temp(temp) precisely so
+	// the zero survives `omitempty` (the v0.18.2 fix). There is deliberately no
+	// way to ask for the provider default here.
 	Temperature float64
 	// Model, when set, overrides the provider's default model and labels the report
 	// (so a baseline is pinned to an exact model, not just a provider).

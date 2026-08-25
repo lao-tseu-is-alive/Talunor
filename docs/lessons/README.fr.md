@@ -12,8 +12,9 @@ clair, une courte liste de lecture, une expérience pratique et une checklist po
 savoir quand tu as terminé.
 
 > **Statut : en cours.** Les leçons 00–24 sont prêtes, **entièrement en
-> anglais et en français** (utilise le sélecteur de langue en haut de chaque page) ;
-> l'Itération 5 est en construction.
+> anglais et en français** (utilise le sélecteur de langue en haut de chaque page).
+> L'Itération 5 (« mémoire véridique ») a livré les couches 20 à 23, chacune avec sa
+> leçon ; la couche 24 est la prochaine.
 
 ## Pour qui
 

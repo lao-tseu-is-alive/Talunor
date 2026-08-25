@@ -48,7 +48,7 @@ Click the preview above, or open the full demo directly:
 
 ## Requirements
 
-- Go 1.26+
+- Go 1.27+
 - **`CGO_ENABLED=1`** and a C toolchain (gcc) — the SQLite extensions are C.
 - Linux x86_64 (the fetched extension binaries; other platforms need the matching
   release assets — see the `Makefile`).
@@ -137,6 +137,9 @@ Both the TUI and the `--plain` REPL understand:
 | `/mem` | memory stats (count + database file) |
 | `/list [n]` | list the most recent `n` memories (default 10) |
 | `/forget <id>` | delete the memory with that `#id` (as shown by `/list`) |
+| `/why <id>` | show a fact's **evidence trail** — which turns and sources support it, and whether it superseded (or was superseded by) another (Layer 20/21) |
+| `/plan` | show the plan the last turn executed (planner only — see `TALUNOR_PLANNER`) |
+| `/debug [on\|off]` | stream recall rankings inline as dimmed notes, live (complements the `TALUNOR_DEBUG` file trace) |
 | `/clear` | clear the on-screen transcript (TUI only; does not erase memory) |
 | `/exit`, `/quit` | quit |
 
@@ -295,25 +298,28 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.22.3** — **seven defects two external reviews found, each pinned
-> by a test that was checked to fail first.** A remote provider could crash the agent with
-> one malformed tool-call delta; reflection silently mangled any fact starting with a digit
-> ("3D printing" → "D printing") and stored it as truth; a corrupt lexical index failed a
-> whole recall the vector arm had already answered; the reflection queue could panic on
-> shutdown; and a policy rewrite could run a tool the approved plan never named, scored at
-> another tool's risk — **Lesson 14's defect, nine releases later and one floor down**, so
-> that lesson now carries the comparison. Two of the reported findings did not survive
-> verification, which is its own lesson: a claim is true against a *commit*.
+> Current version: **v0.22.4** — **a maintenance release: the claims and the dependencies,
+> both made current.** The documentation drift two external reviews found is fixed — a
+> calibration comment that taught the very bug v0.18.2 removed, five duplicate CHANGELOG
+> headings (one stranding an orphaned bullet), a command table missing `/why`, a lesson
+> count three releases stale, and Iteration 5's status stated three incompatible ways —
+> plus a new `make changelog-check` so the last of those cannot recur. Go moves to
+> **1.27.0** and the dependencies to current, which matters mostly because CI builds from
+> `go.mod` and was pinned behind the maintainer's own toolchain. **Not a security
+> release:** `govulncheck` was clean before and after, and this CHANGELOG says so rather
+> than implying otherwise.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
 Layer 14 added **model calibration**; Iteration 4 taught it to *learn* (schema
 migrations, per-fact provenance & confidence, salience/decay/consolidation, async
-reflection). **Iteration 5 — "truthful memory" — is complete:** a fact now carries an
-auditable **evidence trail** (`/why`), can be **superseded** by a newer one under an
-explicit, per-domain [trust model](internal/memory/supersede.go) so a model's guess
-never overwrites what you said, and is retrievable by **meaning or by wording**
-(hybrid recall). Layer by layer, with the reasoning: [CHANGELOG.md](CHANGELOG.md).
+reflection). **Iteration 5 — "truthful memory" — is in progress: Layers 20–23 have
+shipped, each with its lesson.** A fact now carries an auditable **evidence trail**
+(`/why`), can be **superseded** by a newer one under an explicit, per-domain
+[trust model](internal/memory/supersede.go) so a model's guess never overwrites what
+you said, is retrievable by **meaning or by wording** (hybrid recall), and knows
+**what it is about** (user vs world) so authority is per-domain mechanically rather
+than by prompt. Layer by layer, with the reasoning: [CHANGELOG.md](CHANGELOG.md).
 
 ## Architecture (target)
 

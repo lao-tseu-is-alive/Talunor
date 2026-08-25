@@ -23,7 +23,7 @@
 # -ldflags. The semantic Version is a const in the source.
 
 # ---- builder ---------------------------------------------------------------
-FROM golang:1.26-bookworm AS builder
+FROM golang:1.27-bookworm AS builder
 
 # make + curl drive `make deps`; the golang image already provides gcc/git.
 RUN apt-get update \

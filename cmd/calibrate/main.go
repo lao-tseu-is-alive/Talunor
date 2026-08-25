@@ -89,7 +89,7 @@ func run() int {
 	var (
 		suitePath    = flag.String("suite", "", "path to a YAML scenario suite (required)")
 		runs         = flag.Int("runs", 0, "default repeats per scenario (0 = 1; a scenario's own `runs` wins)")
-		temperature  = flag.Float64("temperature", 0, "default sampling temperature (0 = provider default)")
+		temperature  = flag.Float64("temperature", 0, "default sampling temperature (sent explicitly, including 0)")
 		baselinePath = flag.String("baseline", "", "compare against this baseline JSON; exit 1 on regression")
 		saveBaseline = flag.String("save-baseline", "", "write this run as a baseline JSON")
 		threshold    = flag.Float64("threshold", 0.05, "regression threshold (pass-rate drop) for --baseline")

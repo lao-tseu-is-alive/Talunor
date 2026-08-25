@@ -13,6 +13,87 @@ changed but the *lessons learned* while getting there.
 
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
+- **Planner follow-ups (deferred from Layer 13):** `/edit-plan` (hand-edit a plan
+  before it runs), semantic deviation detection, and automatic light re-planning
+  when a step surprises — each a small layer / lesson of its own.
+
+## [0.22.4] - 2026-08-25 — Maintenance: the claims and the dependencies, both made current
+
+The other half of the correction batch: the documentation drift the same two reviews
+found, plus routine dependency and toolchain currency. Nothing here changes behaviour.
+
+**This is not a security release, and the CHANGELOG should say so plainly.**
+`govulncheck ./...` was clean *before* these bumps and is clean after. Go ships
+security fixes in PATCH releases: `go1.26.6` was the security one and Talunor took it
+in v0.21.2; `go1.26.7` is a `net/http` bugfix, and `go1.27.0` is a feature release.
+Calling this "vulnerability mitigation" would be exactly the sort of unverified claim
+Lesson 15 trains readers to falsify.
+
+### Changed
+
+- **Go 1.26.6 → 1.27.0** (`go.mod`, `Dockerfile`). The point is not the local
+  toolchain: CI and `release.yml` build from `go-version-file: go.mod`, so they were
+  still compiling on 1.26.6 no matter what the maintainer had installed. The Docker
+  builder is now `golang:1.27-bookworm` — **the `-bookworm` suffix is load-bearing**
+  and must not be dropped for a bare `golang:1.27`: bookworm's glibc 2.36 is what
+  satisfies the fetched extensions (≤ GLIBC_2.34 / GLIBCXX_3.4.29), and no unit test
+  would catch a base-image drift that broke `ai.so`.
+- **Dependencies:** `mattn/go-sqlite3` 1.14.48 → **1.14.50** (load-bearing: cgo, the
+  extension loading, the FTS5 build tag), `golang.org/x/sys` 0.46.0 → **0.47.0**,
+  `golang.org/x/net` 0.56.0 → **0.58.0**, `golang.org/x/text` 0.39.0 → **0.41.0**,
+  `golang.org/x/term` 0.44.0 → **0.45.0**.
+
+### Fixed (documentation)
+
+- **The calibration temperature comment taught the bug the fix removed.**
+  `internal/calibration/runner.go` and `cmd/calibrate/main.go` both said
+  "0 = provider default", three releases after v0.18.2 deliberately made `Run` send
+  `llm.Temp(temp)` so an explicit 0 survives `omitempty`. A reliability canary that
+  silently sampled at the provider's temperature would measure something other than
+  what it reports; both now say 0 is sent explicitly, and why.
+- **Five duplicate `## [x.y.z]` headings** removed from this file (`0.5.7`, `0.6.0`,
+  `0.7.0`, `0.14.1`, `0.15.0`) — the reviews reported two. The `0.14.1` pair had
+  stranded an orphaned "Planner follow-ups" bullet between its two copies; that bullet
+  is a deferred open thread and has been returned to `[Unreleased]`, where it belongs.
+- **The README command table** was missing `/why`, `/plan` and `/debug` — `/why` being
+  the Iteration-5 feature the prose above the table advertises.
+- **`docs/architecture.md` said "20 lessons"**; there are 25 (EN + FR).
+- **Iteration 5's status was stated three incompatible ways** — "complete" (README),
+  "in progress" (lessons index), "continues" (AGENTS.md). It is now stated once, in the
+  README, as *in progress: Layers 20–23 shipped, each with its lesson*. The v0.21.1
+  CHANGELOG/AGENTS entry that called it "fully built and fully lessoned" was true when
+  written and is left standing, annotated — history is not edited to match the present.
+- **`AGENTS.md` prescribed a stale commit trailer** naming a specific model version.
+
+### Added
+
+- **`make changelog-check`**, wired into `release-check`: no duplicate `## [x.y.z]`
+  headings, and the version in `internal/version` has a section here. Verified by
+  injecting a duplicate and watching it fail.
+
+### Lessons learned
+
+- **"Update the dependencies to fix vulnerabilities" deserves the same verification as
+  any other claim.** The premise was reasonable and turned out not to hold *for this
+  repo*: `govulncheck` was already clean, and the delta from 1.26.6 to 1.27.0 is a
+  feature release, not a security patch. The work was still worth doing — as currency,
+  and because CI was pinned behind the maintainer's own toolchain — but the honest
+  justification is a different one from the one we started with, and the CHANGELOG says
+  which. Cf. v0.21.2, where the bump *was* security and said so.
+- **Every drift alarm was born the same way: something nobody re-read.** `atlas-check`,
+  `readme-check`, `lessons-check`, `lessons-assert` and now `changelog-check` each exist
+  because a file drifted while the guards next to it stayed green. Five duplicate
+  headings survived in the project's most-edited document because no target ever opened
+  it. The pattern is worth naming: *a document with no guard is a document that is
+  already wrong, you just have not looked yet.*
+- **The remaining unguarded surface is source comments.** `lessons-assert` re-derives the
+  claims in `docs/lessons/`; nothing re-derives the claims in `//` comments, which is how
+  the calibration temperature note survived three releases past its own correction. Not
+  fixed here — naming it so the next guard has an obvious target.
+- **A version pin is a claim about the environment, and CI is where it is tested.**
+  `go-version-file: go.mod` is the right pattern precisely because it makes one number
+  authoritative — but it also means a stale `go` directive silently holds CI back while
+  the maintainer's local `govulncheck` reports clean. Local green is not CI green.
 
 ## [0.22.3] - 2026-08-25 — Seven defects a review found, and the tests that pin them
 
@@ -1343,8 +1424,6 @@ long-term memory with the authority of established fact.
 
 ## [0.15.0] - 2026-07-24 — Iteration 4 begins: schema versioning & migrations (Layer 15)
 
-## [0.15.0] - 2026-07-24 — Iteration 4 begins: schema versioning & migrations (Layer 15)
-
 Iteration 4 (learning) needs to *evolve* the memory schema — add per-fact provenance,
 confidence, salience, decay. This layer lays the groundwork with zero behaviour change:
 a tiny migration runner, so every later learning layer adds its columns as an ordered,
@@ -1384,11 +1463,6 @@ the schema is still one flat table and the cost of getting migrations right is l
    users have run those exact statements. The single rule — never reorder, renumber, or
    edit a released migration; fix mistakes with a *new* one — is what keeps every
    database in the fleet reaching the same state.
-
-## [0.14.1] - 2026-07-23 — Course: Lesson 16 (measure the model), bilingual
-- **Planner follow-ups (deferred from Layer 13):** `/edit-plan` (hand-edit a plan
-  before it runs), semantic deviation detection, and automatic light re-planning
-  when a step surprises — each a small layer / lesson of its own.
 
 ## [0.14.1] - 2026-07-23 — Course: Lesson 16 (measure the model), bilingual
 
@@ -2500,8 +2574,6 @@ prerequisite for giving the agent side-effecting tools (next: a sandboxed
 
 ## [0.7.0] - 2026-07-15 — Tools & actions: the ReAct act/observe loop
 
-## [0.7.0] - 2026-07-15 — Tools & actions: the ReAct act/observe loop
-
 Talunor can now *do* things, not just talk. It runs a ReAct-style
 act→observe→reason loop using **native tool-calling**: the model asks to call a
 tool, the agent runs it and feeds the result back, and this repeats until the
@@ -2560,8 +2632,6 @@ model answers. Completes the core of Iteration 2.
 
 ## [0.6.0] - 2026-07-15 — Iteration 2 begins: providers & config
 
-## [0.6.0] - 2026-07-15 — Iteration 2 begins: providers & config
-
 The first layer of Iteration 2. Talunor can now talk to **hosted frontier
 models via OpenRouter**, not just local Ollama, and all configuration is
 discoverable through a `.env` file. This unblocks running the upcoming
@@ -2603,8 +2673,6 @@ tool/ReAct loop on a strong tool-calling model.
 3. **Make expensive behaviour a switch.** Reflection is great with a local model
    and costs nothing; on a metered API it silently doubles spend. Surfacing
    `TALUNOR_REFLECT` makes the trade-off the user's to make.
-
-## [0.5.7] - 2026-07-15 — Harden the image: distroless base + dependency bumps
 
 ## [0.5.7] - 2026-07-15 — Harden the image: distroless base + dependency bumps
 

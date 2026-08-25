@@ -62,7 +62,7 @@ LDFLAGS     := -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(B
 # Container image (local builds). IMAGE overridable; nerdctl for Rancher Desktop.
 IMAGE ?= talunor:local
 
-.PHONY: deps doctor build test release-check capabilities atlas-check readme-check lessons-check lessons-assert tidy clean distclean \
+.PHONY: deps doctor build test release-check capabilities atlas-check readme-check changelog-check lessons-check lessons-assert tidy clean distclean \
         docker-build docker-run nerdctl-build nerdctl-run
 
 ## deps: download the SQLite extensions and the embedding model into ext/
@@ -126,6 +126,8 @@ release-check: deps
 	@$(MAKE) --no-print-directory atlas-check
 	@echo "==> README version banner matches internal/version"
 	@$(MAKE) --no-print-directory readme-check
+	@echo "==> CHANGELOG has no duplicate headings and documents this version"
+	@$(MAKE) --no-print-directory changelog-check
 	@echo "==> lessons reference valid tags / links / files"
 	@$(MAKE) --no-print-directory lessons-check
 	@echo "==> lesson claims still hold against the source"
@@ -171,6 +173,20 @@ atlas-check:
 	done; \
 	[ "$$missing" = 0 ] || { echo "docs/atlas.md is stale — regenerate it (repo-atlas skill)"; exit 1; }
 	@echo "atlas-check: OK"
+
+## changelog-check: fail if a version heading appears twice in CHANGELOG.md. Five
+## duplicate `## [x.y.z]` headings accumulated unnoticed (one of them stranding an
+## orphaned bullet between the two copies) because no guard read the changelog at
+## all — the same blind spot that let a lesson go stale. A release history that
+## records a version twice is a record you can no longer trust to be a history.
+changelog-check:
+	@test -f CHANGELOG.md || { echo "changelog-check: no CHANGELOG.md (skipped)"; exit 0; }
+	@dup=$$(grep -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | sort | uniq -d); \
+	  [ -z "$$dup" ] || { echo "CHANGELOG.md has duplicate version headings:"; echo "$$dup"; exit 1; }; \
+	  ver=$$(grep -oE 'Version = "[0-9]+\.[0-9]+\.[0-9]+"' internal/version/version.go | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'); \
+	  grep -q "^## \[$$ver\]" CHANGELOG.md \
+	    || { echo "CHANGELOG.md has no '## [$$ver]' section (internal/version says $$ver)"; exit 1; }; \
+	  echo "changelog-check: OK (no duplicates, v$$ver documented)"
 
 ## readme-check: fail if the README "Current version" banner drifts from the
 ## Version constant in internal/version (the source of truth, bumped before this

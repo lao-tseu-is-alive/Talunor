@@ -13,7 +13,7 @@ with a documented lesson**, so the repo reads as a tutorial on how to build an
 agent with guardrails. Optimise changes for clarity and teachability, not
 cleverness.
 
-Module: `github.com/lao-tseu-is-alive/Talunor` · Go 1.26 · **cgo required**.
+Module: `github.com/lao-tseu-is-alive/Talunor` · Go 1.27 · **cgo required**.
 
 ## How it is built: the working agreement
 
@@ -44,7 +44,8 @@ Module: `github.com/lao-tseu-is-alive/Talunor` · Go 1.26 · **cgo required**.
      CI is not enough (CI does not exercise the release bundle step).
 - **Linear history on `main`** — the user wants tags pushed directly to `main`,
   no PR branch. Commit messages: Conventional-Commits style, end with the
-  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` trailer.
+  `Co-Authored-By: Claude <noreply@anthropic.com>` trailer, naming the model that
+  actually did the work (it has changed across releases; the git history is the record).
 - Work **step by step and checkpoint** with the user before starting the next
   layer.
 
@@ -730,7 +731,9 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   opens with the reader reproducing the gap via `TALUNOR_RECALL=vector`, then FTS5/BM25, the
   stopword incident, RRF + its single-arm trap, retrieval-vs-identity, and build-tag capability.
   Competency matrix: persistence/retrieval becomes 02 · 03 · 23; course now 00–23 (24 lessons).
-  **Iteration 5 is fully built AND fully lessoned.**
+  **Iteration 5 was fully built AND fully lessoned _as scoped at this point_** — Layer 23
+  (v0.22.0) later extended it, so the present-tense status is "in progress"; see the
+  Iteration-5 line in README.md, which is the single place that status is stated.
 - **v0.21.2 (fixes)** = **"the course is executable too"** — a correction batch before the next
   layer, all three items the same failure: *a claim nobody re-checks goes stale.* (1) **Lesson 15
   was itself stale** — the lesson on verifying AI claims had readers prove `grep fts5 internal/`
@@ -808,6 +811,28 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   twelve did not survive (the report's "red CI" headline was already fixed in `3d5f07d`),
   and the `Modified` hole was rated *up*. `cmd/talunor` still has no test harness, so (6)
   and (7) are covered by inspection — stated, not implied.
+- **v0.22.4 (maintenance)** = **the claims and the dependencies, both made current.**
+  Doc drift from the same two reviews: the calibration temperature comment said
+  "0 = provider default" three releases after v0.18.2 deliberately made `Run` send
+  `llm.Temp(temp)` (a canary that silently sampled at the provider's temperature would
+  measure something other than what it reports); **five** duplicate `## [x.y.z]` CHANGELOG
+  headings (reviews said two), the `0.14.1` pair stranding an orphaned "Planner follow-ups"
+  bullet now returned to `[Unreleased]`; README command table missing `/why`/`/plan`/`/debug`;
+  `docs/architecture.md` "20 lessons" → 25 (EN+FR); **Iteration 5's status stated once**
+  (README, "in progress: Layers 20–23 shipped") instead of three incompatible ways — the
+  v0.21.1 entry that called it complete was TRUE WHEN WRITTEN and is left standing,
+  annotated, because history is not edited to match the present. New **`make
+  changelog-check`** in `release-check` (no duplicate headings + `internal/version` has a
+  section), verified by injecting a duplicate. **Go 1.26.6 → 1.27.0** (`go.mod` +
+  `golang:1.27-bookworm` — the `-bookworm` suffix is LOAD-BEARING, see the Dockerfile
+  notes: bookworm's glibc 2.36 is what satisfies the extensions, and no unit test would
+  catch a base-image drift that broke `ai.so`); deps to current (go-sqlite3 1.14.50,
+  x/sys 0.47.0, x/net 0.58.0, x/text 0.41.0, x/term 0.45.0). **NOT a security release** —
+  `govulncheck` clean before and after; go1.26.6 was the security patch (taken in v0.21.2),
+  1.26.7 is a net/http bugfix and 1.27.0 a feature release. The real argument for the bump
+  is that CI/release build from `go-version-file: go.mod`, so they were pinned behind the
+  maintainer's local toolchain: **local green is not CI green.** Remaining unguarded
+  surface, named not fixed: `//` comments (nothing re-derives their claims).
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
   tests; calibration output 0600 + KDF. Same per-layer checkpoint rhythm.
