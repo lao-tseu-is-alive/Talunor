@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"regexp"
 	"strings"
 
 	"github.com/lao-tseu-is-alive/Talunor/internal/llm"
@@ -128,6 +129,15 @@ func (e *llmExtractor) Extract(ctx context.Context, text string, about memory.Su
 	return parseFacts(out), nil
 }
 
+// listMarker matches ONLY an enumerated list marker: digits followed by "." or
+// ")" and whitespace ("1. ", "12) "). Being this strict is the point — a
+// character-class TrimLeft that included digits also ate the first characters of
+// any fact that legitimately starts with one ("3D printing is my hobby" became
+// "D printing is my hobby"), and reflection stored the mangled text with no error
+// and no trace. A fact the agent will believe for months must not be damaged by
+// its own formatting cleanup.
+var listMarker = regexp.MustCompile(`^\d+[.)]\s+`)
+
 // parseFacts turns the model's raw reply into a clean fact list: one fact per
 // non-empty line, leading list markers stripped, and the NONE sentinel (in any
 // casing) mapped to "no facts". It is intentionally forgiving of formatting so a
@@ -136,7 +146,8 @@ func parseFacts(raw string) []string {
 	var facts []string
 	for line := range strings.SplitSeq(raw, "\n") {
 		line = strings.TrimSpace(line)
-		line = strings.TrimLeft(line, "-*•0123456789. \t")
+		line = strings.TrimLeft(line, "-*• \t")      // bullets first…
+		line = listMarker.ReplaceAllString(line, "") // …so "- 1. fact" also loses its number.
 		line = strings.TrimSpace(line)
 		if line == "" || strings.EqualFold(line, "NONE") {
 			continue

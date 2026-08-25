@@ -336,6 +336,16 @@ func TestParseFacts(t *testing.T) {
 		{"one fact", "User's name is Carlos.", []string{"User's name is Carlos."}},
 		{"strips bullets", "- User likes Go.\n* User likes TypeScript.", []string{"User likes Go.", "User likes TypeScript."}},
 		{"strips numbering + blanks", "1. User uses Bun.\n\n2. User codes in Go.\n", []string{"User uses Bun.", "User codes in Go."}},
+		{"strips numbering with paren", "1) User uses Bun.", []string{"User uses Bun."}},
+		{"strips bullet then number", "- 1. User uses Bun.", []string{"User uses Bun."}},
+		// A fact may legitimately BEGIN with a digit. The old character-class
+		// TrimLeft ate it ("3D printing" → "D printing") and reflection stored the
+		// mangled text with no error and no trace — a memory the agent would then
+		// believe for months. Only a real list marker (digits + "." or ")" +
+		// whitespace) may be stripped.
+		{"keeps leading digits", "User's hobby is 3D printing.", []string{"User's hobby is 3D printing."}},
+		{"keeps a bare leading year", "1984 is User's favourite novel.", []string{"1984 is User's favourite novel."}},
+		{"keeps a leading measurement", "3.5mm jacks are User's preference.", []string{"3.5mm jacks are User's preference."}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1353,5 +1363,54 @@ func TestExtractorAsksOneQuestionPerSubject(t *testing.T) {
 	}
 	if !strings.Contains(worldPrompt, "about the world") {
 		t.Errorf("world prompt does not ask about the world: %q", oneLine(worldPrompt, 80))
+	}
+}
+
+// TestEnqueueReflectAfterCloseDoesNotPanic is the regression test for the
+// shutdown race in the reflection queue. A turn goroutine can still be enqueuing
+// when Close runs — the TUI quits on a key without cancelling the turn's context —
+// and the queue is bounded, so a send that parks on a full queue would panic if
+// the channel were closed underneath it.
+//
+// The fix removes the hazard by construction: reflectCh is never closed, and both
+// the sender and the worker select on a separate `closing` channel. Learning is
+// best-effort, so a job that arrives during shutdown is dropped rather than
+// costing a panic on the way out.
+func TestEnqueueReflectAfterCloseDoesNotPanic(t *testing.T) {
+	store := testStore(t)
+	prov := &scriptedProvider{steps: [][]llm.Chunk{{{Content: "hi"}}}}
+	cfg := DefaultConfig()
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	if err := ag.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	// Overfill the (now unattended) queue: every send must take the shutdown
+	// branch instead of parking or panicking.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < reflectQueueCap*3; i++ {
+			ag.enqueueReflect(reflectJob{userInput: "late"})
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("enqueueReflect blocked after Close — the shutdown branch is not reachable")
+	}
+
+	// Quiesce must not hang: every dropped job released its WaitGroup slot.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := ag.Quiesce(ctx); err != nil {
+		t.Fatalf("quiesce after close: %v — a dropped job leaked its WaitGroup slot", err)
+	}
+
+	// Close is idempotent (closeOnce): a second call must not re-close anything.
+	if err := ag.Close(); err != nil {
+		t.Fatalf("second close: %v", err)
 	}
 }

@@ -121,8 +121,9 @@ func hasDigit(s string) bool {
 	return false
 }
 
-// LexicalStatus reports whether the lexical arm of recall is available on this
-// build, and why not when it is not. It is set once at Open.
+// LexicalStatus reports whether the lexical arm of recall is available, and why
+// not when it is not. It is set once at Open — except LexicalFailed, which a
+// runtime failure latches later (see Store.Lexical).
 type LexicalStatus int
 
 const (
@@ -137,6 +138,10 @@ const (
 	// LexicalDisabled means the operator turned hybrid recall off
 	// (TALUNOR_RECALL=vector).
 	LexicalDisabled
+	// LexicalFailed means the arm was available at Open but FAILED AT RUNTIME (a
+	// corrupt index, schema drift). Recall degraded itself to vector-only rather
+	// than failing outright; this status is how that degradation stays visible.
+	LexicalFailed
 )
 
 func (l LexicalStatus) String() string {
@@ -147,13 +152,22 @@ func (l LexicalStatus) String() string {
 		return "unavailable (built without -tags sqlite_fts5)"
 	case LexicalDisabled:
 		return "disabled (TALUNOR_RECALL=vector)"
+	case LexicalFailed:
+		return "failed at runtime — recall degraded to vector-only"
 	default:
 		return "unknown"
 	}
 }
 
-// Lexical reports the state of the lexical arm (see LexicalStatus).
-func (s *Store) Lexical() LexicalStatus { return s.lexical }
+// Lexical reports the state of the lexical arm (see LexicalStatus). An arm that
+// was healthy at Open but has since failed at runtime reports LexicalFailed —
+// recall keeps working on the vector arm alone, and this is what says so.
+func (s *Store) Lexical() LexicalStatus {
+	if s.lexicalBroken.Load() {
+		return LexicalFailed
+	}
+	return s.lexical
+}
 
 // initLexical creates the FTS5 index and its synchronisation triggers, and
 // records whether the lexical arm is usable. A missing fts5 module is NOT an

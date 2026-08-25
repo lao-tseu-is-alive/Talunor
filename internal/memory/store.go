@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
@@ -146,6 +147,12 @@ type Store struct {
 	dim        int              // embedding dimension, discovered from the model at open time.
 	provenance ProvenanceStatus // embedding-stack fingerprint check, set at Open.
 	lexical    LexicalStatus    // LAYER 22: state of the lexical (FTS5) arm, set at Open.
+	// lexicalBroken latches when the lexical arm fails at RUNTIME (a corrupt index,
+	// schema drift) rather than at Open. Recall then degrades to the vector arm for
+	// the rest of the process — the same graceful degradation a build without FTS5
+	// already gets, instead of failing a recall the vector arm had answered.
+	// Atomic because Lexical() is read from the UI goroutine while a turn recalls.
+	lexicalBroken atomic.Bool
 }
 
 // registerDriver registers the custom driver exactly once. The ConnectHook

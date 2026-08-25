@@ -259,11 +259,17 @@ func (s *Store) recall(ctx context.Context, query string, k int, maxDistance flo
 	}
 	var lexical []Hit
 	if opt.lexical {
+		// The lexical arm FAILS SOFT. A build without FTS5 already degrades to
+		// vector-only; a runtime failure of the index deserves the same treatment,
+		// not the loss of a recall the vector arm has already answered. The failure
+		// latches so Lexical() reports it (doctor, /mem) instead of degrading
+		// silently — a quieter memory must still be an observable one.
 		lexical, err = s.lexicalCandidates(ctx, query, k*lexicalCandidateFactor)
 		if err != nil {
-			return nil, err
+			s.lexicalBroken.Store(true)
+		} else {
+			lexical = s.keepRecallable(lexical, opt.includeForgotten)
 		}
-		lexical = s.keepRecallable(lexical, opt.includeForgotten)
 	}
 	return fuse(vector, lexical, k), nil
 }

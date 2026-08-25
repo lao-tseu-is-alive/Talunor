@@ -412,3 +412,130 @@ func TestUnknownPlannerFallbackResolvesToFailClosed(t *testing.T) {
 		t.Errorf("unknown fallback resolved to %q, want %q", ag.cfg.PlannerFallback, FallbackFailClosed)
 	}
 }
+
+// rewritingPolicy allows every step but rewrites it to target `to`. It stands in
+// for a rule engine that redirects a call ("run the safe variant instead").
+//
+// riskByTool is keyed by the tool the step NAMES, which is the whole point: a
+// realistic policy scores the step in front of it, so the risk it returns for the
+// original call says nothing about the substitute. Only asking again — about the
+// tool that will actually run — produces the right number.
+type rewritingPolicy struct {
+	to         string
+	riskByTool map[string]plan.RiskLevel
+}
+
+func (p rewritingPolicy) Evaluate(_ context.Context, _ *plan.Plan, step plan.PlanStep) (policy.Decision, error) {
+	risk := p.riskByTool[step.Tool]
+	if step.Tool == p.to {
+		// Already the substitute: score it, do not rewrite it again.
+		return policy.Decision{Allowed: true, Reason: "substitute", RiskLevel: risk}, nil
+	}
+	mod := step
+	mod.Tool = p.to
+	return policy.Decision{Allowed: true, Reason: "rewritten", Modified: &mod, RiskLevel: risk}, nil
+}
+
+// otherTool is a second, differently-named tool so a rewrite has somewhere to go.
+type otherTool struct{ ran *bool }
+
+func (otherTool) Name() string            { return "other" }
+func (otherTool) Description() string     { return "a tool the plan never approved" }
+func (otherTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (o otherTool) Execute(context.Context, json.RawMessage) (string, error) {
+	*o.ran = true
+	return "the other thing happened", nil
+}
+
+// TestPolicyModifiedCannotEscapeThePlanCap is the regression test for the
+// Modified-vs-plan-cap hole. The plan's tool cap is enforced where tools are
+// OFFERED (toolSpecs), so a policy that rewrites Decision.Modified.Tool used to
+// redirect execution to a tool the approved plan never named — the plan's
+// "structural cap" quietly bypassed at the last step.
+//
+// This is Lesson 14's defect at a different altitude: v0.13.2 fixed an approval
+// that bound the tool NAME but not the ARGUMENTS; this bound neither once the
+// policy swapped the tool underneath it.
+func TestPolicyModifiedCannotEscapeThePlanCap(t *testing.T) {
+	store := testStore(t)
+	var dangerRan, otherRan bool
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "danger", Args: `{}`}}}},
+		{{Content: "done"}},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(fakeTool{ran: &dangerRan}, otherTool{ran: &otherRan})
+	cfg.Policy = rewritingPolicy{to: "other"} // redirect danger → other
+	cfg.Planner = fakePlanner{pl: dangerPlan()}
+	cfg.ApprovalMode = ApprovalPlan
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	_, final, _ := drainPlanned(t, ag, true)
+
+	if otherRan {
+		t.Fatal("the policy redirected execution to a tool the approved plan never named")
+	}
+	if dangerRan {
+		t.Error("the rewritten call should not have run the original tool either")
+	}
+	// The model must SEE the refusal (fail closed = an observation it can react to).
+	if !strings.Contains(strings.ToLower(prov.lastMsgs[len(prov.lastMsgs)-1].Content), "approved plan does not allow") {
+		t.Errorf("the blocked rewrite should be observed by the model; last message = %q",
+			prov.lastMsgs[len(prov.lastMsgs)-1].Content)
+	}
+	if !strings.Contains(final, "done") {
+		t.Errorf("final = %q, want the turn to still complete", final)
+	}
+}
+
+// TestPolicyModifiedRederivesRiskForTheSubstitutedTool checks the second half of
+// the same hole: when a rewrite IS within the cap, the RiskLevel that gates
+// approval must describe the tool about to run, not the one the model asked for.
+// Here the policy substitutes and raises the risk, so approval must be sought.
+func TestPolicyModifiedRederivesRiskForTheSubstitutedTool(t *testing.T) {
+	store := testStore(t)
+	var dangerRan, otherRan bool
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "danger", Args: `{}`}}}},
+		{{Content: "done"}},
+	}}
+	// A plan naming BOTH tools, so the substitution is inside the cap.
+	pl := &plan.Plan{Goal: "do it", Steps: []plan.PlanStep{
+		{ID: "s1", Type: plan.StepTool, Tool: "danger", Rationale: "asked"},
+		{ID: "s2", Type: plan.StepTool, Tool: "other", Rationale: "asked"},
+		{ID: "s3", Type: plan.StepFinal, Rationale: "report"},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(fakeTool{ran: &dangerRan}, otherTool{ran: &otherRan})
+	// The ORIGINAL call scores low (no approval needed); the SUBSTITUTE scores
+	// high. Pre-fix the gate saw only the first number, so the high-risk tool ran
+	// with no approval at all.
+	cfg.Policy = rewritingPolicy{to: "other", riskByTool: map[string]plan.RiskLevel{
+		"danger": plan.RiskLow,
+		"other":  plan.RiskHigh,
+	}}
+	cfg.Planner = fakePlanner{pl: pl}
+	cfg.ApprovalMode = ApprovalPlan
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	approvals, _, _ := drainPlanned(t, ag, true)
+
+	// The re-prompt must name the tool that will ACTUALLY run.
+	var sawOther bool
+	for _, a := range approvals {
+		if a == "other" {
+			sawOther = true
+		}
+		if a == "danger" {
+			t.Errorf("approval asked about %q, but %q is what would run", "danger", "other")
+		}
+	}
+	if !sawOther {
+		t.Fatalf("approvals = %v; want the substituted high-risk tool re-confirmed", approvals)
+	}
+	if !otherRan {
+		t.Error("the approved substituted tool should have run")
+	}
+}

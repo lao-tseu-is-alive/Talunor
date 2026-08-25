@@ -230,6 +230,23 @@ type Agent struct {
 	workerWG  sync.WaitGroup
 	bgCtx     context.Context
 	bgCancel  context.CancelFunc
+	// closing is closed by Close to announce shutdown. reflectCh itself is NEVER
+	// closed: a turn goroutine can still be enqueuing while Close runs (the TUI
+	// quits on a key without cancelling the turn's context), and a send parked on
+	// a full queue panics if the channel is closed underneath it. Announcing
+	// shutdown on a SECOND channel removes that hazard by construction — both the
+	// sender and the worker select on it, and nothing ever sends on a closed one.
+	//
+	// closeMu/closed then make the handoff exact rather than merely safe. Closing
+	// the channel unparks a blocked sender, but the queue is BUFFERED, so a send
+	// racing shutdown could still land a job in the buffer after the worker had
+	// gone — a job nobody would ever run, and whose reflectWG slot would never be
+	// released (Quiesce would hang forever). Close takes the write lock to wait
+	// until no sender is inside enqueueReflect, then sets closed; from that point
+	// every enqueue drops its job immediately.
+	closing   chan struct{}
+	closeMu   sync.RWMutex
+	closed    bool
 	closeOnce sync.Once
 	// drainTimeout bounds Close's wait for queued reflection (defaults to
 	// closeDrainTimeout; overridable in tests to keep them fast).
@@ -344,6 +361,7 @@ func New(store *memory.Store, provider llm.Provider, cfg Config) *Agent {
 	// Start the async reflection worker (Layer 18). It owns the deferred learning
 	// step; callers should Close the agent to drain it on shutdown.
 	a.reflectCh = make(chan reflectJob, reflectQueueCap)
+	a.closing = make(chan struct{})
 	a.bgCtx, a.bgCancel = context.WithCancel(context.Background())
 	a.workerWG.Add(1)
 	go a.reflectWorker()
@@ -554,6 +572,42 @@ func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCa
 		}
 		args = d.Modified.Arguments
 		a.trace("policy.modify", "name", name, "reason", d.Reason)
+	}
+
+	// A rewrite that SUBSTITUTES A DIFFERENT TOOL re-opens both questions the code
+	// above just answered — is this tool inside the plan's cap, and what is it worth
+	// on the risk scale? Neither answer travels with Decision.Modified: the cap is
+	// enforced at offer time (toolSpecs) and the RiskLevel describes the tool the
+	// model asked for, not the one now about to run. So both are asked again.
+	//
+	// This is Lesson 14's defect at a different altitude. v0.13.2 fixed an approval
+	// that bound the tool NAME but not the ARGUMENTS; this bound neither once the
+	// policy swapped the tool underneath it.
+	if name != tc.Name {
+		if exec.allowTools != nil && !exec.allowTools[name] {
+			a.trace("policy.modify.blocked", "from", tc.Name, "to", name, "reason", "outside the approved plan")
+			return fmt.Sprintf("error: the policy rewrote this call to %q, which the approved plan does not allow", name), false
+		}
+		sub := plan.NewToolCallPlan(name, args)
+		d2, err := a.policy.Evaluate(ctx, sub, sub.Steps[0])
+		if err != nil {
+			a.trace("policy.error", "name", name, "err", err)
+			return fmt.Sprintf("error: policy evaluation failed, tool not run: %v", err), false
+		}
+		if d2.Denied() {
+			a.trace("policy.deny", "name", name, "reason", d2.Reason)
+			return fmt.Sprintf("error: policy denied this tool call (%s)", d2.Reason), false
+		}
+		// One rewrite only. A policy that keeps redirecting does not get to run
+		// anything — there would be no stable effect left to approve.
+		if d2.Modified != nil && d2.Modified.Tool != "" && d2.Modified.Tool != name {
+			a.trace("policy.modify.blocked", "from", name, "to", d2.Modified.Tool, "reason", "second rewrite")
+			return "error: the policy rewrote this tool call twice, tool not run", false
+		}
+		if d2.Modified != nil {
+			args = d2.Modified.Arguments
+		}
+		d = d2 // risk and approval now describe the tool that will ACTUALLY run.
 	}
 
 	if d.NeedsApproval() && d.RiskLevel >= exec.reapproveAtOrAbove {
@@ -807,9 +861,25 @@ func truncateForReflect(s string) string {
 // pinned single connection.
 func (a *Agent) reflectWorker() {
 	defer a.workerWG.Done()
-	for job := range a.reflectCh {
-		a.reflect(a.bgCtx, job)
-		a.reflectWG.Done()
+	for {
+		select {
+		case job := <-a.reflectCh:
+			a.reflect(a.bgCtx, job)
+			a.reflectWG.Done()
+		case <-a.closing:
+			// Shutdown announced: finish what is already queued, then exit. This is
+			// the drain Close waits on — `default` is what ends it, so the worker
+			// never blocks waiting for work that can no longer arrive.
+			for {
+				select {
+				case job := <-a.reflectCh:
+					a.reflect(a.bgCtx, job)
+					a.reflectWG.Done()
+				default:
+					return
+				}
+			}
+		}
 	}
 }
 
@@ -817,13 +887,31 @@ func (a *Agent) reflectWorker() {
 // returns at once, so reflection stays off the turn's critical path. If the queue
 // is full it blocks briefly (backpressure) rather than dropping the learning. With
 // no worker (should not happen after New) it falls back to reflecting inline.
+//
+// The send waits on shutdown as well as on room in the queue. A turn goroutine can
+// still be in flight when Close() runs (the TUI quits on a key, without cancelling
+// the signal context), and a bare send that blocks on a full queue would then panic
+// when Close closes the channel. Learning is best-effort by design, so on shutdown
+// the job is dropped — never at the cost of a panic on the way out.
 func (a *Agent) enqueueReflect(job reflectJob) {
 	if a.reflectCh == nil {
 		a.reflect(context.Background(), job)
 		return
 	}
+	// Held for the whole send: Close cannot declare the queue shut while a sender
+	// is still inside it.
+	a.closeMu.RLock()
+	defer a.closeMu.RUnlock()
+	if a.closed {
+		return // shutting down; learning is best-effort, so drop it.
+	}
+
 	a.reflectWG.Add(1)
-	a.reflectCh <- job
+	select {
+	case a.reflectCh <- job:
+	case <-a.closing:
+		a.reflectWG.Done() // dropped: the worker is on its way out.
+	}
 }
 
 // Quiesce blocks until every enqueued reflection job has been processed (or ctx is
@@ -862,8 +950,11 @@ const closeDrainTimeout = 5 * time.Second
 // wait" is the correct shutdown order once a drain deadline exists.
 func (a *Agent) Close() error {
 	a.closeOnce.Do(func() {
-		if a.reflectCh != nil {
-			close(a.reflectCh) // worker finishes the queue, then exits
+		if a.closing != nil {
+			close(a.closing) // unparks any sender waiting on a full queue…
+			a.closeMu.Lock() // …then wait for every sender to leave enqueueReflect…
+			a.closed = true  // …and refuse the ones that arrive from here on.
+			a.closeMu.Unlock()
 		}
 		done := make(chan struct{})
 		go func() { a.workerWG.Wait(); close(done) }()

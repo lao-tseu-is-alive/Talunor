@@ -295,15 +295,15 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.22.2** — **a planning failure no longer quietly re-arms the
-> agent.** Turning the planner on is a request to be *bounded*: the approved plan is what
-> caps which tools the executor may offer. Until now, if planning itself failed, the turn
-> fell through to the plain loop — every tool back on the table at exactly the moment the
-> mechanism you opted into stopped working. (Each call was still policy-gated, so nothing
-> ran unchecked; but *gated* is not *capped*.) The behaviour is now an explicit choice,
-> `TALUNOR_PLANNER_FALLBACK`: **`fail_closed`** (default) answers without tools and says so,
-> **`ask`** lets you decide per turn, **`react`** restores the old behaviour — announced.
-> An unrecognised value resolves to `fail_closed`.
+> Current version: **v0.22.3** — **seven defects two external reviews found, each pinned
+> by a test that was checked to fail first.** A remote provider could crash the agent with
+> one malformed tool-call delta; reflection silently mangled any fact starting with a digit
+> ("3D printing" → "D printing") and stored it as truth; a corrupt lexical index failed a
+> whole recall the vector arm had already answered; the reflection queue could panic on
+> shutdown; and a policy rewrite could run a tool the approved plan never named, scored at
+> another tool's risk — **Lesson 14's defect, nine releases later and one floor down**, so
+> that lesson now carries the comparison. Two of the reported findings did not survive
+> verification, which is its own lesson: a claim is true against a *commit*.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

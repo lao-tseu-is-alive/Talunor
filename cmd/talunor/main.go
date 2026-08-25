@@ -54,7 +54,10 @@ func main() {
 }
 
 func run(plain bool, list int, reembed bool) error {
-	// Ctrl-C cancels the current turn / exits cleanly.
+	// Ctrl-C cancels the current turn / exits cleanly. This first defer only covers
+	// the error returns below it; the session itself gets a second, later-registered
+	// defer stop() so that LIFO cancels the context BEFORE the closers (see there).
+	// stop is idempotent, so registering it twice is safe.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
@@ -121,6 +124,11 @@ func run(plain bool, list int, reembed bool) error {
 	// Persistent, deduplicated prompt history (recalled with ↑/↓ in the TUI),
 	// stored next to the memory database so it survives across sessions.
 	hist := history.New(history.DefaultPath(store.Path()))
+
+	// Whatever ends the session — a signal, EOF, or a TUI quit key — cancel the
+	// context BEFORE the deferred closers run, so any turn goroutine still in flight
+	// is unwound while the store is open rather than after it has closed.
+	defer stop()
 
 	if plain {
 		fmt.Printf("%s\n%s → %s | %d memories | db: %s\ntype /help for commands\n\n",
@@ -309,8 +317,14 @@ func repl(ctx context.Context, ag *agent.Agent, hist *history.History) error {
 		hist.Add(line) // record for cross-session recall (used by the TUI).
 		if strings.HasPrefix(line, "/") {
 			done, err := command(ctx, line, ag)
-			if done || err != nil {
-				return err
+			if done {
+				return nil
+			}
+			if err != nil {
+				// A failed command is a failed COMMAND, not a failed session: a typo in
+				// `/forget 999` used to end the REPL, while a failed agent turn (below)
+				// merely reports and continues. Report and continue here too.
+				fmt.Fprintf(os.Stderr, "[%v]\n", err)
 			}
 			continue // handled; do not send the command to the agent.
 		}

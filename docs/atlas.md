@@ -93,6 +93,8 @@ Talunor/
 │   │   ├── hybrid_test.go    #     LAYER 22 tests (identifier vectors miss; supersession/soft-forget/forget
 │   │   │                     #       respected by the lexical arm; consolidation stays vector-only).
 │   │   ├── fusion_internal_test.go # Pure-fn tests (MATCH sanitising, RRF, one-arm compatibility) — no DB/ext.
+│   │   ├── lexical_internal_test.go # Test (a RUNTIME lexical failure degrades recall to the vector arm
+│   │   │                     #       instead of failing it, and reports LexicalFailed). Needs the ext + fts5.
 │   │   └── memory_test.go    #     Tests (semantic recall, thresholding, assistant-turn exclusion).
 │   │
 │   ├── llm/                  # LAYER 3 / 6: LLM provider abstraction + OpenAI-compatible adapter.

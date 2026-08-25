@@ -104,9 +104,11 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    idempotently at Open (NOT a migration: it is derived data), kept in
                    sync by SQL triggers, queried with bm25(); matchExpression sanitises
                    user text into a quoted OR-expression (raw text would hit FTS5's own
-                   query syntax). LexicalStatus = ok/unavailable/disabled: a build
+                   query syntax). LexicalStatus = ok/unavailable/disabled/failed: a build
                    without `-tags sqlite_fts5` has no fts5 module and degrades to
-                   vector-only, reported by doctor + /mem. hybrid.go fuses the arms by
+                   vector-only, reported by doctor + /mem. v0.22.3: a RUNTIME failure of
+                   the arm (corrupt index, schema drift) also degrades instead of failing
+                   the recall — latched in an atomic.Bool, surfaced as LexicalFailed. hybrid.go fuses the arms by
                    RECIPROCAL RANK FUSION (rrfK=60) because cosine distance and BM25
                    share no scale; with one arm the Layer-17 formula
                    (1-d)·confidence·eff-salience is kept verbatim, so a vector-only
@@ -781,6 +783,31 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   `llm.ApprovalRequest("(no plan)")` and binds the answer; `react` is the old behaviour, opt-in and
   ANNOUNCED. Unknown values resolve to `fail_closed` (a typo must never widen authority). Regression
   tests assert the offered tool set per mode (scriptedProvider now records `lastOpts`).
+- **v0.22.3 (fixes)** = **seven defects two external reviews found, each pinned by a test
+  verified to FAIL first.** (1) `accumulateToolCall` grew its slice with `for len(calls) <=
+  d.Index`, so a **negative** wire index reached `calls[-1]` — a remote provider panicking
+  the process. (2) `parseFacts` used `TrimLeft(line, "-*•0123456789. \t")`, a *character
+  class*: "3D printing is my hobby" became "D printing…", stored with no error and no trace
+  — the quietest and worst of the batch, a corrupted memory that then accrues confidence,
+  salience and evidence. Now `^\d+[.)]\s+` only, after bullets. (3) A **runtime** lexical
+  failure returned an error from `Recall`, losing an answer the vector arm had produced; it
+  now fails soft, with a new `LexicalFailed` status latched in an `atomic.Bool` so the
+  degradation stays visible in doctor/`/mem`. (4) `enqueueReflect`'s bare send could panic
+  on send-to-closed; `reflectCh` is now **never closed** (shutdown announced on a separate
+  `closing` channel) — and writing the test exposed a bug *in that fix*: a buffered queue
+  accepts sends after its worker has gone, leaking a `reflectWG` slot and hanging `Quiesce`,
+  closed by `closeMu`/`closed`. (5) **`Decision.Modified` could escape the plan cap** —
+  the cap is enforced at OFFER time (`toolSpecs`) and `RiskLevel` described the tool the
+  model *asked for*, so a rewrite substituting a tool ran outside the approved plan at
+  another tool's risk. Both questions are re-asked about the tool that will actually run;
+  a second rewrite is refused. **This is Lesson 14's defect one floor down** — v0.13.1
+  bound the name not the arguments, v0.22.2 bound neither once the policy swapped the tool
+  — so Lesson 14 gained a bilingual postscript. (6) `defer stop()` ran LAST (LIFO), so a
+  TUI quit could `store.Remember` into a closed DB. (7) A mistyped slash command ended the
+  `--plain` REPL. **Method note:** every claim was re-checked at the source first — two of
+  twelve did not survive (the report's "red CI" headline was already fixed in `3d5f07d`),
+  and the `Modified` hole was rated *up*. `cmd/talunor` still has no test harness, so (6)
+  and (7) are covered by inspection — stated, not implied.
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
   tests; calibration output 0600 + KDF. Same per-layer checkpoint rhythm.

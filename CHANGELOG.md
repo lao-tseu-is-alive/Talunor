@@ -14,6 +14,119 @@ changed but the *lessons learned* while getting there.
 - **Iteration 4, continued** — the executed plan becomes an input to learning (deferred
   from Layer 13); let a policy consult calibration/confidence for high-risk steps.
 
+## [0.22.3] - 2026-08-25 — Seven defects a review found, and the tests that pin them
+
+A correction batch from two external reviews (2026-08-14 "next moves", 2026-08-25
+Kimi Code), plus one defect found while verifying them. Every claim was re-checked
+against the source before being accepted — two did not survive that check: the
+report's headline finding (`atlas-check` red on `main`) had already been fixed in
+`3d5f07d`, and the `enqueueReflect` panic is real but narrower than described.
+
+**Every regression test below was verified to FAIL against the pre-fix code.** A
+test that passes before the fix guards nothing — the Lesson 22 principle applied to
+the patch that closes Lesson 22-shaped bugs.
+
+### Fixed
+
+- **A remote provider can no longer crash the process with one malformed delta**
+  (`internal/llm/openai.go`). `accumulateToolCall` grew the slice with
+  `for len(calls) <= d.Index`, which a **negative** index skips entirely — then
+  indexes `calls[-1]`. The index comes off the wire: with Ollama that is local
+  trust, but over OpenRouter it is a network service panicking your agent. The
+  fragment is now dropped.
+
+- **Reflection no longer mangles a fact that begins with a digit**
+  (`internal/agent/reflect.go`). `strings.TrimLeft(line, "-*•0123456789. \t")`
+  strips a *character class*, not a list marker: `"3D printing is my hobby"` became
+  `"D printing is my hobby"`, `"1984 is my favourite novel"` lost its subject
+  entirely. Stored with no error and no trace — a corrupted memory the agent would
+  then believe for months. Now only a real enumerated marker (`^\d+[.)]\s+`) is
+  removed, after bullets, so `- 1. fact` still parses.
+
+- **A runtime failure of the lexical arm no longer fails the whole recall**
+  (`internal/memory/`). A build *without* FTS5 degrades gracefully to vector-only —
+  that is the package's stated posture — but a corrupt index or schema drift
+  returned an error from `Recall`, losing an answer the vector arm had already
+  produced. The arm now fails soft and the degradation stays **observable**: new
+  `LexicalFailed` status, latched in an `atomic.Bool` (read from the UI goroutine
+  while a turn recalls), reported by `Lexical()` to doctor and `/mem`.
+
+- **The reflection queue's shutdown handoff is now exact, not merely safe**
+  (`internal/agent/agent.go`). `enqueueReflect`'s bare `a.reflectCh <- job` could
+  panic on send-to-closed: a turn goroutine can still be enqueuing when `Close()`
+  runs, because the TUI quits on a key without cancelling the turn's context.
+  `reflectCh` is now **never closed** — shutdown is announced on a separate
+  `closing` channel that both the sender and the worker select on, so nothing ever
+  sends on a closed channel. Writing the test then exposed a second, subtler bug in
+  that first fix: the queue is *buffered*, so a send racing shutdown still landed a
+  job nobody would run, leaking its `reflectWG` slot and hanging `Quiesce` forever.
+  `closeMu`/`closed` close that window — `Close` waits until no sender is inside
+  `enqueueReflect`, then refuses every later one.
+
+- **A policy rewrite can no longer escape the plan's tool cap**
+  (`internal/agent/agent.go`). `Decision.Modified` may replace a step before it runs,
+  but the cap is enforced where tools are *offered* (`toolSpecs`) and `RiskLevel` was
+  computed for the tool the model **asked for**. A rewrite substituting a different
+  tool escaped both: it could run something the approved plan never named, scored at
+  another tool's risk. Both questions are now asked again about the tool that will
+  actually run — cap membership (fail closed, observed by the model) and a fresh
+  policy evaluation for its risk. A second rewrite is refused outright: there would
+  be no stable effect left to approve.
+
+- **Quitting no longer races the store closing** (`cmd/talunor/main.go`). `defer
+  stop()` was registered first, so LIFO ran it *last* — after `ag.Close()` and
+  `store.Close()`. On a TUI quit (Esc/ctrl+c are Bubble Tea keys; they never touch
+  the signal context) an in-flight turn could still `store.Remember` into a closed
+  database. A second, later-registered `defer stop()` now cancels the context before
+  the closers; `stop` is idempotent, so the original stays as the path for the error
+  returns above it.
+
+- **A mistyped slash command no longer ends the REPL session**
+  (`cmd/talunor/main.go`). `if done || err != nil { return err }` meant `/forget 999`
+  terminated `--plain` mode, while two lines below a failed agent turn merely
+  reported and continued. Found while verifying the reports, in neither of them.
+
+### Documentation
+
+- **Lesson 14 gains a postscript** (EN + FR): the policy-`Modified` defect is the
+  *same shape* as the v0.13.2 defect the lesson is about, nine releases later and one
+  floor down — v0.13.1 bound the tool's name but not its arguments; v0.22.2 bound
+  neither once the policy substituted the tool. With the comparison table and the
+  transferable rule: every place a decision is carried forward is a place the binding
+  can be lost.
+
+### Lessons learned
+
+- **A review's findings are claims, and claims are true against a commit.** Two of
+  twelve did not survive verification, and one was rated too low. Re-checking each at
+  the source cost an hour and changed the plan: the "red CI" headline was already
+  fixed, while the `Modified` hole — filed as low severity, "only matters with an
+  untrusted policy" — was the most serious item in the set, because it is Lesson 14's
+  defect recurring at a different altitude in the very mechanism that teaches it.
+
+- **A regression test that passes before the fix guards nothing.** Each of the five
+  new tests was run against reverted code first. That discipline caught a *worthless*
+  test: the first version of `TestPolicyModifiedRederivesRiskForTheSubstitutedTool`
+  passed pre-fix, because its stub policy returned the same risk for every tool and
+  so could not tell the two evaluations apart. Making `riskByTool` tool-sensitive is
+  what turned it into a test of the thing it names.
+
+- **Writing the test found a bug in the fix.** The `closing`-channel design removed
+  the panic but not the *leak*: a buffered queue accepts sends after its worker has
+  gone. Only `TestEnqueueReflectAfterCloseDoesNotPanic`'s `Quiesce` assertion — added
+  as an afterthought — surfaced it. "Cannot panic" and "cannot lose work" are two
+  properties, and a shutdown path owes you both.
+
+- **The most damaging defect was the quietest.** The two panics announce themselves;
+  the `parseFacts` digit strip does not. It writes a plausible-looking sentence into
+  long-term memory, where confidence, salience and evidence then accrue to text the
+  user never said. In a system whose whole thesis is *provenance you can audit*, a
+  silent corruption between the source and the store is worse than a crash.
+
+- **`cmd/talunor` still has no test harness**, so the last two fixes are covered by
+  inspection rather than by a test — stated plainly here rather than left implied.
+  Command-level lifecycle tests remain an open thread (both reviews name it).
+
 ## [0.22.2] - 2026-08-18 — The planner's silent fallback becomes an explicit contract
 
 The last "Important" finding of the 2026-08-14 external review, verified against

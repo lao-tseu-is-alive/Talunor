@@ -202,6 +202,51 @@ An approval protects only what it mechanically binds — not what it displays.
 4. **Review across perspectives.** The author's review is necessary but not
    sufficient; adversarial and independent review find the holes intent conceals.
 
+## Postscript: the same defect, one floor down (v0.22.3)
+
+The principle at the top of this page has a habit of being violated in new places.
+Nine releases later, a second instance of the *same* shape surfaced — this time not
+in the plan-approval path but in the **policy**:
+
+```go
+// internal/agent/runTool, before v0.22.3
+name, args := tc.Name, step.Arguments
+if d.Modified != nil {
+    if d.Modified.Tool != "" {
+        name = d.Modified.Tool   // ← a DIFFERENT tool
+    }
+    args = d.Modified.Arguments
+}
+// …and then straight to a.tools.Execute(ctx, name, args)
+```
+
+A `policy.Decision` may rewrite the step before it runs (`Decision.Modified`) — a
+rule engine forcing a safer variant, say. But the plan's tool cap is enforced where
+tools are *offered* (`toolSpecs`), and `d.RiskLevel` was computed for the tool the
+model **asked for**. So a rewrite that substituted a different tool escaped both:
+it could run something the approved plan never named, at a risk score belonging to
+something else.
+
+Notice the shape is identical to the v0.13.2 defect you just read about. Only the
+altitude changed:
+
+| | bound | not bound |
+|---|---|---|
+| v0.13.1 (fixed in v0.13.2) | the tool's **name** | its **arguments** |
+| v0.22.2 (fixed in v0.22.3) | *nothing*, once the policy substituted the tool | name **and** arguments |
+
+The fix asks both questions again, about the tool that will actually run: is it
+inside `exec.allowTools`, and what does the policy score *it* at? Two regression
+tests pin it (`TestPolicyModifiedCannotEscapeThePlanCap`,
+`TestPolicyModifiedRederivesRiskForTheSubstitutedTool`) — and both were checked to
+FAIL against the pre-fix code, because a regression test that passes before the fix
+guards nothing.
+
+The transferable point is not "we had the bug twice". It is that **every place a
+decision is carried forward is a place the binding can be lost** — so the question
+"what exactly does this approval bind?" has to be re-asked at each hop, not answered
+once for the system.
+
 ## Completion checklist
 
 - [ ] I can explain the difference between binding a tool's name and its arguments.

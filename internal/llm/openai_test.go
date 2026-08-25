@@ -239,3 +239,41 @@ func TestToolCallMarshalsToOpenAIShape(t *testing.T) {
 		}
 	}
 }
+
+// TestChatSurvivesNegativeToolCallIndex is the regression test for the
+// provider-triggerable panic: a streamed tool-call delta carries its index from
+// the wire, and a negative one skipped the grow loop and indexed calls[-1]. With
+// Ollama that is local trust, but a REMOTE provider must never be able to crash
+// the process with one malformed delta. The bad fragment is dropped; the valid
+// tool call in the same stream still assembles.
+func TestChatSurvivesNegativeToolCallIndex(t *testing.T) {
+	srv := sseServer(t, http.StatusOK,
+		`{"choices":[{"delta":{"tool_calls":[{"index":-1,"id":"evil","function":{"name":"boom","arguments":"{}"}}]}}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"calculator","arguments":"{}"}}]}}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	)
+	defer srv.Close()
+
+	p := llm.NewOpenAICompatible("test", srv.URL, "", "m")
+	ch, err := p.Chat(context.Background(), []llm.Message{{Role: llm.RoleUser, Content: "hi"}}, llm.Options{})
+	if err != nil {
+		t.Fatalf("chat: %v", err)
+	}
+
+	var calls []llm.ToolCall
+	for c := range ch { // a panic here fails the test by crashing it — that is the point.
+		if c.Err != nil {
+			t.Fatalf("chunk err: %v", c.Err)
+		}
+		if len(c.ToolCalls) > 0 {
+			calls = c.ToolCalls
+		}
+	}
+	if len(calls) != 1 {
+		t.Fatalf("got %d tool calls; want 1 (the negative-index fragment must be dropped)", len(calls))
+	}
+	if calls[0].Name != "calculator" {
+		t.Errorf("assembled tool = %q; want calculator", calls[0].Name)
+	}
+}

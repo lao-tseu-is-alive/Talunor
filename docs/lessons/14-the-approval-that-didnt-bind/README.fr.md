@@ -217,6 +217,53 @@ Une approbation ne protège que ce qu'elle lie mécaniquement — pas ce qu'elle
    suffisante ; la revue adverse et indépendante trouve les trous que l'intention
    dissimule.
 
+## Post-scriptum : le même défaut, un étage plus bas (v0.22.3)
+
+Le principe en haut de cette page a la fâcheuse habitude d'être violé à de nouveaux
+endroits. Neuf versions plus tard, une deuxième instance de la *même* forme est
+apparue — cette fois non pas dans le chemin d'approbation du plan, mais dans la
+**politique** :
+
+```go
+// internal/agent/runTool, avant v0.22.3
+name, args := tc.Name, step.Arguments
+if d.Modified != nil {
+    if d.Modified.Tool != "" {
+        name = d.Modified.Tool   // ← un AUTRE outil
+    }
+    args = d.Modified.Arguments
+}
+// …puis directement vers a.tools.Execute(ctx, name, args)
+```
+
+Une `policy.Decision` peut réécrire l'étape avant son exécution (`Decision.Modified`)
+— un moteur de règles imposant une variante plus sûre, par exemple. Mais le plafond
+d'outils du plan est appliqué là où les outils sont *proposés* (`toolSpecs`), et
+`d.RiskLevel` avait été calculé pour l'outil que le modèle **avait demandé**. Une
+réécriture substituant un autre outil échappait donc aux deux : elle pouvait exécuter
+quelque chose que le plan approuvé n'avait jamais nommé, avec un score de risque
+appartenant à autre chose.
+
+Remarquez que la forme est identique au défaut v0.13.2 que vous venez de lire. Seule
+l'altitude change :
+
+| | lié | non lié |
+|---|---|---|
+| v0.13.1 (corrigé en v0.13.2) | le **nom** de l'outil | ses **arguments** |
+| v0.22.2 (corrigé en v0.22.3) | *rien*, dès que la politique substituait l'outil | nom **et** arguments |
+
+Le correctif repose les deux questions, à propos de l'outil qui va réellement
+s'exécuter : est-il dans `exec.allowTools`, et que vaut-*il* pour la politique ? Deux
+tests de non-régression le verrouillent (`TestPolicyModifiedCannotEscapeThePlanCap`,
+`TestPolicyModifiedRederivesRiskForTheSubstitutedTool`) — et on a vérifié qu'ils
+ÉCHOUENT sur le code d'avant le correctif, car un test de non-régression qui passe
+avant le correctif ne garde rien du tout.
+
+Ce qu'il faut retenir n'est pas « nous avons eu le bug deux fois ». C'est que
+**chaque endroit où une décision est transmise plus loin est un endroit où le lien
+peut se perdre** — la question « qu'est-ce que cette approbation lie exactement ? »
+doit donc être reposée à chaque étape, et non tranchée une fois pour le système.
+
 ## Checklist de fin
 
 - [ ] Je sais expliquer la différence entre lier le nom d'un outil et ses arguments.

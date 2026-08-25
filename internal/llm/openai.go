@@ -243,7 +243,15 @@ func (p *OpenAICompatible) stream(ctx context.Context, body io.ReadCloser, out c
 
 // accumulateToolCall merges one streamed tool-call fragment into calls (indexed
 // by its position): the id/name come once, the JSON arguments append.
+//
+// The index comes off the wire, so it is validated before it is used as a slice
+// index: a negative one skips the grow loop below entirely and would panic on
+// calls[-1]. With Ollama that is local trust, but a remote provider must never
+// be able to crash the process with one malformed delta — drop the fragment.
 func accumulateToolCall(calls []ToolCall, d deltaToolCall) []ToolCall {
+	if d.Index < 0 {
+		return calls
+	}
 	for len(calls) <= d.Index {
 		calls = append(calls, ToolCall{})
 	}
