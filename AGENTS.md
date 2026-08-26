@@ -937,6 +937,22 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   what you wrote. **Open: reference docs have no drift alarm** (`lessons-assert` covers
   lessons, `readme-check` the banner; nothing covers architecture.md) — third time this note
   is written, cf. v0.22.4 on `//` comments.
+- **v0.23.3 (ci)** = **a tag push is an EVENT, and events cannot be replayed.** A GitHub
+  Actions **major outage** swallowed v0.23.2's runs — three of four never created, the
+  fourth `completed/failure` with its job still `queued`, no logs, rerun refused by the API.
+  The repo was fine (`release-check` green, workflows unchanged since v0.23.1 passed). The
+  real defect was that `release.yml` and `docker-publish.yml` had **one trigger**
+  (`push: tags:`), so republishing meant deleting and re-pushing a public tag. Both now also
+  take **`workflow_dispatch` with a `tag` input** — and **the input is the point**: a
+  dispatched run executes the workflow AT THE REF GIVEN (an older tag has no trigger in it),
+  and dispatching from `main` would make `docker/metadata-action` publish `main`/`sha`
+  instead of `0.23.2`. So each workflow opens with a **`Resolve the tag to publish`** step
+  (manual input or pushed ref, shape-validated `vX.Y.Z` or refuse) driving `checkout.ref`,
+  `RELEASE_VERSION`, an explicit `tag_name` for `action-gh-release`, and `value=` for the
+  semver metadata pattern. Image `COMMIT` build-arg now from the CHECKED-OUT HEAD, not
+  `github.sha` (wrong on a dispatch). **Rule: ask of every automated step how it is re-run
+  after failing at a moment you did not choose.** And diagnose first — the status page said
+  `Actions: major_outage` in two minutes.
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
   tests; calibration output 0600 + KDF. Same per-layer checkpoint rhythm.

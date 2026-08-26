@@ -298,15 +298,14 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.2** — **the mental-model doc had stopped at Iteration 4, and
-> a generated video found it.** A NotebookLM overview built from four docs narrated two
-> claims that were wrong — and both traced back to `docs/architecture.md`, not to the
-> model: §3.2 still described authority as a **linear rank** ("user > tool > model"),
-> the design ADR 0004 replaced in v0.22.0, and §3.5 closed with *"the project is honest
-> about what is a boundary versus defense-in-depth"* — a sentence that claims the
-> distinction without drawing it, so the summary kept "kernel boundary" and dropped the
-> caveat. Both rewritten (EN + FR), Layers 20–24 added, and the sandbox section now
-> **states** which guard is a boundary and which is not.
+> Current version: **v0.23.3** — **a tag push is an event, and events cannot be
+> replayed.** A GitHub Actions outage swallowed `v0.23.2`'s workflow runs: three were
+> never created, the fourth failed with its job still queued. Nothing was wrong with the
+> repo — but both publishing workflows had a single trigger (`push: tags:`), so the only
+> recovery was to delete and re-push a public tag. They now also accept
+> **`workflow_dispatch` with a `tag` input**, and a `Resolve the tag to publish` step
+> makes a manual run produce *the same artefacts* as the automatic one — the trigger
+> alone would have shipped a button that published `main` instead.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

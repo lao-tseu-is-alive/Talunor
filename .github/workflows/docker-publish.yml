@@ -4,6 +4,12 @@ on:
   push:
     # Triggers only on semantic version tags.
     tags: [ 'v[0-9]+.[0-9]+.[0-9]+' ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag to (re)publish, e.g. v0.23.2. Leave empty to use the current ref.'
+        required: false
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -19,11 +25,36 @@ jobs:
       security-events: write # required for uploading SARIF results.
 
     steps:
+      # Publishing is triggered by a tag push — an event that cannot be replayed.
+      # When Actions is unavailable at that moment (it happened: a major outage
+      # swallowed v0.23.2's runs), the only recovery used to be re-pushing a public
+      # tag. workflow_dispatch adds a second door, and this step is what makes it
+      # actually useful: it resolves WHICH tag to publish, from the manual input or
+      # from the pushed ref, so a dispatched run produces the same artefacts as the
+      # automatic one instead of building whatever main happens to be.
+      - name: Resolve the tag to publish
+        id: target
+        run: |
+          tag="${{ inputs.tag }}"
+          [ -n "$tag" ] || tag="${GITHUB_REF#refs/tags/}"
+          case "$tag" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::'$tag' is not a vX.Y.Z tag — refusing to publish"; exit 1 ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "publishing $tag" >&2
+
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.tag }}
 
       - name: Build metadata
-        run: echo "BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+        run: |
+          echo "BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+          # github.sha is the DISPATCHING ref's commit, which is not the tag's on a
+          # manual run — stamp the image with what was actually checked out.
+          echo "BUILD_COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
 
       - name: Setup Docker buildx
         # docker/setup-buildx-action v3 — pinned to commit SHA (supply-chain).
@@ -47,7 +78,7 @@ jobs:
           load: true # load into the local docker daemon instead of pushing.
           tags: talunor:test
           build-args: |
-            COMMIT=${{ github.sha }}
+            COMMIT=${{ env.BUILD_COMMIT }}
             BUILD_DATE=${{ env.BUILD_DATE }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -98,7 +129,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
+            type=semver,pattern={{version}},value=${{ steps.target.outputs.tag }}
             type=sha
 
       - name: Build and push Docker image

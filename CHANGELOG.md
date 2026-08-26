@@ -17,6 +17,59 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.3] - 2026-08-26 — A tag push is an event, and events cannot be replayed
+
+`v0.23.2` was tagged and pushed correctly. Then **GitHub Actions went into a major
+outage**, and of the four workflow runs that push should have created, three were
+never created at all and the fourth was marked failed with its job still `queued`
+and no logs. Nothing was wrong with the repository — `release-check` was green, the
+workflows were unchanged since `v0.23.1` passed on them two hours earlier.
+
+The problem is what recovery looked like: both publishing workflows had exactly one
+trigger, `push: tags:`. A push is an **event**, and an event that has happened cannot
+be made to happen again. With no second door, the only way to republish a version was
+to delete and re-push a public tag.
+
+### Added
+
+- **`workflow_dispatch` on `release.yml` and `docker-publish.yml`**, with a `tag`
+  input. The trigger alone would not have been enough, and the input is why:
+  - the manual button only appears if the trigger exists on the default branch, but a
+    dispatched run executes the workflow **at the ref it is given** — and an older tag
+    does not contain the trigger;
+  - dispatching from `main` instead would build `main`, and `docker/metadata-action`
+    would derive the image tag from *that* ref — publishing `main`/`sha`, not `0.23.2`.
+
+  So each workflow now starts with a **`Resolve the tag to publish`** step that takes
+  the tag from the manual input or the pushed ref, validates its shape (`vX.Y.Z` or
+  refuse), and drives everything downstream: `actions/checkout` uses it as `ref`,
+  `RELEASE_VERSION` comes from it, `softprops/action-gh-release` gets an explicit
+  `tag_name` (a dispatched run has no tag ref to fall back on), and
+  `docker/metadata-action` gets `value=` so the semver pattern resolves.
+- The image's `COMMIT` build-arg now comes from the **checked-out** HEAD rather than
+  `github.sha`, which on a dispatched run is the dispatching ref's commit, not the
+  tag's.
+
+Publishing a version and marking one are now separable: a tag stays something you
+push once, and a publication becomes something you can retry.
+
+### Lessons learned
+
+- **A single trigger is a single point of failure, and `push` is the least
+  retryable one.** Everything else in this release ritual can be re-run — `make
+  release-check`, the build, the scan. The publish could not, because it was bound to
+  an event rather than to an intention. The generalisation worth keeping: *ask of every
+  automated step how it is re-run after it fails at a moment you did not choose.*
+- **Adding the trigger without the input would have shipped a button that lies.** It
+  would appear in the UI, run, and produce an image tagged `main` — a worse outcome
+  than no button, because it looks like recovery. The trigger is the easy half; making
+  a manual run produce *the same artefacts* as the automatic one is the actual work.
+- **Diagnose before repairing, even when the repair is obvious.** The instinct on a red
+  workflow is to look for the breakage in the diff. Four facts said otherwise — three
+  runs missing entirely, a job that never started, zero logs, a rerun the API refused —
+  and the status page confirmed `Actions: major_outage`. Checking took two minutes and
+  saved changing code that was never at fault.
+
 ## [0.23.2] - 2026-08-26 — architecture.md had stopped at Iteration 4 (and a generated video found it)
 
 A docs-only release, and the way it was found is the point.
