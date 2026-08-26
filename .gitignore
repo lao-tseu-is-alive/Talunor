@@ -47,3 +47,10 @@ go.work.sum
 todo.md
 /reports/
 /write_pedagogical_lessons.md
+
+# Generated media about the project (NotebookLM overviews and the like). Useful
+# to keep locally and fact-check — see scripts/transcribe-media.sh — but they are
+# tens of megabytes and git history is forever, so they stay out of the repo.
+*.mp4
+*.m4a
+*.wav

@@ -298,16 +298,15 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.1** — **course Lesson 25, "The scar that never bled."** The
-> course's first lesson about a defect that produced **no symptom at all**: for four
-> layers, every correction the trust model refused was silently destroyed — nothing
-> crashed, no test failed, because refusing a bad correction *is* the right behaviour and
-> the forgetting was invisible. The lesson then turns Lesson 24's instrument — *what makes
-> this sentence true, code or model behaviour?* — on the vision doc's proposed claim state
-> machine (it fails: every transition would be a model judgement) and on
-> [ADR 0005](docs/decisions/0005-contested-claims.md) itself (it passes, and you verify
-> that yourself). Bilingual, with executable assertions. **The course is now 26 lessons,
-> 00–25.**
+> Current version: **v0.23.2** — **the mental-model doc had stopped at Iteration 4, and
+> a generated video found it.** A NotebookLM overview built from four docs narrated two
+> claims that were wrong — and both traced back to `docs/architecture.md`, not to the
+> model: §3.2 still described authority as a **linear rank** ("user > tool > model"),
+> the design ADR 0004 replaced in v0.22.0, and §3.5 closed with *"the project is honest
+> about what is a boundary versus defense-in-depth"* — a sentence that claims the
+> distinction without drawing it, so the summary kept "kernel boundary" and dropped the
+> caveat. Both rewritten (EN + FR), Layers 20–24 added, and the sandbox section now
+> **states** which guard is a boundary and which is not.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

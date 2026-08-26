@@ -910,6 +910,33 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   presence of `contestedExpr`; proved by deleting the feature and watching the absence-only arm
   still pass. Competency matrix: safety becomes 09 · 10 · 12 · 14 · 21 · 24 · 25; course now
   00–25 (**26 lessons**). **Iteration 5 is fully built AND fully lessoned (Layers 20–24).**
+- **v0.23.2 (docs)** = **`docs/architecture.md` had stopped at Iteration 4 — and a generated
+  video found it.** A NotebookLM overview built from README + architecture + atlas + the
+  lessons index narrated two wrong claims, and **both traced to architecture.md, not to the
+  model**: (1) §3.2 described authority as a LINEAR RANK (`user_stated` > `model_inferred`,
+  "`tool_observed` above both") — the design ADR 0004 replaced in v0.22.0 — so the video
+  taught "user at the top, tools in the middle", i.e. the flat-earth hole as a feature. Now
+  §3.2 = confidence only, new **§3.3** = authority as `(provenance, subject)` with the
+  subject-first rule and the real numbers (user/user=2, tool_observed=2 EQUAL, unspecified=1,
+  model_inferred=0, user/world=0). (2) §3.5 ended with *"The project is honest about what is
+  a boundary versus defense-in-depth"* — **a sentence that claims a virtue instead of
+  exercising it**; a summariser cannot propagate a virtue, so it kept "kernel boundary" and
+  amplified to "physically constrained by the kernel", false for the namespaces backend
+  (gotchas 13/15). Now **§3.7** is a table: 2 boundaries (OCI, SSRF dialer hook), 1
+  defense-in-depth that must not hold hostile code (namespaces), 1 mitigation (fenced
+  memory). Also: §3.1's "no extra lock" scoped to DATABASE access (the video generalised it
+  to "no mutexes"; the code uses atomic.Bool/Pointer + sync.RWMutex), new **§3.4** covers the
+  evidence trail (Layers 20–24 appeared NOWHERE in the mental-model page), `agent.FactArbiter`
+  added to the interface seams. EN + FR; six subsections → eight. Ships
+  **`scripts/transcribe-media.sh`** (ffmpeg → 16 kHz mono WAV → whisper.cpp, fully local;
+  auto-detects the CLI and the largest REAL ggml model — the size filter matters, whisper.cpp
+  ships ~600 KB `for-tests-*.bin` dummies that transcribe nothing) so the check is repeatable,
+  and git-ignores `*.mp4`/`*.m4a`/`*.wav` (the 75 MB video was untracked but NOT ignored — one
+  `git add -A` from being in the history forever). **Method note: a generated
+  summary is a cheap drift detector** — it has no loyalty to what you meant and propagates
+  what you wrote. **Open: reference docs have no drift alarm** (`lessons-assert` covers
+  lessons, `readme-check` the banner; nothing covers architecture.md) — third time this note
+  is written, cf. v0.22.4 on `//` comments.
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
   tests; calibration output 0600 + KDF. Same per-layer checkpoint rhythm.

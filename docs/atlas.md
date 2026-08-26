@@ -271,7 +271,9 @@ Talunor/
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.
     ├── allow-unprivileged-userns.sh # Toggle the Ubuntu AppArmor gate so the namespaces backend can run.
-    └── run-container-with-ollama-bridge.sh # Start the loopback→VM Ollama bridge, then run the container.
+    ├── run-container-with-ollama-bridge.sh # Start the loopback→VM Ollama bridge, then run the container.
+    └── transcribe-media.sh # Local transcript of a video/audio file (ffmpeg + whisper.cpp), so a
+                            #   generated artefact about Talunor can be fact-checked against the code (v0.23.2).
 ```
 
 ---

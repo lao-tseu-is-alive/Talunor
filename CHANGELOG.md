@@ -17,6 +17,90 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.2] - 2026-08-26 — architecture.md had stopped at Iteration 4 (and a generated video found it)
+
+A docs-only release, and the way it was found is the point.
+
+A NotebookLM video overview was generated from four sources — `README.md`,
+`docs/architecture.md`, `docs/atlas.md`, `docs/lessons/README.fr.md`. Most of its
+narration was accurate and precise. Two claims were not, and **both traced back to
+`docs/architecture.md` rather than to the model.** A generated summary turned out to
+be a drift detector: it faithfully propagated what the source said, which is exactly
+how the source's staleness became audible.
+
+### Fixed
+
+- **§3.2 described a trust model this project explicitly rejected.** It said authority
+  ranked `user_stated` > `model_inferred`, "a verified `tool_observed` above both" — a
+  **linear ranking**, and one that predates Layer 23 (`v0.22.0`). The real
+  `supersedeAuthority` is a function of `(provenance, subject)`: `user_stated` about
+  the *user* = 2, `tool_observed` = 2 (**equal**, not above or below), `unspecified`
+  = 1, `model_inferred` = 0, and `user_stated` about the **world** = 0. A global rank
+  is precisely the design ADR 0003's two worked examples break — and the video, reading
+  the stale sentence, told viewers "user input sits at the top, verified tools in the
+  middle", which is the flat-earth hole as a *feature*.
+  §3.2 now covers confidence only; a new **§3.3** covers authority, states the
+  subject-first rule, and links ADRs 0003/0004/0005.
+
+- **§3.5 announced a virtue instead of exercising it.** It described `bash` as running
+  in "a network-less sandbox (a kernel boundary)" and closed with *"The project is
+  honest about what is a boundary versus defense-in-depth."* That sentence claims the
+  distinction is drawn somewhere without drawing it — and a summariser cannot propagate
+  a virtue, only sentences. So the video kept "kernel boundary" and amplified it to
+  "physically constrained by the kernel… the model's logic is entirely irrelevant to
+  the containment", which is **false for the namespaces backend** (no seccomp, no
+  reliable rootless pids cap — gotchas 13 and 15).
+  The section (now **§3.7**) replaces the claim with a table: two boundaries (OCI
+  runtime, SSRF dialer hook), one defense-in-depth that must not hold hostile code
+  (namespaces), one mitigation (fenced memory) — plus the reminder that auto-detect
+  falls back to `namespaces` when no daemon answers, so *check which one you got*.
+
+- **§3.1's "no extra lock" invited a misreading**, and got one ("eliminates the need
+  for complex mutexes… without application-level locking"). The single connection
+  serialises **database** access only; in-process state still uses `atomic.Bool`,
+  `atomic.Pointer` and a `sync.RWMutex`. The scope is now stated.
+
+### Added
+
+- **§3.4 — the evidence trail, with both sides.** `architecture.md` covered Iteration 4
+  and stopped: Layers 20–24 (evidence, supersession, subject-as-data, contested claims)
+  appeared nowhere in the page billed as the project's mental model.
+- `agent.FactArbiter` added to the list of interface seams (§2).
+- **`scripts/transcribe-media.sh`** — the check made repeatable. ffmpeg → 16 kHz mono
+  WAV → whisper.cpp → `.txt` (or `srt`/`vtt`/`csv`), fully local: uploading an
+  unreleased description of your own architecture to a transcription service is a
+  decision, not a convenience. Auto-detects `whisper-cli` and picks the largest real
+  ggml model — with a size filter, because whisper.cpp ships ~600 KB `for-tests-*.bin`
+  dummies that load happily and transcribe nothing. `WHISPER_CLI` / `WHISPER_MODEL` /
+  `WHISPER_LANG` / `WHISPER_FORMAT` override everything. The header carries the method,
+  not just the usage: check against the **code** (not the docs the artefact was built
+  from), hunt **omissions** rather than errors, and ask where a wrong claim came *from*
+  before fixing the artefact.
+- **Generated media is now git-ignored** (`*.mp4`, `*.m4a`, `*.wav`). The 75 MB video
+  that prompted this release sat untracked-but-not-ignored, one `git add -A` away from
+  being in the history forever.
+
+Both languages. Six subsections became eight; nothing else moved.
+
+### Lessons learned
+
+- **A generated summary is a drift detector, and a cheap one.** The instinct is to
+  audit the artefact for hallucination. The higher-value move was to trace each error
+  back to its source — and two of three landed in a hand-written doc nobody had re-read
+  since Iteration 4. A summariser has no loyalty to what you meant; it propagates what
+  you wrote. That makes it a rather good reader of your own staleness.
+- **"We are honest about X" is not a statement of X.** The single most instructive line
+  in this batch. A sentence that describes the project's virtue carries no information
+  a reader — or a summariser — can use, and it *feels* like a caveat while occupying
+  the place where the caveat should be. Write the distinction, not the claim to have
+  drawn it.
+- **Reference docs need the same drift alarms as lessons, and don't have them.**
+  `lessons-assert` re-derives the claims in `docs/lessons/`; `readme-check` pins the
+  version banner. Nothing checks `architecture.md`, which is why it could describe a
+  superseded trust model three releases after the ADR that replaced it. Not fixed here
+  — named, so the next guard has an obvious target (this is the third time this note
+  has been written: see v0.22.4 on `//` comments).
+
 ## [0.23.1] - 2026-08-26 — Course: Lesson 25 ("The scar that never bled"), bilingual
 
 A docs-only release. Layer 24 gets its lesson — and it is a kind the course has not had.

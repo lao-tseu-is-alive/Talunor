@@ -140,7 +140,7 @@ Arrows read **"imports / depends on."** Things worth noticing:
   there is no `policy ↔ agent` cycle.
 - **The seams are interfaces**, each with a fake in tests: `llm.Provider`,
   `policy.Policy`, `tools.Tool`, `sandbox.Sandbox`, `agent.Planner`,
-  `agent.FactExtractor`.
+  `agent.FactExtractor`, `agent.FactArbiter`.
 - **`tools` is the only thing that touches `sandbox` and `webfetch`.** The agent
   never reaches the network or the shell directly — it goes through a tool, which
   goes through a guarded boundary.
@@ -154,48 +154,100 @@ Arrows read **"imports / depends on."** Things worth noticing:
 
 ## 3. The load-bearing decisions
 
-Six choices explain most of the code. Each links to the lesson that teaches it.
+Eight choices explain most of the code. Each links to the lesson that teaches it.
 
 ### 3.1 One pinned SQLite connection *is* the concurrency model
 The `sqlite-ai` / `sqlite-vector` extensions keep the loaded model, embedding
 context, and vector index in **per-connection** C state, so `memory.Store` pins
 the pool to a single connection (`SetMaxOpenConns(1)`). This is not a limitation
 worked around — it is *used*: `database/sql` serialises every access, so lazy
-decay stays a pure read and the async reflection worker needs **no extra lock**.
+decay stays a pure read and the async reflection worker needs **no extra lock
+around the store**. Note the scope: this buys serialisation of *database* access
+only. In-process state still needs the usual care, and the code says so —
+`atomic.Bool`/`atomic.Pointer` for state shared between the UI and turn
+goroutines, `sync.RWMutex` for the shutdown handoff. "No mutexes anywhere" would
+be a misreading.
 → Lessons [02](lessons/02-persistent-memory/) and [19](lessons/19-off-the-critical-path/).
 
 ### 3.2 Trust comes from the source, never the model's self-report
 A memory's `confidence` is assigned by the **system** from its provenance
-(`user_stated` > `model_inferred`, a verified `tool_observed` above both), then
-scaled by the model's measured calibration — the model is never asked how sure it
-is (a sycophancy trap). Reinforcement raises confidence **only on independent
-evidence** (a user restating counts; the model echoing itself does not).
+(`user_stated` and a verified `tool_observed` are both trusted; `model_inferred`
+is not), then scaled by the model's measured calibration — the model is never
+asked how sure it is (a sycophancy trap). Reinforcement raises confidence **only
+on independent evidence** (a user restating counts; the model echoing itself does
+not).
 → Lessons [16](lessons/16-measure-the-model/) and [17](lessons/17-learning-with-humility/).
 
-### 3.3 Retention is computed at read time, not maintained by writes
+### 3.3 Authority is a function of (who spoke, what it is about) — not a ranking
+Confidence says how much a fact is believed. **Authority** — who may *retire*
+someone else's fact — is a separate question, and it is deliberately **not** a
+linear rank. A global ordering like "user > tool > model" is the design this
+project tried and rejected: it breaks in both directions (see ADR 0003's worked
+examples). `memory.Supersedes` therefore reads an **`Attribution` = (provenance,
+subject)** and asks two questions in order:
+
+1. **Different subjects never supersede.** A claim about the *user* and a claim
+   about the *world* cannot contradict each other; they coexist. This is
+   arithmetic, not a judgement call — it holds even when both LLM steps misbehave.
+2. Within one subject, authority decides: `user_stated` about the **user** = 2,
+   `tool_observed` = 2 (*equal*, not below), `unspecified` = 1,
+   `model_inferred` = 0 — and `user_stated` about the **world** = 0. You are the
+   authority on yourself, not on the world; saying it does not make it so.
+
+A refused correction is not discarded: it is recorded as **counter-evidence**,
+which makes the incumbent report `Contested` — a status **derived** from the
+evidence trail, never stored beside it, so it cannot drift from its own
+justification.
+→ Lessons [21](lessons/21-whose-word-counts/), [24](lessons/24-the-adr-that-didnt-bind/)
+and [25](lessons/25-the-scar-that-never-bled/); ADRs
+[0003](decisions/0003-trust-model-for-supersession.md),
+[0004](decisions/0004-subject-as-data.md),
+[0005](decisions/0005-contested-claims.md).
+
+### 3.4 Every fact carries an auditable trail, with two sides
+`RecordEvidence` appends one row per store and per reinforcement — which turn,
+which source — so "the agent believes X (90%)" becomes "…because you said so in
+turns #3 and #9" (`/why <id>`). Since Layer 24 the trail also holds what
+*contradicted* a fact and lost. Facts distilled from a tool's text are
+`model_inferred` by default: an LLM reading a tool's output is still inference.
+`tool_observed` is reserved for a tool that declares itself `tools.Verified` —
+**no builtin does today**; it is a wired and tested seam, not a claim.
+→ Lesson [20](lessons/20-learn-from-action/); ADR [0002](decisions/0002-provenance-from-source.md).
+
+### 3.5 Retention is computed at read time, not maintained by writes
 Salience decays **lazily**: `Recall` computes effective salience
 `= salience · 2^(−age/half-life)` at the moment of the query and soft-forgets
 below a floor (the row survives). No background job, no write on the read path —
 which is exactly what the single-connection design (§3.1) needs.
 → Lesson [18](lessons/18-the-memory-of-the-gesture/).
 
-### 3.4 Every action crosses an explicit, fail-closed gate
+### 3.6 Every action crosses an explicit, fail-closed gate
 Before any tool runs, `policy.Evaluate` decides allow / prompt / deny. A policy
 error or a denial **fails closed** (the model observes a refusal, it does not act).
 A whole-plan approval binds the tool *names*, but a high-risk step still
 re-confirms its **live arguments** — approving a plan is not a blank cheque.
 → Lessons [12](lessons/12-the-open-bar/) and [14](lessons/14-the-approval-that-didnt-bind/).
 
-### 3.5 Danger is opt-in and bounded, not trusted
-The powerful tools are **off by default** (`TALUNOR_BASH`, `TALUNOR_WEBFETCH`) and,
-when on, sit behind real boundaries: `bash` runs in a network-less sandbox (a
-kernel boundary), `web_fetch` runs behind an SSRF guard in the dialer's `Control`
-hook (the resolved IP is vetted immediately before connect, re-checked on every
-redirect). Recalled memory is fenced as untrusted DATA in the prompt. The project
-is honest about what is a *boundary* versus *defense-in-depth*.
+### 3.7 Danger is opt-in — and each guard says which kind of guard it is
+The powerful tools are **off by default** (`TALUNOR_BASH`, `TALUNOR_WEBFETCH`).
+When on, they sit behind guards of **three different strengths**, and the
+difference is load-bearing — stating it is the point of this section, not a
+disclaimer at the end of it:
+
+| Guard | Strength | What that means |
+|---|---|---|
+| `bash` via the **OCI runtime** (nerdctl/docker) | **Boundary** | A real container: `--cap-drop=ALL`, `--security-opt=no-new-privileges`, non-root, no network. Use this for code you do not trust. |
+| `bash` via the **namespaces backend** (rootless Linux) | **Defense-in-depth — NOT a boundary** | Rootless user namespaces, read-only rootfs, empty netns, a memory rlimit and a hard timeout. But there is **no seccomp**, and rootless gives **no reliable pids cap**. It is teaching material and a speed bump. **Do not run hostile code behind it.** |
+| `web_fetch` SSRF guard | **Boundary** | The check lives in the dialer's `Control` hook, so it vets the **resolved IP** immediately before connect and re-checks on every redirect — which is what defeats DNS rebinding. |
+| Fenced recalled memory | **Mitigation** | Untrusted text is delimited and labelled as DATA in the prompt. It reduces prompt injection; it cannot *prevent* it, because the model still reads it. |
+
+The honest summary: two boundaries, one mitigation, and one guard whose value
+depends entirely on which backend is selected. `TALUNOR_SANDBOX` chooses; auto-detect
+falls back to `namespaces` when no container daemon answers — so *check which one you
+got* before trusting it (`make capabilities`).
 → Lessons [09](lessons/09-secure-web-fetching/) and [10](lessons/10-understand-the-sandbox/).
 
-### 3.6 Learning runs off the critical path
+### 3.8 Learning runs off the critical path
 Reflection is a second LLM call; making it synchronous would hold the reply open.
 Instead the turn hands the message to a bounded queue and ends; one background
 worker learns behind it. One worker + the single pinned connection means the
