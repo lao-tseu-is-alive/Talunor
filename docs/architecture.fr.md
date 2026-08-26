@@ -216,4 +216,4 @@ lectures d'un tour, gratuitement.
 
 *Ensuite : choisis un fil dans le [cours](lessons/README.fr.md), ou lis d'abord le
 substrat dans [`internal/memory/store.go`](../internal/memory/store.go) et la boucle
-dans [`internal/agent/agent.go`](../internal/agent/agent.go).*
+dans [`internal/agent/turn.go`](../internal/agent/turn.go).*

@@ -140,7 +140,7 @@ un souvenir. Lis les deux méthodes de renforcement dans `salience.go` :
   un plafond sous 1.0, avec des rendements décroissants.
 
 Elles se déclenchent à deux moments bien définis, jamais comme effet de bord de
-`Recall` (le rappel est une lecture pure). Trouve-les dans `internal/agent/agent.go` :
+`Recall` (le rappel est une lecture pure). Trouve-les dans `internal/agent/learn.go` :
 
 - **Au rappel** — `reinforceRecalled` augmente la saillance des souvenirs qui ont façonné
   le prompt d'un tour. Être récupéré et utilisé est un signal qu'un souvenir compte.

@@ -38,10 +38,15 @@ After a turn, the agent stores the assistant's reply. Find the call — search t
 agent for it:
 
 ```bash
-grep -n "_, _ = a.store.Remember" internal/agent/agent.go
+git show v0.13.2:internal/agent/agent.go | grep -n "_, _ = a.store.Remember"
 ```
 
-You'll find something like:
+Note the pinned tag. On today's `main` this grep finds **nothing** — the line was
+hardened in `v0.13.3`, and this lesson is what it looks like when a course claim
+outlives the code it describes (Lesson 15's rule: *a claim is true against a commit*).
+Read the original at `v0.13.2`, reason about it, then study the fix at the end.
+
+At that tag you'll find:
 
 ```go
 _, _ = a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, answer)
@@ -53,15 +58,23 @@ shouldn't retract it. That part is right. **But the error is also invisible** �
 storing the assistant turn keeps failing, long-term memory quietly goes asymmetric
 (the question saved, the answer not) and nobody knows why.
 
-> *(If, by the time you read this, that line has already been hardened — great,
-> that's this lesson landing in the real project. Study the diff instead.)*
+That line **has** since been hardened — this lesson landed in the real project. See
+exactly how, and note that the deliberate "don't retract the reply" choice survived:
+
+```bash
+git diff v0.13.2 v0.13.3 -- internal/agent/agent.go | grep -A6 "store.assistant.error"
+```
+
+On current `main` that code lives in `internal/agent/turn.go` (the loop was split out
+of `agent.go` in `v0.22.5`).
 
 ## Read how observability already works
 
 Talunor has a lightweight trace, off by default. Read:
 
 ```text
-internal/agent/agent.go     # the a.trace("…", …) helper and its call sites
+internal/agent/agent.go     # the a.trace("…", …) helper itself
+# its call sites are spread across the package: grep -rn 'a.trace(' internal/agent/
 cmd/talunor/main.go         # debugLogger — how TALUNOR_DEBUG is wired
 ```
 

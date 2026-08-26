@@ -105,10 +105,22 @@ Talunor/
 │   │   └── config_test.go    #     Provider-selection tests.
 │   │
 │   ├── agent/                # LAYER 4: the cognitive loop (orchestrator).
-│   │   ├── agent.go          #     Turn = perceive → recall → reason (reactLoop) → store → reflect.
-│   │   │                     #       Async reflect worker (L18): enqueueReflect / Close(drain) / Quiesce.
-│   │   │                     #       Tool loop with MaxToolIters cap (errors, never silently); each call
-│   │   │                     #       consults Config.Policy (deny fails closed, risk≥medium prompts).
+│   │   ├── agent.go          #     IDENTITY + LIFECYCLE: Config/DefaultConfig, the Agent struct, New,
+│   │   │                     #       Close (bounded drain) / Quiesce, execCtx, approval + planner-fallback
+│   │   │                     #       modes, trace. v0.22.5 split the rest out (same package, same code).
+│   │   ├── turn.go           #     THE LOOP: Turn = perceive → recall → reason (runLoop → reactLoop) →
+│   │   │                     #       store. Prompt assembly (buildMessages, fencedMemories = recalled
+│   │   │                     #       memory fenced as untrusted DATA), recall trace + confidence filter.
+│   │   ├── tools.go          #     THE ACTION SEAM: toolSpecs (which tools a turn may offer — the plan's
+│   │   │                     #       structural cap) and runTool (where Config.Policy decides: deny fails
+│   │   │                     #       closed, risk≥threshold re-prompts with LIVE args, a rewrite that
+│   │   │                     #       substitutes a tool is re-checked against the cap — v0.22.3).
+│   │   ├── learn.go          #     AFTER THE ANSWER: reflection. reflect → learnFrom (one question per
+│   │   │                     #       SUBJECT) → learnOneFact (arbiter proposes, trust model gates) →
+│   │   │                     #       evidence. Async worker (L18): reflectWorker / enqueueReflect.
+│   │   │                     #       Reinforcement: reinforceRecalled, knownFact, consolidation gain.
+│   │   ├── commands.go       #     The slash-command surface shared by TUI + --plain REPL: /help, /mem,
+│   │   │                     #       /list, /forget, /why, plus FormatMemories and friends.
 │   │   ├── planner.go        #     LAYER 13: Planner — LLM emits a validated plan.Plan (retry on bad JSON,
 │   │   │                     #       never runs tools); opt-in Config.Planner / TALUNOR_PLANNER.
 │   │   ├── execute.go        #     LAYER 13: runPlanned — plan → policy pre-screen → whole-plan approval

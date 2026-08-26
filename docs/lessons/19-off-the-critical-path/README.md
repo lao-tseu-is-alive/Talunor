@@ -47,7 +47,7 @@ By the end you can:
 Read the tail of the turn on `main`:
 
 ```text
-internal/agent/agent.go   (reactLoop, near the end)
+internal/agent/turn.go    (reactLoop, near the end)
 internal/agent/execute.go (finishAnswer)
 ```
 
@@ -100,7 +100,8 @@ lifecycle tool, not a safety device.
 Now read the machinery:
 
 ```text
-internal/agent/agent.go   (reflectJob, reflectWorker, enqueueReflect; the worker fields on Agent; New)
+internal/agent/learn.go   (reflectJob, reflectWorker, enqueueReflect)
+internal/agent/agent.go   (the worker fields on Agent; New)
 ```
 
 The shape is small and deliberate:
@@ -160,7 +161,7 @@ Before Layer 18, with `/debug` on, reflection streamed dimmed notes into the
 transcript ("+fact …", "reinforced …"). Read `reflect` now:
 
 ```text
-internal/agent/agent.go   (reflect — note it no longer takes an `out` channel)
+internal/agent/learn.go   (reflect — note it no longer takes an `out` channel)
 ```
 
 It lost its stream parameter. It *can't* stream to the turn anymore: by the time the

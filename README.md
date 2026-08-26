@@ -298,16 +298,14 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.22.4** — **a maintenance release: the claims and the dependencies,
-> both made current.** The documentation drift two external reviews found is fixed — a
-> calibration comment that taught the very bug v0.18.2 removed, five duplicate CHANGELOG
-> headings (one stranding an orphaned bullet), a command table missing `/why`, a lesson
-> count three releases stale, and Iteration 5's status stated three incompatible ways —
-> plus a new `make changelog-check` so the last of those cannot recur. Go moves to
-> **1.27.0** and the dependencies to current, which matters mostly because CI builds from
-> `go.mod` and was pinned behind the maintainer's own toolchain. **Not a security
-> release:** `govulncheck` was clean before and after, and this CHANGELOG says so rather
-> than implying otherwise.
+> Current version: **v0.22.5** — **the file that was the curriculum.**
+> `internal/agent/agent.go` had reached 1,300 lines holding the turn loop, tool
+> execution, learning, the commands and the lifecycle at once — and in a repo whose file
+> tree *is* part of the course, that is a teaching cost, not just a style one. It is now
+> **417 lines** plus `turn.go`, `tools.go`, `learn.go` and `commands.go`: same package,
+> same code, no new abstractions. Groupings follow how the lessons already teach the
+> code rather than a tidy taxonomy. Behaviour is unchanged — and provably so: the symbol
+> set and every executable line were diffed before and after, byte-identical.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

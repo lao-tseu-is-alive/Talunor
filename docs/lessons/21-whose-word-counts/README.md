@@ -91,7 +91,7 @@ the code.
 ```text
 internal/memory/supersede.go   (Supersedes, supersedeAuthority)
 internal/agent/arbiter.go      (FactArbiter, the SUPERSEDES verdict)
-internal/agent/agent.go        (learnOneFact — propose, then gate)
+internal/agent/learn.go        (learnOneFact — propose, then gate)
 docs/decisions/0003-trust-model-for-supersession.md
 ```
 

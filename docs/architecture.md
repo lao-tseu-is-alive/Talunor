@@ -206,4 +206,4 @@ worker's writes are serialised against a turn's reads for free.
 
 *Next: pick a thread from the [course](lessons/), or read the substrate first in
 [`internal/memory/store.go`](../internal/memory/store.go) and the loop in
-[`internal/agent/agent.go`](../internal/agent/agent.go).*
+[`internal/agent/turn.go`](../internal/agent/turn.go).*

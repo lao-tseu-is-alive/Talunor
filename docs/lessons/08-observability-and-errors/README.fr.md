@@ -38,10 +38,16 @@ Après un tour, l'agent stocke la réponse de l'assistant. Trouve l'appel — ch
 dans l'agent :
 
 ```bash
-grep -n "_, _ = a.store.Remember" internal/agent/agent.go
+git show v0.13.2:internal/agent/agent.go | grep -n "_, _ = a.store.Remember"
 ```
 
-Tu trouveras quelque chose comme :
+Remarque le tag épinglé. Sur le `main` d'aujourd'hui, ce grep ne trouve **rien** — la
+ligne a été durcie en `v0.13.3`, et cette leçon montre à quoi ressemble une affirmation
+de cours qui survit au code qu'elle décrit (la règle de la leçon 15 : *une affirmation
+est vraie face à un commit*). Lis l'original à `v0.13.2`, raisonne dessus, puis étudie
+le correctif à la fin.
+
+À ce tag, tu trouveras :
 
 ```go
 _, _ = a.store.Remember(ctx, memory.KindTurn, llm.RoleAssistant, answer)
@@ -54,15 +60,24 @@ si le stockage du tour assistant échoue de façon répétée, la mémoire long 
 silencieusement asymétrique (la question sauvée, la réponse non) et personne ne sait
 pourquoi.
 
-> *(Si, au moment où tu lis ceci, cette ligne a déjà été durcie — parfait, c'est cette
-> leçon qui atterrit dans le vrai projet. Étudie le diff à la place.)*
+Cette ligne **a** depuis été durcie — cette leçon a atterri dans le vrai projet. Vois
+exactement comment, et remarque que le choix délibéré « ne pas retirer la réponse » a
+survécu :
+
+```bash
+git diff v0.13.2 v0.13.3 -- internal/agent/agent.go | grep -A6 "store.assistant.error"
+```
+
+Sur le `main` actuel, ce code vit dans `internal/agent/turn.go` (la boucle a été
+extraite d'`agent.go` en `v0.22.5`).
 
 ## Lis comment l'observabilité marche déjà
 
 Talunor a une trace légère, désactivée par défaut. Lis :
 
 ```text
-internal/agent/agent.go     # le helper a.trace("…", …) et ses points d'appel
+internal/agent/agent.go     # le helper a.trace("…", …) lui-même
+# ses points d'appel sont répartis dans le paquet : grep -rn 'a.trace(' internal/agent/
 cmd/talunor/main.go         # debugLogger — comment TALUNOR_DEBUG est câblé
 ```
 

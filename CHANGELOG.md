@@ -17,6 +17,75 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.22.5] - 2026-08-26 — The file that was the curriculum: agent.go split by responsibility
+
+`internal/agent/agent.go` had reached **1,300 lines**, holding the turn loop, tool
+execution, learning, the slash commands and the lifecycle at once. Both external
+reviews named it, and for this repo it is a specific kind of debt: **the file tree is
+part of the curriculum.** A learner tracing one turn had to bounce across 700 lines of
+a single file. Nothing here changes behaviour.
+
+### Changed
+
+- **`agent.go` 1,300 → 417 lines**, split into four same-package files. No new types,
+  no new interfaces, no exported surface added or removed — *code moved, nothing else*:
+  - **`agent.go`** — identity and lifecycle: `Config`/`DefaultConfig`, the `Agent`
+    struct, `New`, `Close` (bounded drain) / `Quiesce`, `execCtx`, the approval and
+    planner-fallback modes, `trace`.
+  - **`turn.go`** (305) — the cognitive loop: `Turn` → `runLoop` → `reactLoop`, prompt
+    assembly (`buildMessages`, `fencedMemories`), the recall trace and confidence filter.
+  - **`tools.go`** (116) — the action seam: `toolSpecs` (which tools a turn may offer —
+    the plan's structural cap) and `runTool` (where `Config.Policy` decides).
+  - **`learn.go`** (~360) — everything after the answer: `reflect`, `learnFrom`,
+    `learnOneFact`, the async worker, and reinforcement.
+  - **`commands.go`** (186) — the slash-command surface shared by the TUI and the
+    `--plain` REPL, plus the formatting helpers.
+- **Groupings follow how the course already teaches the code, not a tidy taxonomy.**
+  Lesson 20 tells readers to read `reflect, learnFrom, toolVerified, worthReflecting`
+  together, so all four are in `learn.go` even though two are *about* tools. Lesson 18
+  teaches `reinforceRecalled` beside `reflect` and `knownFact`, so `reinforceRecalled`
+  moved to `learn.go` rather than staying with the loop that calls it. A split that
+  scattered a lesson's reading list would have made the file tree worse, not better.
+
+### Fixed (documentation)
+
+- **23 lesson/doc pointers into `agent.go` updated** to the file that now holds the
+  code — and **19 deliberately left alone**, because they read at a pinned tag
+  (`git checkout v0.18.0`, `git diff v0.4.0 v0.7.0 -- internal/agent/agent.go`) where
+  the code genuinely was in `agent.go`. Each reference was classified by scanning back
+  to its nearest `git checkout`, not by pattern-matching the path.
+- **Lesson 08's central exercise was already broken, and the audit found it.** It asked
+  readers on `main` to `grep -n "_, _ = a.store.Remember" internal/agent/agent.go` — a
+  swallowed error hardened in **v0.13.3**, three releases before hybrid recall. The grep
+  had been returning nothing, and the lesson's "if this has already been hardened" hedge
+  came *after* the reader had failed. It now reads the original at the pinned `v0.13.2`,
+  says plainly that `main` no longer contains it, and shows the fix diff.
+
+### Lessons learned
+
+- **A refactor is a documentation change in a repo whose file tree is the curriculum.**
+  The mechanical part — moving 883 lines — took minutes and was provably safe. The real
+  work was the 42 doc references, and the only reason it was tractable is that lessons
+  pin code reads to immutable tags: **19 of them were already correct and had to be
+  protected from a careless find-and-replace.** A path is not a string to be updated; it
+  is a claim about a specific commit.
+- **Prove a mechanical change is mechanical.** Beyond the tests: the exported+unexported
+  symbol set was diffed before and after (identical), and every non-comment, non-import
+  line of the five files was normalised and diffed against the original (759 lines,
+  byte-identical). "The tests pass" says the behaviour survived; a code-identity diff
+  says *nothing was rewritten while nobody was looking* — a much stronger claim, and the
+  one a reviewer of a 900-line diff actually wants.
+- **The guard fired at exactly the right moment.** Writing "split out in `v0.22.5`" into
+  a lesson made `lessons-check` fail — the tag did not exist yet. That is the rule
+  working: a lesson may only reference a tag a reader can check out. Bumping
+  `internal/version` first (which the check exempts) is the intended order, and the
+  failure was a better reminder of it than any comment would have been.
+- **Auditing one thing finds another.** Nobody set out to fix Lesson 08; it surfaced
+  because the split forced a read of every pointer into `agent.go`. The stale exercise
+  had survived `lessons-check` (the link was valid) and `lessons-assert` (nobody had
+  written an assertion for it). A third instance of the same lesson: *structure guards
+  cannot see meaning.*
+
 ## [0.22.4] - 2026-08-25 — Maintenance: the claims and the dependencies, both made current
 
 The other half of the correction batch: the documentation drift the same two reviews

@@ -108,7 +108,7 @@ into one call and ask the model to sort them out.
 Read how `reflect` does exactly that:
 
 ```text
-internal/agent/agent.go   (reflect, learnFrom, toolVerified, worthReflecting)
+internal/agent/learn.go   (reflect, learnFrom, toolVerified, worthReflecting)
 internal/agent/reflect.go (the source-neutral extractor prompt)
 ```
 

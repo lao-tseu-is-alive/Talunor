@@ -121,7 +121,16 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
 internal/llm/      Provider interface + OpenAICompatible adapter (Ollama/OpenRouter),
                    FromEnv() provider selection, NewOpenRouter
 internal/config/   minimal dependency-free .env loader (real env wins)
-internal/agent/    the cognitive loop: Turn = perceive→recall→reason(act/observe
+internal/agent/    the cognitive loop. **v0.22.5 split the package's one 1,300-line file
+                   by responsibility** (same package, same code, no new abstractions):
+                   agent.go = identity + lifecycle (Config, the Agent struct, New, Close/
+                   Quiesce, execCtx, trace); turn.go = the loop (Turn → runLoop →
+                   reactLoop, prompt assembly, recall trace); tools.go = the action seam
+                   (toolSpecs = the plan's cap, runTool = where the policy decides);
+                   learn.go = everything after the answer (reflect/learnFrom/learnOneFact,
+                   the async worker, reinforcement); commands.go = the slash-command
+                   surface. planner.go / execute.go / arbiter.go / reflect.go / debug.go
+                   are unchanged. Turn = perceive→recall→reason(act/observe
                    loop)→store→reflect. reactLoop (shared core) offers Config.Tools,
                    executes tool calls, feeds observations back (MaxToolIters cap),
                    streams the final answer (an unanswered tool-loop that hits
@@ -833,6 +842,24 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   is that CI/release build from `go-version-file: go.mod`, so they were pinned behind the
   maintainer's local toolchain: **local green is not CI green.** Remaining unguarded
   surface, named not fixed: `//` comments (nothing re-derives their claims).
+- **v0.22.5 (refactor)** = **`agent.go` split by responsibility — the file tree is part of
+  the curriculum.** 1,300 → **417** lines: `agent.go` (identity + lifecycle), **`turn.go`**
+  (Turn → runLoop → reactLoop + prompt assembly), **`tools.go`** (toolSpecs = the plan's
+  cap, runTool = where the policy decides), **`learn.go`** (reflect/learnFrom/learnOneFact,
+  the async worker, reinforcement), **`commands.go`** (the slash-command surface). Same
+  package, **no new abstractions**, no exported surface changed. **Groupings follow the
+  COURSE, not a taxonomy**: Lesson 20 reads `reflect, learnFrom, toolVerified,
+  worthReflecting` together so all four are in learn.go though two are *about* tools;
+  Lesson 18 reads `reinforceRecalled` beside `reflect`/`knownFact`, so it moved there too.
+  **Doc work was the real work:** 23 main-context pointers into `agent.go` updated, **19
+  tag-pinned ones deliberately left** (they read at `v0.4.0`/`v0.18.0` etc., where the code
+  genuinely was in agent.go) — classified by scanning back to the nearest `git checkout`,
+  never by find-and-replace. **A path is a claim about a commit.** The audit also found
+  Lesson 08's central exercise already broken on `main` (it grepped for a swallowed error
+  hardened in v0.13.3); now pinned to `v0.13.2` with the fix diff. Proof the change is
+  mechanical: symbol set identical, and all 759 non-comment/non-import lines byte-identical
+  before vs after. `lessons-check` correctly rejected the in-lesson `v0.22.5` reference
+  until `internal/version` was bumped — bump first, that is the intended order.
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
   tests; calibration output 0600 + KDF. Same per-layer checkpoint rhythm.

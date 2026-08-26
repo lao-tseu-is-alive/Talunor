@@ -48,7 +48,7 @@ récompense la lecture du *raisonnement* plus que celle du diff.
 Lis la queue du tour sur `main` :
 
 ```text
-internal/agent/agent.go   (reactLoop, vers la fin)
+internal/agent/turn.go    (reactLoop, vers la fin)
 internal/agent/execute.go (finishAnswer)
 ```
 
@@ -103,7 +103,8 @@ et de cycle de vie, pas un dispositif de sûreté.
 Lis maintenant la mécanique :
 
 ```text
-internal/agent/agent.go   (reflectJob, reflectWorker, enqueueReflect ; les champs worker sur Agent ; New)
+internal/agent/learn.go   (reflectJob, reflectWorker, enqueueReflect)
+internal/agent/agent.go   (les champs worker sur Agent ; New)
 ```
 
 La forme est petite et délibérée :
@@ -167,7 +168,7 @@ quelque chose. Avant le Layer 18, avec `/debug` activé, la réflexion streamait
 grisées dans le transcript (« +fact … », « reinforced … »). Lis `reflect` maintenant :
 
 ```text
-internal/agent/agent.go   (reflect — remarque qu'il ne prend plus de channel `out`)
+internal/agent/learn.go   (reflect — remarque qu'il ne prend plus de channel `out`)
 ```
 
 Il a perdu son paramètre stream. Il *ne peut plus* streamer vers le tour : au moment où le

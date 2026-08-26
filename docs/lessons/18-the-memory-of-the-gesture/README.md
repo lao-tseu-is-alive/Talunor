@@ -132,7 +132,7 @@ two reinforcement methods in `salience.go`:
   ceiling below 1.0, with diminishing returns.
 
 They fire at two well-defined moments, never as a side effect of `Recall` (recall is a
-pure read). Find them in `internal/agent/agent.go`:
+pure read). Find them in `internal/agent/learn.go`:
 
 - **On recall** — `reinforceRecalled` bumps the salience of the memories that shaped a
   turn's prompt. Being retrieved and used is a signal a memory matters.

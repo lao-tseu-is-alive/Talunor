@@ -91,7 +91,7 @@ distils a fact, how sure should it be? The tempting answer is to *ask the model*
 Read how reflection stores a fact — `reflect` in:
 
 ```text
-internal/agent/agent.go
+internal/agent/learn.go
 ```
 
 Notice it calls `store.RememberFact(ctx, fact, ProvenanceUserStated, conf)` — the

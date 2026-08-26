@@ -112,7 +112,7 @@ au modèle de trier.
 Lis comment `reflect` fait exactement ça :
 
 ```text
-internal/agent/agent.go   (reflect, learnFrom, toolVerified, worthReflecting)
+internal/agent/learn.go   (reflect, learnFrom, toolVerified, worthReflecting)
 internal/agent/reflect.go (le prompt d'extraction neutre vis-à-vis de la source)
 ```
 

@@ -95,7 +95,7 @@ distille un fait, à quel point doit-il en être sûr ? La réponse tentante est
 Lis comment la réflexion stocke un fait — `reflect` dans :
 
 ```text
-internal/agent/agent.go
+internal/agent/learn.go
 ```
 
 Remarque qu'elle appelle `store.RememberFact(ctx, fact, ProvenanceUserStated, conf)` —

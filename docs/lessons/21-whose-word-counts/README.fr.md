@@ -98,7 +98,7 @@ lire, tester et posséder, pas une hypothèse étalée dans le code.
 ```text
 internal/memory/supersede.go   (Supersedes, supersedeAuthority)
 internal/agent/arbiter.go      (FactArbiter, le verdict SUPERSEDES)
-internal/agent/agent.go        (learnOneFact — proposer, puis gater)
+internal/agent/learn.go        (learnOneFact — proposer, puis gater)
 docs/decisions/0003-trust-model-for-supersession.md
 ```
 
