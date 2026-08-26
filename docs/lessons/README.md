@@ -13,7 +13,7 @@ done.
 
 > **Status: in progress.** Lessons 00–24 are ready, **fully bilingual EN/FR** (use the
 > language switcher at the top of each page). Iteration 5 ("truthful memory") has shipped
-> Layers 20–24; Lesson 25 (Layer 24, contested claims) is the next one to write.
+> Layers 20–24, each with its lesson.
 
 ## Who this is for
 
@@ -58,7 +58,7 @@ you prove it. Lesson numbers refer to [the route](#the-route) below.
 | **Persistence & retrieval (SQLite + embeddings)** | 02 · 03 · 23 | Explain how a text query becomes a ranked, thresholded recall — and what an embedding cannot represent | Tune the recall threshold and watch the results change (03); make an identifier unfindable, then findable (23) |
 | **Agentic memory: provenance · confidence · salience** | 11 · 16 · 17 · 18 · 20 · 24 | Separate embedding-provenance from fact-provenance; explain why confidence is system-assigned, never self-reported; learn from action without over-claiming | Read migrations 2–3 and `salience.go` (17, 18); trace a fact to its evidence with `/why` (20) |
 | **The agent loop & tools (ReAct)** | 05 · 06 · 13 | Trace a tool call from the model's request to the observation fed back | Watch `/debug` follow a tool call end to end (05, 06) |
-| **Agent safety: injection · policy · sandbox · SSRF** | 09 · 10 · 12 · 14 · 21 · 24 | Name which layer stops which threat — and why fencing text is a mitigation, not a boundary; decide a memory's trust model on purpose, and check that the code can actually enforce it | Read the policy gate (12), the approval post-mortem (14), the trust model (21); reproduce an unenforced decision and close it (24) |
+| **Agent safety: injection · policy · sandbox · SSRF** | 09 · 10 · 12 · 14 · 21 · 24 · 25 | Name which layer stops which threat — and why fencing text is a mitigation, not a boundary; decide a memory's trust model on purpose, and check that the code can actually enforce it | Read the policy gate (12), the approval post-mortem (14), the trust model (21); reproduce an unenforced decision and close it (24); design one that binds before writing the code, and reject a state machine the model would have driven (25) |
 | **Trustworthy evaluation & verification** | 07 · 15 · 16 · 22 | Build a deterministic check (no LLM judge), falsify a claim against the code, and know what your green suite did *not* run | Do the "verify the AI review" exercise (15); read the matchers (16); audit your suite's skips and make a privileged decision testable without the privilege (22) |
 
 ## The route
@@ -90,6 +90,7 @@ you prove it. Lesson numbers refer to [the route](#the-route) below.
 | [22](22-the-silent-suite/) | The silent suite: a skipped test is not a passing test | 3 · **advanced** | 70 min | `v0.20.1` → `v0.20.2` | ✅ ready |
 | [23](23-two-ways-to-find-a-memory/) | Two ways to find a memory: when meaning is the wrong index | 3 · **advanced** | 75 min | `v0.21.0` | ✅ ready |
 | [24](24-the-adr-that-didnt-bind/) | The ADR that didn't bind: a decision the code never enforced | 3 · **advanced** | 80 min | `v0.21.2` → `v0.22.0` | ✅ ready |
+| [25](25-the-scar-that-never-bled/) | The scar that never bled: designing a decision that binds | 3 · **advanced** | 75 min | `v0.22.5` → `v0.23.0` | ✅ ready |
 
 ## Two kinds of lesson — don't mix them up
 

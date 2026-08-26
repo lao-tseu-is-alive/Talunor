@@ -12,7 +12,7 @@ pedagogical project**: each layer is small, runnable, and documented, so the rep
 reads as a guided tour of how to build a full cognitive-loop agent
 (perception → reasoning → planning → action → learning) with guardrails.
 
-> 📚 The tag-by-tag history is also a **[25-lesson course](docs/lessons/)** (🇬🇧 English
+> 📚 The tag-by-tag history is also a **[26-lesson course](docs/lessons/)** (🇬🇧 English
 > & 🇫🇷 Français) for Go beginners — start at [Lesson 00](docs/lessons/).
 
 ## Philosophy — and why it's different
@@ -298,24 +298,23 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.0** — **LAYER 24: a refused correction is evidence, not
-> nothing.** Talunor already decided *who may correct whom* (an explicit, per-domain
-> trust model). But when it refused a correction it **threw the claim away** — so memory
-> could be "believed" or "gone", never *believed but challenged*. Now a refused claim is
-> recorded as **counter-evidence** against the fact it failed to retire, and `/why <id>`
-> shows both sides. Crucially, **"contested" is derived from the evidence, never stored**:
-> the status *is* its own justification, so it cannot drift from it — which is how the
-> question "who decides a claim is contested?" gets answered with *nobody does*. A
-> contested fact is still believed and still recalled, now **marked**, so the agent can
-> tell you a belief is disputed instead of asserting it flatly. See
-> [ADR 0005](docs/decisions/0005-contested-claims.md).
+> Current version: **v0.23.1** — **course Lesson 25, "The scar that never bled."** The
+> course's first lesson about a defect that produced **no symptom at all**: for four
+> layers, every correction the trust model refused was silently destroyed — nothing
+> crashed, no test failed, because refusing a bad correction *is* the right behaviour and
+> the forgetting was invisible. The lesson then turns Lesson 24's instrument — *what makes
+> this sentence true, code or model behaviour?* — on the vision doc's proposed claim state
+> machine (it fails: every transition would be a model judgement) and on
+> [ADR 0005](docs/decisions/0005-contested-claims.md) itself (it passes, and you verify
+> that yourself). Bilingual, with executable assertions. **The course is now 26 lessons,
+> 00–25.**
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
 Layer 14 added **model calibration**; Iteration 4 taught it to *learn* (schema
 migrations, per-fact provenance & confidence, salience/decay/consolidation, async
 reflection). **Iteration 5 — "truthful memory" — is in progress: Layers 20–24 have
-shipped** (Layer 24 is awaiting its lesson; 20–23 have theirs). A fact now carries an
+shipped, each with its lesson.** A fact now carries an
 auditable **evidence trail** with two sides — what supported it and what contradicted it
 (`/why`) — can be **superseded** by a newer one under an explicit, per-domain
 [trust model](internal/memory/supersede.go) so a model's guess never overwrites what

@@ -17,6 +17,72 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.1] - 2026-08-26 — Course: Lesson 25 ("The scar that never bled"), bilingual
+
+A docs-only release. Layer 24 gets its lesson — and it is a kind the course has not had.
+
+### Added
+
+- **Lesson 25 — "The scar that never bled: designing a decision that binds"**
+  (`docs/lessons/25-the-scar-that-never-bled/`, EN + FR). Read across `v0.22.5` →
+  `v0.23.0`; Level 3, ~75 min.
+
+  The course's other four post-mortems (11, 14, 22, 24) all start from damage. This one
+  starts from a defect that produced **no symptom at all**: from `v0.20.0` to `v0.23.0`,
+  every correction the trust model refused was silently destroyed. Nothing crashed, no
+  test failed, nobody complained — because refusing a bad correction *is* the right
+  behaviour, and the forgetting was invisible. **Fail-open on knowledge.** None of the
+  other post-mortems' techniques would have found it, so the lesson teaches the one that
+  does: *list what the system knows at this instant, then list what survives.*
+
+  It then turns **Lesson 24's instrument on two designs in the same afternoon**. The
+  vision document's proposed claim state machine (`Unexamined → … → Established`) fails
+  it — every transition resolves to "when there is enough evidence", which has no
+  definition in the codebase and therefore means the model decides. ADR 0005 passes it,
+  decision by decision (schema / code / SQL), and the reader verifies that rather than
+  being told. Same instrument, same afternoon, opposite verdicts — which is what makes
+  the lesson a demonstration instead of a boast.
+
+  Hands-on: implement the rejected design (a stored `contested` column), **manufacture
+  the drift** the derived design makes unrepresentable, and discover that catching it
+  requires inventing a consistency check that must itself be run and maintained.
+
+### Changed
+
+- **`make lessons-assert` gains Lesson 25's assertions — with BOTH arms.** An
+  absence-only check ("no migration adds a stored `contested` column") is also satisfied
+  by a repo where the feature was deleted, so it is paired with a presence check
+  (`contestedExpr` exists, migration 7 adds `polarity`). Verified by deleting the feature
+  and watching the absence arm pass while the presence arm failed — which is also
+  hands-on #2 of the lesson.
+- Competency matrix: agent safety becomes 09 · 10 · 12 · 14 · 21 · 24 · **25**.
+- Lesson count corrected to **26** in `README.md` and `docs/architecture.md` (+ `.fr`).
+- **Iteration 5 is now fully built AND fully lessoned** (Layers 20–24).
+
+### Lessons learned
+
+- **Some defects can only be found by reading, and that deserves a named technique.** A
+  crash gives you a stack trace; a wrong answer gives you a diff; a red test gives you a
+  bisect. A silent discard gives you nothing at all — the system is indistinguishable
+  from a working one. The technique that surfaced this one is small enough to teach:
+  enumerate what is known at the moment of a decision, then enumerate what survives it,
+  and treat every discarded row as a question.
+- **The instrument only proves something if it can come back red.** Writing "here is a
+  decision we got right" is the easiest kind of documentation to write badly. The lesson
+  is only a demonstration because it applies the *same* test to a design that fails it
+  (the state machine) and one that passes (ADR 0005), in that order, with the reader
+  running both. A self-congratulatory lesson would have skipped the first half.
+- **Line numbers are drift with a colon in them.** The obvious way to point a reader at
+  the three assertions pinning ADR 0005 is `agent_test.go:1450-1452`. That reference rots
+  the moment anyone inserts a test above it — exactly how Lesson 08's exercise went stale
+  for three releases (fixed in v0.22.5). The lesson cites test *names* and ships
+  `sed`/`grep` recipes instead, and says why.
+- **Writing the hands-on found a broken hands-on.** The first draft had the reader call
+  `store.DB()` to corrupt a stored flag. There is no such method — the store deliberately
+  does not export its `*sql.DB`. The exercise now uses an internal test in
+  `package memory`, the pattern `lexical_internal_test.go` already establishes. *An
+  exercise you did not run is a claim, not an exercise.*
+
 ## [0.23.0] - 2026-08-26 — LAYER 24: a refused correction is evidence, not nothing (contested claims)
 
 Layers 21 and 23 gave the memory a way to correct itself and a deterministic gate

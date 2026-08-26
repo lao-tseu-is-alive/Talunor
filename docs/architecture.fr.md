@@ -7,7 +7,7 @@ cognitive, comment les packages s'articulent, et la poignée de décisions qui
 donnent sa forme au système. Elle est volontairement courte.
 
 - Pour un index **fichier par fichier**, voir [`docs/atlas.md`](atlas.md).
-- Pour le **pourquoi, enseigné pas à pas**, voir le [cours](lessons/README.fr.md) (25 leçons).
+- Pour le **pourquoi, enseigné pas à pas**, voir le [cours](lessons/README.fr.md) (26 leçons).
 - Pour les **conventions de contribution** (rituel de release, pièges), voir
   [`AGENTS.md`](../AGENTS.md).
 

@@ -98,6 +98,30 @@ assert "24 hands-on 3: the subject is asserted at the point of assignment" \
 assert "24 reflection still asks one question per subject" \
 	'grep -q "userFactPrompt" internal/agent/reflect.go && grep -q "worldFactPrompt" internal/agent/reflect.go'
 
+echo "==> lesson 25 (the scar that never bled) — deriving, not storing"
+
+# The lesson's whole thesis is that "contested" is DERIVED. Both arms are needed:
+# the absence check alone would also pass on a repo where the feature was deleted,
+# which is the hands-on the lesson makes the reader perform.
+assert "25 the derivation exists (positive arm)" \
+	'grep -q "func contestedExpr" internal/memory/memory.go &&
+	 grep -q "polarity = .contradicts." internal/memory/memory.go'
+assert "25 evidence polarity is a real column (migration 7)" \
+	'sed -n "/version: 7/,/^\t},/p" internal/memory/migrate.go | grep -q "ADD COLUMN polarity"'
+assert "25 no migration stores a contested/status column (negative arm)" \
+	'! grep -nE "ADD COLUMN (contested|status)" internal/memory/migrate.go'
+assert "25 the three load-bearing decisions stay pinned by assertions" \
+	'sed -n "/func TestRefusedSupersessionIsRecordedAsCounterEvidence/,/^}/p" internal/agent/agent_test.go |
+	   grep -q "must not erode the fact" &&
+	 sed -n "/func TestRefusedSupersessionIsRecordedAsCounterEvidence/,/^}/p" internal/agent/agent_test.go |
+	   grep -q "must live only as evidence detail" &&
+	 sed -n "/func TestRefusedSupersessionIsRecordedAsCounterEvidence/,/^}/p" internal/agent/agent_test.go |
+	   grep -q "not vanish"'
+assert "25 a contested fact is still marked in the prompt (not decorative)" \
+	'sed -n "/func fencedMemories/,/^}/p" internal/agent/turn.go | grep -q "CONTESTED"'
+assert "25 the internal-test helper the hands-on uses still exists" \
+	'grep -q "func internalTestStore" internal/memory/lexical_internal_test.go'
+
 if [ "$fail" != 0 ]; then
 	echo "lessons-assert: FAILED — a lesson's expected result no longer holds."
 	echo "  Fix the lesson (EN + FR) and this file in the same commit."

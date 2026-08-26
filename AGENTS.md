@@ -894,6 +894,22 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   migration — a belief can be challenged but never vindicated), unbounded accumulation, and
   one bit not a scale (needs evidence INDEPENDENCE — vision §15). See **ADR 0005**.
   Lesson 25 (v0.23.1) to write.
+- **v0.23.1 (docs)** = course **Lesson 25** — "The scar that never bled: designing a decision
+  that binds" (`docs/lessons/25-the-scar-that-never-bled/`, bilingual). Read across `v0.22.5`
+  → `v0.23.0`. The course's **first lesson about a defect that produced NO symptom**: for four
+  layers (v0.20.0 → v0.23.0) every refused correction was silently destroyed — nothing crashed,
+  no test failed, because refusing a bad correction IS correct and the forgetting was invisible
+  (*fail-open on knowledge*). None of the other post-mortems' techniques would have found it;
+  the lesson teaches the reading technique that does — *list what the system knows at this
+  instant, then list what survives*. It then turns **Lesson 24's instrument on two designs in
+  the same afternoon**: the vision doc's claim state machine (every transition = a model
+  judgement → rejected) and **ADR 0005 itself** (schema/code/SQL → passes, and the reader
+  verifies it via test NAMES + sed/grep, never line numbers — the L08 drift lesson applied).
+  Hands-on: store the flag in a column and *manufacture the drift* the derived design makes
+  unrepresentable. **Assertions have BOTH arms** — absence of a stored `contested` column AND
+  presence of `contestedExpr`; proved by deleting the feature and watching the absence-only arm
+  still pass. Competency matrix: safety becomes 09 · 10 · 12 · 14 · 21 · 24 · 25; course now
+  00–25 (**26 lessons**). **Iteration 5 is fully built AND fully lessoned (Layers 20–24).**
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
   tests; calibration output 0600 + KDF. Same per-layer checkpoint rhythm.

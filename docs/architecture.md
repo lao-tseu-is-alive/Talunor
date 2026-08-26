@@ -7,7 +7,7 @@ loop, how the packages fit together, and the handful of decisions that give the
 system its shape. It is deliberately short.
 
 - For a **file-by-file** index, see [`docs/atlas.md`](atlas.md).
-- For the **why, taught step by step**, see the [course](lessons/) (25 lessons).
+- For the **why, taught step by step**, see the [course](lessons/) (26 lessons).
 - For **contributor conventions** (release ritual, gotchas), see [`AGENTS.md`](../AGENTS.md).
 
 Talunor is a terminal AI agent with a full cognitive loop

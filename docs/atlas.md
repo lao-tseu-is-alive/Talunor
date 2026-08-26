@@ -264,7 +264,9 @@ Talunor/
 │       ├── 21-whose-word-counts/README.md        # 🔍 Trust model as a design decision; supersession, the flat-earth vs attack-signature examples (Layer 21).
 │       ├── 22-the-silent-suite/README.md         # 🔍 Post-mortem of a FIX: fd lifecycle, empty-string auth, build tags — and what a skipped test hides (v0.20.2).
 │       ├── 23-two-ways-to-find-a-memory/README.md # 🔍 Hybrid recall: what embeddings can't index, BM25, rank fusion, retrieval vs identity (Layer 22).
-│       └── 24-the-adr-that-didnt-bind/README.md  # 🔍 Post-mortem: a decision record the code couldn't enforce; subject as data (Layer 23).
+│       ├── 24-the-adr-that-didnt-bind/README.md  # 🔍 Post-mortem: a decision record the code couldn't enforce; subject as data (Layer 23).
+│       └── 25-the-scar-that-never-bled/README.md # 🔍 A defect with no symptom (fail-open on knowledge); deriving vs
+│                                 #   storing a status; L24's instrument turned on ADR 0005 (Layer 24).
 │
 └── scripts/               # Helper shell scripts.
     ├── initial_setup.sh   #   First-time dependency setup for the MVP.

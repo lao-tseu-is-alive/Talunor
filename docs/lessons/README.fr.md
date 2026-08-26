@@ -13,8 +13,7 @@ savoir quand tu as terminé.
 
 > **Statut : en cours.** Les leçons 00–24 sont prêtes, **entièrement en
 > anglais et en français** (utilise le sélecteur de langue en haut de chaque page).
-> L'Itération 5 (« mémoire véridique ») a livré les couches 20 à 24 ; la leçon 25
-> (couche 24, les affirmations contestées) est la prochaine à écrire.
+> L'Itération 5 (« mémoire véridique ») a livré les couches 20 à 24, chacune avec sa leçon.
 
 ## Pour qui
 
@@ -62,7 +61,7 @@ ci-dessous.
 | **Persistance & récupération (SQLite + embeddings)** | 02 · 03 · 23 | Expliquer comment une requête texte devient un rappel classé et seuillé — et ce qu'un embedding ne peut pas représenter | Régler le seuil de rappel et observer les résultats changer (03) ; rendre un identifiant introuvable, puis retrouvable (23) |
 | **Mémoire agentique : provenance · confiance · saillance** | 11 · 16 · 17 · 18 · 20 · 24 | Distinguer provenance d'embedding et provenance de fait ; expliquer pourquoi la confiance est assignée par le système, jamais auto-évaluée ; apprendre de l'action sans sur-affirmer | Lire les migrations 2–3 et `salience.go` (17, 18) ; tracer un fait jusqu'à son évidence avec `/why` (20) |
 | **La boucle agent & les outils (ReAct)** | 05 · 06 · 13 | Tracer un appel d'outil depuis la demande du modèle jusqu'à l'observation réinjectée | Suivre un appel d'outil de bout en bout avec `/debug` (05, 06) |
-| **Sécurité de l'agent : injection · policy · sandbox · SSRF** | 09 · 10 · 12 · 14 · 21 · 24 | Nommer quelle couche arrête quelle menace — et pourquoi clôturer du texte est une mitigation, pas une frontière ; décider exprès le modèle de confiance d'une mémoire, et vérifier que le code peut réellement l'appliquer | Lire la barrière policy (12), le post-mortem d'approbation (14), le modèle de confiance (21) ; reproduire une décision non appliquée et la refermer (24) |
+| **Sécurité de l'agent : injection · policy · sandbox · SSRF** | 09 · 10 · 12 · 14 · 21 · 24 · 25 | Nommer quelle couche arrête quelle menace — et pourquoi clôturer du texte est une mitigation, pas une frontière ; décider exprès le modèle de confiance d'une mémoire, et vérifier que le code peut réellement l'appliquer | Lire la barrière policy (12), le post-mortem d'approbation (14), le modèle de confiance (21) ; reproduire une décision non appliquée et la refermer (24) ; en concevoir une qui lie avant d'écrire le code, et rejeter une machine à états que le modèle aurait pilotée (25) |
 | **Évaluation & vérification dignes de confiance** | 07 · 15 · 16 · 22 | Construire une vérification déterministe (sans juge LLM), falsifier une affirmation face au code, et savoir ce que ton vert n'a *pas* exécuté | Faire l'exercice « vérifier la revue IA » (15) ; lire les matchers (16) ; auditer les sauts de ta suite et rendre une décision privilégiée testable sans le privilège (22) |
 
 ## Le parcours
@@ -94,6 +93,7 @@ ci-dessous.
 | [22](22-the-silent-suite/README.fr.md) | La suite silencieuse : un test sauté n'est pas un test réussi | 3 · **avancé** | 70 min | `v0.20.1` → `v0.20.2` | ✅ prête |
 | [23](23-two-ways-to-find-a-memory/README.fr.md) | Deux façons de retrouver une mémoire : quand le sens est le mauvais index | 3 · **avancé** | 75 min | `v0.21.0` | ✅ prête |
 | [24](24-the-adr-that-didnt-bind/README.fr.md) | L'ADR qui n'engageait rien : une décision que le code n'appliquait pas | 3 · **avancé** | 80 min | `v0.21.2` → `v0.22.0` | ✅ prête |
+| [25](25-the-scar-that-never-bled/README.fr.md) | La cicatrice qui n'a jamais saigné : concevoir une décision qui lie | 3 · **avancé** | 75 min | `v0.22.5` → `v0.23.0` | ✅ prête |
 
 ## Deux types de leçon — à ne pas confondre
 
