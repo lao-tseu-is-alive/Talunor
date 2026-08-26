@@ -27,7 +27,7 @@ const HelpText = `Commands:
   /mem         memory stats (count + database file + embedding provenance)
   /list [n]    list the most recent n memories (default 10)
   /forget <id> delete the memory with that #id (as shown by /list)
-  /why <id>    show a fact's evidence trail (which turns/sources support it)
+  /why <id>    show a fact's evidence trail (what supports it — and what contradicted it)
   /plan        show the most recent plan (when TALUNOR_PLANNER=1)
   /debug [on|off]  toggle inline trace of recall rankings & reflection
   /clear       clear the on-screen transcript (TUI only; does not erase memory)
@@ -129,17 +129,33 @@ func (a *Agent) WhyMemory(ctx context.Context, id int64) (string, error) {
 	if m.SupersededBy > 0 {
 		fmt.Fprintf(&b, "  ⚠ superseded by #%d (retired from recall; kept for audit)\n", m.SupersededBy)
 	}
+	if m.Contested {
+		b.WriteString("  ⚠ contested — still believed, but see the challenges below\n")
+	}
 	if len(ev) == 0 {
 		b.WriteString("  evidence: (none recorded)")
 		return b.String(), nil
 	}
-	fmt.Fprintf(&b, "  evidence (%d):\n", len(ev))
-	for _, e := range ev {
-		turn := "—"
-		if e.TurnID > 0 {
-			turn = fmt.Sprintf("turn #%d", e.TurnID)
+	// LAYER 24: the trail has two sides. Listing only what supported a fact can
+	// tell just one story — and it would always be a flattering one.
+	support, against := splitEvidence(ev)
+	if len(support) > 0 {
+		fmt.Fprintf(&b, "  supported by (%d):\n", len(support))
+		for _, e := range support {
+			fmt.Fprintf(&b, "    + %-9s %-14s %s\n", evidenceTurn(e), e.Source,
+				e.CreatedAt.Format("2006-01-02 15:04"))
 		}
-		fmt.Fprintf(&b, "    - %-8s %-14s %s\n", turn, e.Source, e.CreatedAt.Format("2006-01-02 15:04"))
+	}
+	if len(against) > 0 {
+		fmt.Fprintf(&b, "  contradicted by (%d) — refused by the trust model, so the fact stands:\n",
+			len(against))
+		for _, e := range against {
+			fmt.Fprintf(&b, "    − %-9s %-14s %s\n", evidenceTurn(e), e.Source,
+				e.CreatedAt.Format("2006-01-02 15:04"))
+			if e.Detail != "" {
+				fmt.Fprintf(&b, "      claim: %s\n", oneLine(e.Detail, 72))
+			}
+		}
 	}
 	return strings.TrimRight(b.String(), "\n"), nil
 }
@@ -170,6 +186,12 @@ func FormatMemories(mems []memory.Memory) string {
 		if m.SupersededBy > 0 {
 			meta += fmt.Sprintf(" ⚠→#%d", m.SupersededBy)
 		}
+		// A contested fact is NOT retired — it is still believed and still recalled —
+		// but something contradicted it and lost. Mark it so the listing shows the
+		// disagreement exists; /why <id> shows both sides (Layer 24).
+		if m.Contested {
+			meta += " ⚡contested"
+		}
 		fmt.Fprintf(&b, "  #%d [%s]%s %s  %s\n",
 			m.ID, label, meta, m.CreatedAt.Format("2006-01-02 15:04"), oneLine(m.Content, 66))
 	}
@@ -183,4 +205,26 @@ func oneLine(s string, max int) string {
 		return string(r[:max-1]) + "…"
 	}
 	return s
+}
+
+// splitEvidence separates a fact's trail into what backed it and what challenged it
+// (Layer 24). Order within each side is preserved: oldest first, the order belief
+// accumulated.
+func splitEvidence(ev []memory.Evidence) (support, against []memory.Evidence) {
+	for _, e := range ev {
+		if e.Polarity == memory.PolarityContradicts {
+			against = append(against, e)
+		} else {
+			support = append(support, e)
+		}
+	}
+	return support, against
+}
+
+// evidenceTurn renders an evidence row's turn reference ("—" when unknown).
+func evidenceTurn(e memory.Evidence) string {
+	if e.TurnID > 0 {
+		return fmt.Sprintf("turn #%d", e.TurnID)
+	}
+	return "—"
 }

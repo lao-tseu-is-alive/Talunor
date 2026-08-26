@@ -83,6 +83,15 @@ internal/memory/   SQLite store: loadable extensions, in-DB embeddings, KNN,
                    with diminishing returns — but only on INDEPENDENT evidence
                    (EvidenceCredibility: user/tool=1, model_inferred=0, the echo
                    guard). Half-life/floor via TALUNOR_SALIENCE_HALFLIFE/_FORGET_FLOOR
+                   evidence.go (LAYER 24): rows carry Polarity supports|contradicts +
+                   detail (migration 7). RecordCounterEvidence(factID,turnID,source,claim)
+                   records a correction the trust model REFUSED — the refused claim is
+                   NOT stored as a memory (a stored fact is a recallable fact, which is
+                   the authority just denied it) and does NOT move confidence. Contested
+                   is DERIVED at read time (contestedExpr: EXISTS a contradicts row),
+                   never stored, so the flag cannot drift from its justification —
+                   Layer 17's lazy-decay precedent. Recall still returns a contested
+                   fact, MARKED. See ADR 0005.
                    evidence.go (LAYER 20): the evidence trail (migration 4). RecordEvidence/
                    EvidenceFor (which turns+sources support a fact, one row per store/reinforce)
                    + MemoryByID (for /why). Append-only; a fact with no rows = empty trail.
@@ -860,6 +869,31 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   mechanical: symbol set identical, and all 759 non-comment/non-import lines byte-identical
   before vs after. `lessons-check` correctly rejected the in-lesson `v0.22.5` reference
   until `internal/version` was bumped — bump first, that is the intended order.
+- **Iteration 5 continues — Layer 24 (done): v0.23.0** = **a refused correction is evidence,
+  not nothing: contested claims**. Layers 21/23 gave the memory a gate deciding who may
+  correct whom; when it refused, `learnOneFact` **dropped the claim** with only a `trace`
+  line — fail-closed on authority, **fail-open on knowledge**. Memory could not represent
+  the one state the epistemic vision is about: *knowing something is disputed*. Now the
+  refusal is recorded as **counter-evidence** against the fact it failed to retire
+  (`evidence.polarity` + `detail`, **migration 7**), and **`Contested` is DERIVED** from
+  those rows at read time — never stored. That is the answer to the vision's "who moves the
+  token?": **nobody does**; the status IS the evidence, so it cannot drift from its own
+  justification (Layer 17's lazy-decay precedent, and why a `status` column was rejected).
+  Deliberately NOT done: the refused claim is not stored as a memory (a stored fact is a
+  recallable fact = the authority the gate denied), and counter-evidence does **not** move
+  confidence (that would re-litigate authority by arithmetic). A contested fact is still
+  believed and still recalled — **marked** in `fencedMemories` so the model can say it is
+  disputed rather than assert it flatly; `/why` shows both sides with the refused text;
+  `/list` marks it `⚡contested`. Trigger is fully deterministic: the disagreement between
+  the arbiter's verdict and the trust gate's, both of which already existed — no new model
+  call, no new prompt. Known limits, stated in the ADR: **a recorded refusal is permanent and
+  was made under ONE trust policy** (Supersedes is swappable, so an old trail keeps asserting
+  the old policy's verdicts — a stored status would be equally stale *plus* drift, so the
+  verdict stands; record the deciding policy on the row if it ever matters), the flag is
+  structurally coupled to `evidence` (so "contested then resolved" needs a retraction
+  migration — a belief can be challenged but never vindicated), unbounded accumulation, and
+  one bit not a scale (needs evidence INDEPENDENCE — vision §15). See **ADR 0005**.
+  Lesson 25 (v0.23.1) to write.
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
   tests; calibration output 0600 + KDF. Same per-layer checkpoint rhythm.

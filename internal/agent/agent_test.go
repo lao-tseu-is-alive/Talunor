@@ -1414,3 +1414,109 @@ func TestEnqueueReflectAfterCloseDoesNotPanic(t *testing.T) {
 		t.Fatalf("second close: %v", err)
 	}
 }
+
+// TestRefusedSupersessionIsRecordedAsCounterEvidence is Layer 24's core: when the
+// arbiter proposes SUPERSEDES and the trust model refuses, the refusal stands — but
+// the claim is no longer thrown away. It becomes counter-evidence against the fact it
+// failed to retire, which is what makes that fact report Contested (ADR 0005).
+//
+// Same subject on both sides, so the candidate really does reach the trust gate: a
+// model inference (authority 0) challenging a Verified tool observation (authority 2).
+func TestRefusedSupersessionIsRecordedAsCounterEvidence(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	observed, err := store.RememberFact(ctx, "Signature X is mitigated by behaviour Y.",
+		memory.Observed(true), 0.95)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ag := newLearner(t, store, RelSupersedes) // the arbiter proposes supersession
+
+	const claim = "Signature X is not mitigated at all."
+	ag.learnOneFact(ctx, claim, memory.Observed(false), 0.5, 0, 42)
+
+	got, ok, err := store.MemoryByID(ctx, observed.ID)
+	if err != nil || !ok {
+		t.Fatalf("MemoryByID: %v ok=%v", err, ok)
+	}
+	// The refusal still holds — that is Layers 21/23, unchanged.
+	if got.SupersededBy != 0 {
+		t.Fatalf("a model inference retired a Verified observation (superseded_by=%d)", got.SupersededBy)
+	}
+	// …but it is no longer silent.
+	if !got.Contested {
+		t.Error("the refused correction must leave the incumbent contested, not vanish")
+	}
+	if got.Confidence != 0.95 {
+		t.Errorf("confidence = %.2f; want 0.95 — a refused claim must not erode the fact", got.Confidence)
+	}
+
+	ev, err := store.EvidenceFor(ctx, observed.ID)
+	if err != nil {
+		t.Fatalf("evidence: %v", err)
+	}
+	var against []memory.Evidence
+	for _, e := range ev {
+		if e.Polarity == memory.PolarityContradicts {
+			against = append(against, e)
+		}
+	}
+	if len(against) != 1 {
+		t.Fatalf("contradicting evidence rows = %d, want 1", len(against))
+	}
+	if against[0].Detail != claim {
+		t.Errorf("recorded claim = %q; want %q", against[0].Detail, claim)
+	}
+	if against[0].TurnID != 42 {
+		t.Errorf("turn id = %d; want 42 (the trail must say WHEN the challenge came)", against[0].TurnID)
+	}
+	// The refused claim must not become a recallable fact — that is the authority
+	// the gate just denied it (ADR 0005, decision 2).
+	if factExists(t, ctx, store, claim) {
+		t.Error("the refused claim was stored as a fact; it must live only as evidence detail")
+	}
+
+	// It must reach the prompt as a flagged belief, not a bare assertion.
+	hits, err := store.Recall(ctx, "is signature X mitigated?", 5, 0.9)
+	if err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	fenced := fencedMemories(hits)
+	if !strings.Contains(fenced, "CONTESTED") {
+		t.Errorf("the fenced memory block must mark a contested fact, got:\n%s", fenced)
+	}
+
+	why, err := ag.WhyMemory(ctx, observed.ID)
+	if err != nil {
+		t.Fatalf("why: %v", err)
+	}
+	for _, want := range []string{"contested", "contradicted by", claim} {
+		if !strings.Contains(why, want) {
+			t.Errorf("/why output missing %q:\n%s", want, why)
+		}
+	}
+}
+
+// TestAllowedSupersessionRecordsNoCounterEvidence is the complement: when the trust
+// model ALLOWS the correction, the old fact is retired as before — it is superseded,
+// not contested. The two states are different answers and must not blur.
+func TestAllowedSupersessionRecordsNoCounterEvidence(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	old, err := store.RememberFact(ctx, "The user's favourite colour is red.",
+		memory.Attr(memory.ProvenanceModelInferred, memory.SubjectUser), 0.4)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ag := newLearner(t, store, RelSupersedes)
+
+	ag.learnOneFact(ctx, "The user's favourite colour is teal.", memory.UserSaid(), 0.9, 0, 7)
+
+	got, _, _ := store.MemoryByID(ctx, old.ID)
+	if got.SupersededBy == 0 {
+		t.Fatal("the user correcting a model guess should supersede it (Layer 21 unchanged)")
+	}
+	if got.Contested {
+		t.Error("an ALLOWED supersession must not also mark the old fact contested")
+	}
+}

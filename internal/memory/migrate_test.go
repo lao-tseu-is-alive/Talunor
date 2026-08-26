@@ -125,8 +125,9 @@ func TestMigrateBaselinesLegacy(t *testing.T) {
 	}
 	// Look like a truly pre-versioning DB: the baseline schema, no version stamp and
 	// none of the columns later migrations add. Reopening must migrate it forward
-	// (baseline via migration 1's no-op, then the column-adding migrations 2, 3, 5 & 6)
-	// losing nothing. NOTE: add a DROP here for every future column-adding migration.
+	// (baseline via migration 1's no-op, then the column-adding migrations 2, 3, 5, 6
+	// & 7) losing nothing. NOTE: add a DROP here for every future column-adding
+	// migration — including ones that touch a table other than `memories`.
 	for _, stmt := range []string{
 		`ALTER TABLE memories DROP COLUMN provenance`,
 		`ALTER TABLE memories DROP COLUMN confidence`,
@@ -135,6 +136,8 @@ func TestMigrateBaselinesLegacy(t *testing.T) {
 		`ALTER TABLE memories DROP COLUMN access_count`,
 		`ALTER TABLE memories DROP COLUMN superseded_by`,
 		`ALTER TABLE memories DROP COLUMN subject`,
+		`ALTER TABLE evidence DROP COLUMN polarity`, // migration 7
+		`ALTER TABLE evidence DROP COLUMN detail`,   // migration 7
 		`DELETE FROM meta WHERE key = '` + metaSchemaVersion + `'`,
 	} {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {

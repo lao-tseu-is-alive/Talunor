@@ -13,8 +13,8 @@ savoir quand tu as terminé.
 
 > **Statut : en cours.** Les leçons 00–24 sont prêtes, **entièrement en
 > anglais et en français** (utilise le sélecteur de langue en haut de chaque page).
-> L'Itération 5 (« mémoire véridique ») a livré les couches 20 à 23, chacune avec sa
-> leçon ; la couche 24 est la prochaine.
+> L'Itération 5 (« mémoire véridique ») a livré les couches 20 à 24 ; la leçon 25
+> (couche 24, les affirmations contestées) est la prochaine à écrire.
 
 ## Pour qui
 

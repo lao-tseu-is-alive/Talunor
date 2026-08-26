@@ -281,6 +281,15 @@ func fencedMemories(hits []memory.Hit) string {
 	for _, h := range hits {
 		b.WriteString("- ")
 		b.WriteString(h.Content)
+		// LAYER 24: a contested fact is still the belief — the trust model decided the
+		// incumbent wins — but the model is told the question was raised, so it can say
+		// "you've told me otherwise" instead of asserting it flatly. Without this the
+		// contestation would be recorded and never used, which is the decorative
+		// failure ADR 0004's lesson warns about.
+		if h.Contested {
+			b.WriteString(" [CONTESTED: a later claim contradicted this; it was not " +
+				"authoritative enough to replace it]")
+		}
 		b.WriteByte('\n')
 	}
 	b.WriteString("</recalled_memories>")

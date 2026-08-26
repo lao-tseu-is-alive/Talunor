@@ -133,6 +133,31 @@ var migrations = []migration{
 			return err
 		},
 	},
+	{
+		version: 7,
+		name:    "evidence polarity (contested claims)",
+		apply: func(ctx context.Context, e execer) error {
+			// Layer 24: a correction the trust model REFUSES is still information —
+			// two sources disagreed about one subject. Until now that claim was
+			// dropped, so memory could not represent a disputed belief (ADR 0005).
+			//
+			// The evidence trail gains a polarity. Every existing row is 'supports',
+			// which is exactly what it was: before this migration the only thing the
+			// trail could record was support. `detail` carries the text of a refused
+			// claim, so the disagreement can be read later; it stays NULL on
+			// supporting rows.
+			//
+			// Note what is NOT added: a `status`/`contested` column on memories.
+			// Contested is DERIVED from these rows at read time, so the flag cannot
+			// drift from the evidence that justifies it (ADR 0005, decision 3).
+			if _, err := e.ExecContext(ctx,
+				`ALTER TABLE evidence ADD COLUMN polarity TEXT NOT NULL DEFAULT 'supports'`); err != nil {
+				return err
+			}
+			_, err := e.ExecContext(ctx, `ALTER TABLE evidence ADD COLUMN detail TEXT`)
+			return err
+		},
+	},
 	// Iteration 5 continues here, one migration per layer.
 }
 

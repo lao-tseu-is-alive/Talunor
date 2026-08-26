@@ -84,3 +84,111 @@ func TestMemoryByID(t *testing.T) {
 		t.Error("MemoryByID(999999) ok=true, want false")
 	}
 }
+
+// TestCounterEvidenceMakesAFactContested is the core of Layer 24: a refused
+// correction is recorded rather than dropped, and "contested" is DERIVED from that
+// record rather than stored beside it (ADR 0005, decision 3).
+func TestCounterEvidenceMakesAFactContested(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	fact, err := store.RememberFact(ctx, "The earth is round.",
+		memory.Observed(true), 0.9)
+	if err != nil {
+		t.Fatalf("remember fact: %v", err)
+	}
+	if err := store.RecordEvidence(ctx, fact.ID, 0, memory.ProvenanceToolObserved); err != nil {
+		t.Fatalf("record evidence: %v", err)
+	}
+
+	// A supported-only fact is not contested.
+	m, ok, err := store.MemoryByID(ctx, fact.ID)
+	if err != nil || !ok {
+		t.Fatalf("MemoryByID: %v ok=%v", err, ok)
+	}
+	if m.Contested {
+		t.Fatal("a fact with only supporting evidence must not be contested")
+	}
+
+	// A refused correction is recorded as counter-evidence.
+	const claim = "The earth is flat."
+	if err := store.RecordCounterEvidence(ctx, fact.ID, 0, memory.ProvenanceUserStated, claim); err != nil {
+		t.Fatalf("record counter-evidence: %v", err)
+	}
+
+	m, ok, err = store.MemoryByID(ctx, fact.ID)
+	if err != nil || !ok {
+		t.Fatalf("MemoryByID: %v ok=%v", err, ok)
+	}
+	if !m.Contested {
+		t.Error("a fact with a contradicting evidence row must report Contested")
+	}
+	// Decision 5: contestation is visible, not corrosive. The source that lost the
+	// authority argument must not win a partial one through arithmetic.
+	if m.Confidence != 0.9 {
+		t.Errorf("confidence = %.2f; want 0.9 unchanged — counter-evidence must not move it", m.Confidence)
+	}
+	// Decision 2: the refused claim is NOT a memory of its own.
+	all, err := store.List(ctx, 50)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, mm := range all {
+		if mm.Content == claim {
+			t.Fatalf("the refused claim was stored as memory #%d — it must live only as evidence detail", mm.ID)
+		}
+	}
+
+	// Both sides are readable, with the refused text.
+	ev, err := store.EvidenceFor(ctx, fact.ID)
+	if err != nil {
+		t.Fatalf("evidence: %v", err)
+	}
+	if len(ev) != 2 {
+		t.Fatalf("evidence rows = %d, want 2", len(ev))
+	}
+	if ev[0].Polarity != memory.PolaritySupports || ev[0].Detail != "" {
+		t.Errorf("row 0 = %v/%q; want supports with no detail", ev[0].Polarity, ev[0].Detail)
+	}
+	if ev[1].Polarity != memory.PolarityContradicts {
+		t.Errorf("row 1 polarity = %v; want contradicts", ev[1].Polarity)
+	}
+	if ev[1].Detail != claim {
+		t.Errorf("row 1 detail = %q; want the refused claim", ev[1].Detail)
+	}
+}
+
+// TestContestedFactIsStillRecalled pins decision 4: contestation flags a belief, it
+// does not retire it. That is the difference from supersession — and the reason a
+// contested fact must keep reaching the prompt (marked), not vanish from it.
+func TestContestedFactIsStillRecalled(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	fact, err := store.RememberFact(ctx, "The user's favourite colour is teal.",
+		memory.UserSaid(), 0.9)
+	if err != nil {
+		t.Fatalf("remember fact: %v", err)
+	}
+	if err := store.RecordCounterEvidence(ctx, fact.ID, 0,
+		memory.ProvenanceModelInferred, "The user's favourite colour is red."); err != nil {
+		t.Fatalf("counter-evidence: %v", err)
+	}
+
+	hits, err := store.Recall(ctx, "what colour does the user like?", 5, 0.9)
+	if err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	var found *memory.Hit
+	for i := range hits {
+		if hits[i].ID == fact.ID {
+			found = &hits[i]
+		}
+	}
+	if found == nil {
+		t.Fatal("a contested fact must still be recalled — it is still the belief")
+	}
+	if !found.Contested {
+		t.Error("the recalled hit must carry Contested so the prompt can mark it")
+	}
+}

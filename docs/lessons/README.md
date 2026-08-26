@@ -13,7 +13,7 @@ done.
 
 > **Status: in progress.** Lessons 00–24 are ready, **fully bilingual EN/FR** (use the
 > language switcher at the top of each page). Iteration 5 ("truthful memory") has shipped
-> Layers 20–23, each with its lesson; Layer 24 is next.
+> Layers 20–24; Lesson 25 (Layer 24, contested claims) is the next one to write.
 
 ## Who this is for
 

@@ -82,6 +82,10 @@ Talunor/
 │   │   │                     #       Attribution + SameSubject; different subjects never supersede (ADR 0004).
 │   │   ├── evidence.go       #     LAYER 20: the evidence trail (migration 4) — RecordEvidence / EvidenceFor
 │   │   │                     #       (which turns+sources support a fact) + MemoryByID (for /why).
+│   │   │                     #       LAYER 24: rows carry a Polarity (supports|contradicts) + detail
+│   │   │                     #       (migration 7). RecordCounterEvidence stores a correction the trust
+│   │   │                     #       model REFUSED; Memory.Contested is DERIVED from those rows at read
+│   │   │                     #       time (contestedExpr), never stored — ADR 0005.
 │   │   ├── shortterm.go      #     Bounded ring buffer of the most recent turns (immediate context).
 │   │   ├── cgo_link.go       #     cgo glue: dlopen libm with RTLD_GLOBAL — vector.so needs it in scope.
 │   │   ├── provenance_test.go #    Tests (fresh=OK, canary mismatch=Stale→ReEmbed, legacy=Unknown, cosine).
@@ -224,7 +228,9 @@ Talunor/
 │   │   ├── 0001-memory-backends.md # ADR 1: the Embedder/VectorIndex seams + backend profiles (proposed/deferred).
 │   │   ├── 0002-provenance-from-source.md # ADR 2: learned-fact provenance from the source, not eagerness (Layer 20).
 │   │   ├── 0003-trust-model-for-supersession.md # ADR 3: a memory's trust model is an explicit per-domain policy (Layer 21).
-│   │   └── 0004-subject-as-data.md # ADR 4: authority = (who spoke, what it is about) — the subject becomes data (Layer 23).
+│   │   ├── 0004-subject-as-data.md # ADR 4: authority = (who spoke, what it is about) — the subject becomes data (Layer 23).
+│   │   └── 0005-contested-claims.md # ADR 5: a refused correction is recorded as counter-evidence;
+│   │                       #   "contested" is DERIVED from the trail, never stored (Layer 24).
 │   ├── policy.sample.yaml #   Commented example TALUNOR_POLICY rule file (allow / prompt / deny per tool).
 │   ├── calibration.seed.yaml #  LAYER 14: public example calibration suite (deterministic, threat-model header).
 │   ├── ollama-networking.md # Reaching a loopback Ollama from inside the container, securely.

@@ -298,22 +298,26 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.22.5** — **the file that was the curriculum.**
-> `internal/agent/agent.go` had reached 1,300 lines holding the turn loop, tool
-> execution, learning, the commands and the lifecycle at once — and in a repo whose file
-> tree *is* part of the course, that is a teaching cost, not just a style one. It is now
-> **417 lines** plus `turn.go`, `tools.go`, `learn.go` and `commands.go`: same package,
-> same code, no new abstractions. Groupings follow how the lessons already teach the
-> code rather than a tidy taxonomy. Behaviour is unchanged — and provably so: the symbol
-> set and every executable line were diffed before and after, byte-identical.
+> Current version: **v0.23.0** — **LAYER 24: a refused correction is evidence, not
+> nothing.** Talunor already decided *who may correct whom* (an explicit, per-domain
+> trust model). But when it refused a correction it **threw the claim away** — so memory
+> could be "believed" or "gone", never *believed but challenged*. Now a refused claim is
+> recorded as **counter-evidence** against the fact it failed to retire, and `/why <id>`
+> shows both sides. Crucially, **"contested" is derived from the evidence, never stored**:
+> the status *is* its own justification, so it cannot drift from it — which is how the
+> question "who decides a claim is contested?" gets answered with *nobody does*. A
+> contested fact is still believed and still recalled, now **marked**, so the agent can
+> tell you a belief is disputed instead of asserting it flatly. See
+> [ADR 0005](docs/decisions/0005-contested-claims.md).
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
 Layer 14 added **model calibration**; Iteration 4 taught it to *learn* (schema
 migrations, per-fact provenance & confidence, salience/decay/consolidation, async
-reflection). **Iteration 5 — "truthful memory" — is in progress: Layers 20–23 have
-shipped, each with its lesson.** A fact now carries an auditable **evidence trail**
-(`/why`), can be **superseded** by a newer one under an explicit, per-domain
+reflection). **Iteration 5 — "truthful memory" — is in progress: Layers 20–24 have
+shipped** (Layer 24 is awaiting its lesson; 20–23 have theirs). A fact now carries an
+auditable **evidence trail** with two sides — what supported it and what contradicted it
+(`/why`) — can be **superseded** by a newer one under an explicit, per-domain
 [trust model](internal/memory/supersede.go) so a model's guess never overwrites what
 you said, is retrievable by **meaning or by wording** (hybrid recall), and knows
 **what it is about** (user vs world) so authority is per-domain mechanically rather

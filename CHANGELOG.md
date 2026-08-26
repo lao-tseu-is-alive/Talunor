@@ -17,6 +17,96 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.0] - 2026-08-26 — LAYER 24: a refused correction is evidence, not nothing (contested claims)
+
+Layers 21 and 23 gave the memory a way to correct itself and a deterministic gate
+deciding who may correct whom. When that gate refused, `learnOneFact` did this:
+
+```go
+} else {
+    // The trust model forbids it — the old belief is more authoritative than
+    // this source. Drop the new fact rather than store a contradiction.
+    a.trace("supersede.denied", ...)
+}
+```
+
+The refusal is right. **Throwing the claim away is not.** At that moment the system
+knows two sources disagree about one subject, which one lacked the authority to win,
+and the exact text of the disagreement — and discards all of it, leaving a debug line
+that exists only when `TALUNOR_DEBUG` is on. Fail-closed on authority, **fail-open on
+knowledge**: every fact was either believed or gone, with no way to be *believed but
+challenged*.
+
+### Added
+
+- **`evidence.polarity` + `evidence.detail` (migration 7).** A trail row now records
+  whether it `supports` or `contradicts` its fact; a contradicting row carries the
+  refused claim's text. Every pre-existing row is `supports`, which is what it always
+  meant. Append-only, no backfill, no re-embed.
+- **`Store.RecordCounterEvidence(factID, turnID, source, claim)`** — called from the
+  former drop-site in `agent.learnOneFact`.
+- **`Memory.Contested` / `Hit.Contested`, DERIVED not stored.** A fact is contested iff
+  its trail holds a contradicting row (`contestedExpr`, an `EXISTS` subquery folded
+  into recall, `List` and `MemoryByID`).
+- **`/why <id>` shows both sides** — what supported the fact, and what contradicted it,
+  with the refused text and its source. `/list` marks a contested fact `⚡contested`.
+- **`fencedMemories` marks contested facts in the prompt**, so the model can say a
+  belief is disputed instead of asserting it flatly.
+- **[ADR 0005](docs/decisions/0005-contested-claims.md)** records the decision, the four
+  rejected alternatives, and the limits.
+
+### Deliberately not done (all in ADR 0005)
+
+- **The refused claim is not stored as a memory.** A stored fact is a recallable fact,
+  and recall is precisely the authority the gate just denied it. It lives only as the
+  `detail` of a counter-evidence row.
+- **Counter-evidence does not move confidence.** The contradicting source is by
+  construction one the trust model judged insufficiently authoritative here; letting it
+  lower confidence would hand it by arithmetic the influence it was denied explicitly.
+  Contestation is *visible*, not *corrosive*.
+- **No `status` column**, and **no state machine** (`Unexamined → … → Established`).
+
+### Known limits (all recorded in ADR 0005)
+
+A recorded refusal is **permanent, and was made under one trust policy** — `Supersedes`
+is deliberately swappable, so a trail accumulated under the personal-assistant policy
+keeps asserting *that* policy's verdicts after it has been replaced. This does not change
+the decision (a stored status would be equally stale *plus* drift-prone), but it is a real
+property worth finding written down. The flag is also **structurally coupled to the
+evidence table**: since `Contested` *is* `EXISTS(a contradicts row)`, "contested then
+resolved" cannot be expressed without a retraction migration — so today a belief can be
+challenged but never vindicated. Plus: unbounded accumulation, and one bit rather than a
+scale (which needs evidence *independence*, vision §15 — not a confidence coefficient).
+
+### Lessons learned
+
+- **"Who moves the token?" is the question a status field cannot answer, so don't have
+  one.** The vision document proposes a claim-status state machine; the honest reading
+  is that every transition would be decided by the model — ADR 0003's mistake made a
+  second time, knowingly. Deriving `Contested` from the evidence dissolves the question
+  instead of answering it: **nobody moves it, because the status IS the evidence.** A
+  stored flag can disagree with its own justification; a derived one cannot. That is
+  Layer 17's lazy-decay reasoning applied to truth rather than to retention.
+- **A gate that refuses should record what it refused.** The refusal was correct and the
+  forgetting was invisible — the worst combination, because the system looked like it was
+  working. Generalising: *any place a system discards input because it lacked authority is
+  a place worth an audit row.* The decision is not the same as the evidence for it, and
+  keeping only the decision makes the system unable to explain itself later.
+- **The subtlest trap was the one that felt most reasonable.** "Counter-evidence should
+  lower confidence a little" sounds like weighing the evidence. It is a back door: the
+  source that lost the explicit authority argument wins a partial one implicitly, through
+  a number nobody re-derives. Layer 16 refused self-reported confidence; this is the same
+  refusal one level up.
+- **Fully deterministic, because the trigger already existed.** No new model call, no new
+  prompt: the signal is the *disagreement between the arbiter's verdict and the trust
+  gate's*, two mechanisms already in the code. The cheapest layer in Iteration 5 and the
+  first to touch the vision doc — a reminder that "make the mechanism explicit" usually
+  costs less than the design conversation about it.
+- **The migration test told us what to do, and we should read our own notes.**
+  `TestMigrateBaselinesLegacy` carries a comment — *"add a DROP here for every future
+  column-adding migration"* — and it failed exactly as designed, because migration 7 adds
+  columns to `evidence` rather than `memories`. The note now says so explicitly.
+
 ## [0.22.5] - 2026-08-26 — The file that was the curriculum: agent.go split by responsibility
 
 `internal/agent/agent.go` had reached **1,300 lines**, holding the turn loop, tool

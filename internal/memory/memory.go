@@ -102,6 +102,22 @@ type Memory struct {
 	// SupersededBy is the id of the fact that retired this one (0 = active). A
 	// superseded fact is excluded from recall but kept for audit (Layer 21).
 	SupersededBy int64
+	// Contested reports that at least one claim CONTRADICTED this fact and was
+	// refused by the trust model (Layer 24). It is DERIVED at read time from the
+	// evidence trail — never stored — so it cannot drift from its own justification;
+	// see contestedExpr and ADR 0005. A contested fact is still believed and still
+	// recalled: the gate decided the incumbent wins. The flag records that the
+	// question was raised, so the agent can say so instead of asserting flatly.
+	Contested bool
+}
+
+// contestedExpr derives the Contested flag in SQL. A fact is contested iff its trail
+// holds at least one contradicting row — the status IS the evidence, which is what
+// makes "who moves the token?" a question with no answer needed (ADR 0005).
+// `alias` is the memories table's alias in the surrounding query.
+func contestedExpr(alias string) string {
+	return `EXISTS(SELECT 1 FROM evidence ev WHERE ev.fact_id = ` + alias +
+		`.id AND ev.polarity = 'contradicts')`
 }
 
 // Hit is a memory returned by a similarity search, with its distance to the query
@@ -330,7 +346,7 @@ func (s *Store) vectorCandidates(ctx context.Context, query string, k int, maxDi
 		       COALESCE(m.provenance, 'unspecified'), COALESCE(m.subject, 'unspecified'),
 		       COALESCE(m.confidence, 1.0),
 		       COALESCE(m.salience, 1.0), m.last_accessed, COALESCE(m.access_count, 0),
-		       m.created_at, v.distance
+		       m.created_at, `+contestedExpr("m")+`, v.distance
 		FROM vector_full_scan('memories', 'embedding', ?, ?) AS v
 		JOIN memories m ON m.id = v.rowid
 		WHERE m.superseded_by IS NULL
@@ -397,7 +413,7 @@ func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
 		       COALESCE(provenance, 'unspecified'), COALESCE(subject, 'unspecified'),
 		       COALESCE(confidence, 1.0),
 		       COALESCE(salience, 1.0), last_accessed, COALESCE(access_count, 0), created_at,
-		       COALESCE(superseded_by, 0)
+		       COALESCE(superseded_by, 0), `+contestedExpr("memories")+`
 		FROM memories
 		ORDER BY id DESC
 		LIMIT ?`, limit)
@@ -417,7 +433,8 @@ func (s *Store) List(ctx context.Context, limit int) ([]Memory, error) {
 			createdAt    string
 		)
 		if err := rows.Scan(&m.ID, &kind, &m.Role, &m.Content, &prov, &subject, &m.Confidence,
-			&m.Salience, &lastAccessed, &m.AccessCount, &createdAt, &m.SupersededBy); err != nil {
+			&m.Salience, &lastAccessed, &m.AccessCount, &createdAt, &m.SupersededBy,
+			&m.Contested); err != nil {
 			return nil, err
 		}
 		m.Kind = Kind(kind)

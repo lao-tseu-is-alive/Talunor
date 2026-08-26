@@ -176,9 +176,20 @@ func (a *Agent) learnOneFact(ctx context.Context, f string, attr memory.Attribut
 				"new", m.ID, "newAttr", attr.String())
 		} else {
 			// The trust model forbids it — the old belief is more authoritative than
-			// this source. Drop the new fact rather than store a contradiction.
+			// this source. The refusal stands, but LAYER 24 stops it from also being
+			// an act of forgetting: the disagreement is recorded as counter-evidence
+			// against the incumbent, which is what makes that fact report Contested.
+			//
+			// The refused claim is deliberately NOT stored as a memory. A stored fact
+			// is a recallable fact, and recall is exactly the authority just denied it;
+			// it lives only as the detail of this row. Nor does it move the incumbent's
+			// confidence — letting a source that lost the explicit authority argument
+			// win a partial one by arithmetic is the back door ADR 0005 closes.
 			a.trace("supersede.denied", "newAttr", attr.String(), "oldAttr", candAttr.String(),
 				"old", cand.ID)
+			if err := a.store.RecordCounterEvidence(ctx, cand.ID, turnID, attr.Provenance, f); err != nil {
+				a.trace("counterevidence.error", "fact", cand.ID, "err", err)
+			}
 		}
 	case RelUnrelated:
 		a.storeNewFact(ctx, f, attr, conf, turnID)

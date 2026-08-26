@@ -300,7 +300,7 @@ func (s *Store) lexicalCandidates(ctx context.Context, query string, limit int) 
 		       COALESCE(m.provenance, 'unspecified'), COALESCE(m.subject, 'unspecified'),
 		       COALESCE(m.confidence, 1.0),
 		       COALESCE(m.salience, 1.0), m.last_accessed, COALESCE(m.access_count, 0),
-		       m.created_at, bm25(%[1]s)
+		       m.created_at, `+contestedExpr("m")+`, bm25(%[1]s)
 		FROM %[1]s
 		JOIN memories m ON m.id = %[1]s.rowid
 		WHERE %[1]s MATCH ? AND m.superseded_by IS NULL

@@ -56,7 +56,7 @@ func scanHit(rows *sql.Rows, src scanSource) (Hit, error) {
 		relevance    float64
 	)
 	if err := rows.Scan(&h.ID, &kind, &h.Role, &h.Content, &prov, &subject, &h.Confidence,
-		&h.Salience, &lastAccessed, &h.AccessCount, &createdAt, &relevance); err != nil {
+		&h.Salience, &lastAccessed, &h.AccessCount, &createdAt, &h.Contested, &relevance); err != nil {
 		return Hit{}, err
 	}
 	h.Kind = Kind(kind)
