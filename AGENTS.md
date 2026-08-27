@@ -953,6 +953,21 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   `github.sha` (wrong on a dispatch). **Rule: ask of every automated step how it is re-run
   after failing at a moment you did not choose.** And diagnose first — the status page said
   `Actions: major_outage` in two minutes.
+- **v0.23.4 (ci)** = **three defects a green pipeline could not have shown.** v0.23.3's
+  `workflow_dispatch` was USED FOR REAL to repair v0.23.2 (whose runs the Actions outage
+  swallowed), and the ARTEFACTS were inspected instead of the run conclusions. The core held
+  (`publishing v0.23.2`, `HEAD is now at 1e76672`, image `0.23.2`, Release + bundle created,
+  no tag rewritten) — but: (1) the **pushed** image carried `COMMIT=2dfdfb8` (the dispatching
+  ref) because `docker-publish.yml` builds TWICE and v0.23.3's `replace(...,1)` fixed only the
+  scan build; (2) `type=sha` tagged it `sha-2dfdfb8` for the same reason — now reads a new
+  `BUILD_SHA` (full hash of what checkout produced); (3) **`latest` moved BACKWARDS** onto
+  0.23.2 while 0.23.3 existed — now `type=raw,value=latest,enable=${{ github.event_name ==
+  'push' }}`. **The keeper: re-publishing an old version is a REPAIR, not a release, and the
+  tag set has to encode that** — `latest` means *newest*, so a repair claiming it is wrong by
+  construction. Also: a green pipeline says the steps ran, not that the artefact is right —
+  nothing in CI compares an artefact to what it claims to be, so read it (`docker pull`, grep
+  build-args from logs, open the release). And after a pattern edit, **grep for what should no
+  longer exist** (`grep -n 'github.sha' .github/workflows/`), not for the new form.
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
   tests; calibration output 0600 + KDF. Same per-layer checkpoint rhythm.

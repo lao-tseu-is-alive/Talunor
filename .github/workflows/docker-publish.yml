@@ -53,8 +53,12 @@ jobs:
         run: |
           echo "BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
           # github.sha is the DISPATCHING ref's commit, which is not the tag's on a
-          # manual run — stamp the image with what was actually checked out.
+          # manual run — stamp the image with what was actually checked out. Both
+          # forms are needed: the short one labels the binary, the full one feeds
+          # docker/metadata-action, whose type=sha would otherwise also read
+          # github.sha and tag the image with a commit it was not built from.
           echo "BUILD_COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Setup Docker buildx
         # docker/setup-buildx-action v3 — pinned to commit SHA (supply-chain).
@@ -128,9 +132,18 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Every pattern is pinned to the RESOLVED tag, never to the ref that
+          # triggered the run — on a manual re-publish those differ.
+          #
+          # `latest` is deliberately restricted to the automatic path. Re-publishing
+          # an older version is a REPAIR, not a release: without this guard, running
+          # a dispatch for v0.23.2 moves `latest` backwards off v0.23.3, and anyone
+          # pulling :latest silently downgrades. Publishing a version and repairing
+          # one are not the same operation, and the tag set has to say so.
           tags: |
             type=semver,pattern={{version}},value=${{ steps.target.outputs.tag }}
-            type=sha
+            type=sha,value=${{ env.BUILD_SHA }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' }}
 
       - name: Build and push Docker image
         # docker/build-push-action v5 — pinned to commit SHA (supply-chain).
@@ -141,7 +154,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            COMMIT=${{ github.sha }}
+            COMMIT=${{ env.BUILD_COMMIT }}
             BUILD_DATE=${{ env.BUILD_DATE }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

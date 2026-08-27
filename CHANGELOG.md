@@ -17,6 +17,58 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.4] - 2026-08-27 — Three defects a green pipeline could not have shown
+
+`v0.23.3` added `workflow_dispatch` so a version could be re-published without
+touching a public tag. Its four workflows went green. Then it was **used for real** —
+to repair `v0.23.2`, whose runs an Actions outage had swallowed — and the artefacts it
+produced were inspected rather than the run conclusions.
+
+The core of the fix held: `publishing v0.23.2`, `HEAD is now at 1e76672`, and an image
+tagged `0.23.2`. The GitHub Release and the container image for `v0.23.2` exist, and no
+tag was rewritten. But three things were wrong, and **none of them could turn a
+workflow red.**
+
+### Fixed
+
+- **The published image was stamped with the wrong commit.** `docker-publish.yml`
+  builds **twice** — once locally to be scanned, once to push — and v0.23.3 only fixed
+  the first. The scanned image carried `COMMIT=1e76672` (correct); the one actually
+  pushed carried `COMMIT=2dfdfb8`, the *dispatching* ref. An artefact that misreports
+  its own commit is a poor thing to ship from a project about traceability.
+- **`type=sha` tagged the image `sha-2dfdfb8`** — again the dispatching ref, not the
+  build. The semver pattern had been pinned to the resolved tag in v0.23.3; this one
+  had not. The build metadata step now also exports `BUILD_SHA` (the full hash of what
+  checkout produced) and the pattern reads from it.
+- **`latest` moved backwards.** Re-publishing `0.23.2` overwrote `latest`, which had
+  been pointing at `0.23.3` — so anyone running `docker pull …:latest` would silently
+  have been downgraded. `latest` is now emitted only on the automatic path
+  (`enable=${{ github.event_name == 'push' }}`).
+
+### Lessons learned
+
+- **Re-publishing an old version is a repair, not a release, and the tag set has to
+  say so.** This is the one worth keeping. `latest` means *the newest*, and a repair
+  operation that also claims that meaning is wrong by construction — no matter how
+  correct the image it builds. The bug was not in any step; it was in treating two
+  different intentions as one workflow. The `enable=` guard is small, but the
+  distinction it encodes is not.
+- **A green pipeline says the steps ran, not that the artefact is right.** All four
+  runs passed while shipping an image labelled with a commit it was not built from.
+  Nothing in CI compares an artefact against what it claims to be — so the only way to
+  find this class of defect is to *read the artefact*: `docker pull` the tags, grep the
+  build args out of the logs, open the release and look at the asset names.
+- **`replace(old, new, 1)` shipped a half-fix.** The `COMMIT` build-arg appears twice
+  and only the first occurrence was rewritten, in a diff that looked complete because
+  the thing it changed was real. Editing config by pattern needs the same discipline as
+  editing code: after the change, grep for what should no longer exist
+  (`grep -n 'github.sha' .github/workflows/`) rather than checking that the new form is
+  present.
+- **The test that found all three was the one nobody had to write.** Using the new
+  mechanism for its actual purpose, once, on a real backlog item, surfaced more than
+  the four workflow runs that had just certified it. When a feature exists to be used
+  in an emergency, use it once before the emergency.
+
 ## [0.23.3] - 2026-08-26 — A tag push is an event, and events cannot be replayed
 
 `v0.23.2` was tagged and pushed correctly. Then **GitHub Actions went into a major

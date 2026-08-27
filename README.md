@@ -298,14 +298,14 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.3** — **a tag push is an event, and events cannot be
-> replayed.** A GitHub Actions outage swallowed `v0.23.2`'s workflow runs: three were
-> never created, the fourth failed with its job still queued. Nothing was wrong with the
-> repo — but both publishing workflows had a single trigger (`push: tags:`), so the only
-> recovery was to delete and re-push a public tag. They now also accept
-> **`workflow_dispatch` with a `tag` input**, and a `Resolve the tag to publish` step
-> makes a manual run produce *the same artefacts* as the automatic one — the trigger
-> alone would have shipped a button that published `main` instead.
+> Current version: **v0.23.4** — **three defects a green pipeline could not have
+> shown.** v0.23.3's manual re-publish was used for real, to repair the release an
+> Actions outage had swallowed. It worked — and inspecting the *artefacts* rather than
+> the run conclusions found three things wrong that never turned a workflow red: the
+> pushed image was stamped with the dispatching commit rather than the one it was built
+> from (the workflow builds twice; only the first build had been fixed), `type=sha`
+> tagged it likewise, and **`latest` moved backwards** onto the older version. Repairing
+> a release is not the same operation as making one, and the tag set now says so.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
