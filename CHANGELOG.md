@@ -17,6 +17,65 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.9] - 2026-08-28 — Four corrections, and the guard that should have caught two of them
+
+The XS tier of the 2026-08-28 review. Small, independent, no behaviour change for a
+running agent — but one of them had a real security consequence and another closes a
+gap in a drift alarm that shipped three days ago.
+
+### Fixed
+
+- **`scripts/initial_setup.sh` no longer maintains a second artefact-fetch path.** It
+  downloaded the two native `.so` extensions and the GGUF model with `curl -sL`,
+  verified **no checksums**, used a **mutable** HuggingFace `main` URL, had no `curl -f`
+  (so an HTTP error page was saved and failed later as a confusing `tar` error), and ran
+  `go get` + `go mod tidy`, rewriting `go.mod`/`go.sum`. Meanwhile `make deps` pins the
+  exact SHA-256 of every byte and fails closed. A contributor following the discoverable
+  script therefore loaded **unverified native code** — code that runs inside SQLite,
+  in-process, with no sandbox. The script is now prerequisite checks plus `exec make deps`,
+  and its header explains what setup does rather than re-implementing it.
+- **Release tag validation is an anchored SemVer match, not a shell glob.** `case`
+  patterns are globs: `v[0-9]*.[0-9]*.[0-9]*` reads as "a digit then anything" and
+  accepts `v1abc.2.3` or `v1.2.3-oops`. Both publish workflows now use
+  `grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'`, **and** a new step compares the tag to
+  `internal/version` after checkout — a tag and a binary that disagree about which
+  version this is should never produce an artefact.
+- **A database migrated by a newer build is refused.** `runMigrations` applied versions
+  above the stored one but never checked the stored one against the highest this binary
+  knows. An older Talunor would silently read and write a schema it does not understand —
+  nothing failing at the time, the damage surfacing later in the newer binary. It now
+  fails at `Open` with a message naming both versions and the fix.
+- **Two documentation drifts**: the README's Iteration-5 table stopped at Layer 23 while
+  Layer 24 shipped in `v0.23.0`, and the lessons index said "00–24" while listing 25.
+
+### Added
+
+- **Two `docs-assert` assertions for status lines**, because fixing the drift without
+  fixing the guard would leave the same hole open. Both compare a document against an
+  **artefact** rather than against prose: the lessons index status line must match the
+  highest lesson directory on disk, and the README iteration table must contain a row
+  for the highest layer `AGENTS.md` calls done. Verified by re-introducing both drifts
+  and watching each assertion fail.
+
+### Lessons learned
+
+- **Documentation that duplicates a security mechanism does not stay a copy.** The setup
+  script began as a deliberate, commented mirror of `make deps` — a reasonable idea, and
+  its own header said it might eventually just call it. It should have. Left alone, it
+  became an older, weaker implementation that nobody re-read, and the weakness was
+  precisely the part that mattered: verification. *Never maintain a second implementation
+  of artefact fetching.*
+- **A drift alarm has a shape, and status lines are outside it.** `docs-assert` shipped
+  three days ago and missed both of these, because every check it had re-derived a claim
+  from code — and "lessons 00–24 are ready" makes no claim code can answer. The fix was
+  not more claim checks but a different comparison: document against artefact (the
+  directory listing, the roadmap's own record). *When a guard misses something, ask what
+  KIND of statement it cannot see, not which statement it forgot.*
+- **`case` patterns are globs.** Third time this release cycle that configuration read
+  as a stricter language than it is — after `type=sha,value=` (silently ignored) and
+  `type=raw,value=latest,enable=false` (a disabled duplicate). Go would not compile these
+  mistakes; YAML, shell and action inputs accept them and carry on.
+
 ## [0.23.8] - 2026-08-28 — An approval that binds the action, and a fence with no cheaper path
 
 Two findings from an external technical review (`reports/report_20260828_gpt-5.md`),

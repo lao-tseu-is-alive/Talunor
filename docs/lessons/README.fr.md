@@ -11,7 +11,7 @@ Ce répertoire transforme cette idée en un parcours guidé. Chaque leçon a un 
 clair, une courte liste de lecture, une expérience pratique et une checklist pour
 savoir quand tu as terminé.
 
-> **Statut : en cours.** Les leçons 00–24 sont prêtes, **entièrement en
+> **Statut : en cours.** Les leçons 00–25 sont prêtes, **entièrement en
 > anglais et en français** (utilise le sélecteur de langue en haut de chaque page).
 > L'Itération 5 (« mémoire véridique ») a livré les couches 20 à 24, chacune avec sa leçon.
 

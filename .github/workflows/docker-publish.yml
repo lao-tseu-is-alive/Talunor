@@ -37,10 +37,11 @@ jobs:
         run: |
           tag="${{ inputs.tag }}"
           [ -n "$tag" ] || tag="${GITHUB_REF#refs/tags/}"
-          case "$tag" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "::error::'$tag' is not a vX.Y.Z tag — refusing to publish"; exit 1 ;;
-          esac
+          # ANCHORED, not a shell glob. `case` patterns are globs: `v[0-9]*.[0-9]*.[0-9]*`
+          # reads as "a digit then anything", so it happily accepts v1abc.2.3 and
+          # v1.2.3-oops. A publish target must be exactly vMAJOR.MINOR.PATCH.
+          printf '%s' "$tag" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' || {
+            echo "::error::'$tag' is not an exact vX.Y.Z tag — refusing to publish"; exit 1; }
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "publishing $tag" >&2
 
@@ -48,6 +49,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.target.outputs.tag }}
+
+      # The tag says which version this is; internal/version says which version the
+      # code believes it is. If they disagree, something was tagged off-ritual and the
+      # artefact would carry a version its own binary denies.
+      - name: Tag matches internal/version
+        run: |
+          want="${{ steps.target.outputs.tag }}"
+          got="v$(grep -oE 'Version = "[0-9]+\.[0-9]+\.[0-9]+"' internal/version/version.go \
+                  | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+          [ "$want" = "$got" ] || {
+            echo "::error::tag $want but internal/version says $got — refusing to publish"; exit 1; }
+          echo "version check: $want == $got"
 
       - name: Build metadata
         run: |

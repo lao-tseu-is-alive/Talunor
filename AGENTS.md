@@ -1033,12 +1033,32 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   below. And **a test can hold a hole open**: `TestPlannedPlanModeMediumRiskCoveredByPlan`
   asserted the gap as intended behaviour; a green test proves the code does what someone once
   meant, not that the meaning was right.
+- **v0.23.9 (fixes)** = **the XS tier of the 2026-08-28 review, plus the guard that should
+  have caught two of them.** (1) **`scripts/initial_setup.sh` maintained a SECOND
+  artefact-fetch path** — `curl -sL`, no checksums, no `-f`, a MUTABLE HuggingFace `main`
+  URL, and `go get`/`go mod tidy` — while `make deps` pins every byte and fails closed. A
+  contributor following the discoverable script loaded **unverified native code** into the
+  process. Now prerequisite checks + `exec make deps`. (2) **Tag validation was a shell
+  GLOB**: `case` patterns are globs, so `v[0-9]*.[0-9]*.[0-9]*` accepts `v1abc.2.3`. Now an
+  anchored `grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'` in both publish workflows, plus a step
+  comparing the tag to `internal/version` after checkout. (3) **A future schema is refused**
+  — `runMigrations` never compared the stored version to the highest this binary knows, so an
+  older build would silently read and write a schema it does not understand. (4) Two doc
+  drifts (README table stopped at Layer 23; lessons index said 00–24 while listing 25) —
+  fixed **with two new `docs-assert` assertions**, verified by re-introducing both drifts.
+  **Keepers: documentation that duplicates a security mechanism does not stay a copy** — it
+  becomes an older, weaker version whose weakness is precisely verification. And **a drift
+  alarm has a SHAPE**: docs-assert missed both because every check re-derived a claim from
+  code, and "lessons 00–24 are ready" makes no claim code can answer; the fix was a different
+  comparison (document vs ARTEFACT — the directory listing, the roadmap's own record), not
+  more claim checks. *When a guard misses something, ask what KIND of statement it cannot
+  see.* Third time this cycle that config read as a stricter language than it is.
 - **Next — open threads.** Same per-layer checkpoint rhythm. Ordered by what a failure
   would cost, not by effort. *(Closed: "reference docs have no drift alarm" → v0.23.6;
   `agent.go` split → v0.22.5.)*
 
   **A. Remaining findings from the 2026-08-28 review** (all verified against the code):
-  1. **`scripts/initial_setup.sh` bypasses the supply chain** — `curl -sL` with no
+  1. ~~`scripts/initial_setup.sh` bypasses the supply chain~~ — **CLOSED v0.23.9.** — `curl -sL` with no
      checksum and no `-f`, a mutable HuggingFace `main` URL, plus `go get`/`go mod tidy`.
      The canonical `make deps` verifies exact bytes and fails closed. Replace the body
      with `exec make deps`, or retire it into a lesson. *Never two artefact-fetch paths.*
@@ -1053,12 +1073,12 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
      under exclusive state before the drain signal, plus a barrier-controlled interleaving
      test. *(Introduced by v0.22.3's own fix for the panic — narrow the window, do not
      re-open it.)*
-  4. **Release tag validation is a glob, not SemVer** — `v[0-9]*.[0-9]*.[0-9]*` accepts
+  4. ~~Release tag validation is a glob, not SemVer~~ — **CLOSED v0.23.9.** — `v[0-9]*.[0-9]*.[0-9]*` accepts
      `v1abc.2.3`. Anchor the expression and compare the tag to `internal/version`.
-  5. **A newer schema is not rejected** — an older binary opens a database migrated by a
+  5. ~~A newer schema is not rejected~~ — **CLOSED v0.23.9.** — an older binary opens a database migrated by a
      newer one and writes to a schema it does not understand. Fail startup with an
      actionable message; add the future-version migration test.
-  6. **Two doc drifts `docs-assert` does not see** — the README Iteration-5 table stops at
+  6. ~~Two doc drifts `docs-assert` does not see~~ — **CLOSED v0.23.9** (drifts fixed AND both assertions added). — the README Iteration-5 table stops at
      Layer 23 (Layer 24 shipped in v0.23.0), and `docs/lessons/README.md` says "00–24" while
      listing 25. Fix both, then add the two assertions: the layer table must cover every
      shipped layer, and the status line must agree with the directory listing.

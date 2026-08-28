@@ -11,7 +11,7 @@ This directory turns that idea into a guided path. Each lesson has a clear goal,
 short reading list, a hands-on experiment, and a checklist so you know when you're
 done.
 
-> **Status: in progress.** Lessons 00–24 are ready, **fully bilingual EN/FR** (use the
+> **Status: in progress.** Lessons 00–25 are ready, **fully bilingual EN/FR** (use the
 > language switcher at the top of each page). Iteration 5 ("truthful memory") has shipped
 > Layers 20–24, each with its lesson.
 

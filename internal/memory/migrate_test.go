@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -157,5 +159,35 @@ func TestMigrateBaselinesLegacy(t *testing.T) {
 	}
 	if n, _ := s2.Count(ctx); n != 1 {
 		t.Errorf("memory count after baseline = %d, want 1 (no data loss)", n)
+	}
+}
+
+// TestMigrateRejectsFutureSchema: an older binary must refuse a database migrated
+// by a newer one. The migration list only moves forward, so without this check the
+// old build would silently read and write a schema it does not understand — nothing
+// would fail at the time, and the damage would surface later, in the newer binary.
+func TestMigrateRejectsFutureSchema(t *testing.T) {
+	ctx := context.Background()
+	cfg := provConfig(t) // same temp dir for both opens, so the file persists
+
+	s, err := Open(cfg)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	// Stamp a version this build cannot know about.
+	future := latestSchemaVersion() + 1
+	if err := metaSetOn(ctx, s.db, metaSchemaVersion, []byte(strconv.Itoa(future))); err != nil {
+		t.Fatalf("stamp future version: %v", err)
+	}
+	s.Close()
+
+	_, err = Open(cfg)
+	if err == nil {
+		t.Fatal("opening a database from a newer build must fail, not proceed silently")
+	}
+	for _, want := range []string{"newer Talunor", strconv.Itoa(future)} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should be actionable and name the versions; missing %q: %v", want, err)
+		}
 	}
 }

@@ -298,15 +298,15 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.8** — **an approval that binds the action, and a fence with
-> no cheaper path.** Two findings from an external review, fixed together because they
-> compose into one exfiltration path. A whole-plan approval displayed concrete arguments
-> but bound only the tool name below `RiskHigh` — and `web_fetch` sits at `RiskMedium`,
-> so an approved fetch to `docs.example` could execute against `evil.example`. It now
-> binds the **arguments it displayed**; running exactly what was shown still needs no
-> extra prompt. And every tool result now arrives fenced as untrusted data: recalled
-> memory was fenced, but `recall_memory` — which needs no approval — returned the same
-> text unfenced. A mitigation with a cheaper path around it is barely a mitigation.
+> Current version: **v0.23.9** — **four corrections, and the guard that should have
+> caught two of them.** `scripts/initial_setup.sh` fetched the native extensions with
+> no checksum verification while `make deps` pins every byte — a discoverable path that
+> loaded **unverified native code**; it now delegates. Release tags are matched with an
+> anchored SemVer expression instead of a shell glob (which accepted `v1abc.2.3`) and
+> checked against `internal/version`. A database migrated by a newer build is refused
+> rather than silently written to. And two status-line drifts are fixed **with the two
+> `docs-assert` assertions that would have caught them** — comparing documents against
+> artefacts, not prose.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
@@ -413,6 +413,7 @@ uncalibrated model should not silently gain the authority of an established one.
 | 21 | **Contradiction & supersession** — a new fact supersedes an old, incompatible one, governed by an explicit, per-domain **trust model** (`memory.Supersedes`); the model never overrides the user, a `Verified` tool can retire a stale belief; soft (reversible, auditable) | ✅ done (v0.20.0) |
 | 22 | **Hybrid recall** — vector ∪ lexical (FTS5/BM25) fused by reciprocal rank, so an exact identifier or rare term is retrievable even though embeddings cannot tell two of them apart; still weighted by confidence & salience | ✅ done (v0.21.0) |
 | 23 | **Subject as data** — a fact records what it is *about* (`user`/`world`) beside who stated it, assigned by which question reflection asked; claims about different subjects never retire each other, so the per-domain trust model of Layer 21 holds without depending on a prompt or an arbiter's verdict | ✅ done (v0.22.0) |
+| 24 | **Contested claims** — a correction the trust model *refuses* is recorded as counter-evidence against the fact it failed to retire, instead of being dropped; the fact stays believed but reports **contested**, and `/why` shows both sides. The status is **derived** from the evidence at read time, never stored beside it, so it cannot drift from its own justification | ✅ done (v0.23.0) |
 
 The thesis: Iteration 4 made memory *learn, retain, and forget*; Iteration 5 makes it
 stay **true** — learn from its own actions, justify its beliefs, and correct itself.

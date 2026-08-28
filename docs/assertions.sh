@@ -130,6 +130,25 @@ assert "3.7 recalled memory is fenced as untrusted DATA" \
 assert "3.8 the turn hands learning to a background worker" \
 	'grep -q "func (a \*Agent) enqueueReflect" internal/agent/learn.go'
 
+echo "==> status lines agree with what actually shipped"
+
+# CODE -> DOC again, and the reason this section exists: docs-assert shipped in
+# v0.23.6 and a review found two status drifts the next day. The README's layer table
+# stopped at Layer 23 while Layer 24 had shipped in v0.23.0, and the lessons index
+# said "00–24" while listing 25. Both are the same shape as the ADR gap — a document
+# that has not heard of something the repository already did — and neither was
+# guarded, because a status line makes no claim a code check can re-derive.
+#
+# So compare the documents against the ARTEFACTS: the directory listing, and the
+# roadmap's own record of what is done.
+assert "the lessons index status line matches the lessons on disk" \
+	'last=$(ls -d docs/lessons/[0-9]*/ | sed "s|.*/\([0-9][0-9]\)-.*|\1|" | sort -n | tail -1);
+	 grep -q "Lessons 00–$last are ready" docs/lessons/README.md &&
+	 grep -q "leçons 00–$last sont prêtes" docs/lessons/README.fr.md'
+assert "the README iteration table covers every layer AGENTS.md calls done" \
+	'last=$(grep -oE "Layer [0-9]+ \(done\)" AGENTS.md | grep -oE "[0-9]+" | sort -n | tail -1);
+	 grep -qE "^\| $last \|" README.md'
+
 echo "==> architecture.md — the two languages stay structurally in step"
 
 # A section added to one language and not the other is the most common way this

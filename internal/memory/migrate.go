@@ -176,6 +176,21 @@ func (s *Store) runMigrations(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// A database from the FUTURE is not something to work around. The migration list
+	// only moves forward, so an older binary opening a newer database would silently
+	// read — and write — a schema it does not know: columns it never selects, tables
+	// whose invariants it cannot maintain. Nothing here would fail; the damage would
+	// be quiet and would surface later, in the newer binary.
+	//
+	// Refusing is the only honest option: this build cannot know what version N+1
+	// meant. Say so, and name the fix.
+	if latest := latestSchemaVersion(); current > latest {
+		return fmt.Errorf(
+			"database schema is version %d but this build only understands %d — "+
+				"it was migrated by a newer Talunor. Upgrade this binary, or point "+
+				"TALUNOR_DB at a different file; downgrading a database is not supported",
+			current, latest)
+	}
 	for _, m := range migrations {
 		if m.version <= current {
 			continue
