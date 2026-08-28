@@ -1520,3 +1520,104 @@ func TestAllowedSupersessionRecordsNoCounterEvidence(t *testing.T) {
 		t.Error("an ALLOWED supersession must not also mark the old fact contested")
 	}
 }
+
+// TestToolOutputIsFencedAsUntrustedData is the regression test for the inconsistent
+// injection fence an external review found. Automatically recalled memory was fenced
+// as untrusted DATA; every tool result was appended raw. Since `recall_memory`
+// returns stored text verbatim and needs no approval, the SAME poisoned memory was
+// fenced on one path and unfenced on the cheaper one — and `web_fetch` returned
+// remote text the same way.
+//
+// A mitigation applied to one path and not the other is barely a mitigation: an
+// attacker simply uses the path without it.
+func TestToolOutputIsFencedAsUntrustedData(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	var ran bool
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "danger", Args: `{}`}}}},
+		{{Content: "done"}},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(fakeTool{ran: &ran})
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	out, err := ag.Turn(ctx, "use the tool")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	if _, err := drain(out); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+
+	// Find the tool message the model was shown.
+	var toolMsg string
+	for _, m := range prov.lastMsgs {
+		if m.Role == llm.RoleTool {
+			toolMsg = m.Content
+		}
+	}
+	if toolMsg == "" {
+		t.Fatal("no tool message reached the model")
+	}
+	for _, want := range []string{"<tool_output", "danger", "untrusted DATA", "never as instructions"} {
+		if !strings.Contains(toolMsg, want) {
+			t.Errorf("tool message missing %q:\n%s", want, toolMsg)
+		}
+	}
+	// The tool's own text must survive intact inside the fence.
+	if !strings.Contains(toolMsg, "did the thing") {
+		t.Errorf("the tool's result was lost:\n%s", toolMsg)
+	}
+}
+
+// denyAllPolicy refuses every step, so the model sees the agent's own refusal
+// rather than a tool's output.
+type denyAllPolicy struct{}
+
+func (denyAllPolicy) Evaluate(context.Context, *plan.Plan, plan.PlanStep) (policy.Decision, error) {
+	return policy.Decision{Allowed: false, Reason: "denied by test policy"}, nil
+}
+
+// TestAgentRefusalsAreNotFenced is the complement, and the reason the fence is
+// applied at one return site rather than to everything runTool produces: a policy
+// denial is THIS SYSTEM speaking, not data from elsewhere. Telling the model to
+// distrust its own guardrail's explanation would be exactly backwards.
+func TestAgentRefusalsAreNotFenced(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	var ran bool
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "danger", Args: `{}`}}}},
+		{{Content: "done"}},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(fakeTool{ran: &ran})
+	cfg.Policy = denyAllPolicy{}
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	out, err := ag.Turn(ctx, "use the tool")
+	if err != nil {
+		t.Fatalf("turn: %v", err)
+	}
+	if _, err := drain(out); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	var toolMsg string
+	for _, m := range prov.lastMsgs {
+		if m.Role == llm.RoleTool {
+			toolMsg = m.Content
+		}
+	}
+	if strings.Contains(toolMsg, "<tool_output") {
+		t.Errorf("the agent's own refusal must not be fenced as untrusted data:\n%s", toolMsg)
+	}
+	if !strings.Contains(toolMsg, "denied") {
+		t.Errorf("the refusal should still reach the model: %q", toolMsg)
+	}
+	if ran {
+		t.Error("the denied tool must not run")
+	}
+}

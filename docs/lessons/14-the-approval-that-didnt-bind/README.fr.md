@@ -251,6 +251,7 @@ l'altitude change :
 |---|---|---|
 | v0.13.1 (corrigé en v0.13.2) | le **nom** de l'outil | ses **arguments** |
 | v0.22.2 (corrigé en v0.22.3) | *rien*, dès que la politique substituait l'outil | nom **et** arguments |
+| v0.23.7 (corrigé en v0.23.8) | le nom — et les arguments **seulement au-dessus de `RiskHigh`** | les arguments de tout ce qui est en dessous, dont chaque `web_fetch` |
 
 Le correctif repose les deux questions, à propos de l'outil qui va réellement
 s'exécuter : est-il dans `exec.allowTools`, et que vaut-*il* pour la politique ? Deux
@@ -259,10 +260,30 @@ tests de non-régression le verrouillent (`TestPolicyModifiedCannotEscapeThePlan
 ÉCHOUENT sur le code d'avant le correctif, car un test de non-régression qui passe
 avant le correctif ne garde rien du tout.
 
-Ce qu'il faut retenir n'est pas « nous avons eu le bug deux fois ». C'est que
+**Puis une troisième fois, trouvée par une revue externe.** Le mode plan ne
+re-confirmait les arguments vivants qu'à `RiskHigh` — or `web_fetch`, derrière sa
+liste d'autorisation, vaut `RiskMedium`. Un plan approuvé affichant une requête vers
+`docs.example` pouvait donc exécuter une requête vers `evil.example` : l'outil était
+plafonné, le seuil de risque respecté, et la destination — la seule chose qui
+comptait — n'était liée par rien. Un test affirmait même ce comportement, et c'est
+ainsi qu'un trou reste ouvert : il avait été *consigné comme voulu*.
+
+Le correctif a cessé de rapiécer le seuil pour lier la chose elle-même. `execCtx`
+transporte désormais les arguments que le plan a **affichés**, et un appel dont les
+arguments s'en écartent redemande confirmation quel que soit son niveau de risque.
+Remarque ce que ça achète : exécuter exactement ce qui a été montré ne demande
+*aucune* invite supplémentaire, puisque l'humain l'a déjà vu. Une étape que le plan a
+laissée sans arguments ne lie rien du tout — elle n'a affiché aucune action, il n'y a
+donc rien à quoi consentir.
+
+Ce qu'il faut retenir n'est pas « nous avons eu le bug trois fois ». C'est que
 **chaque endroit où une décision est transmise plus loin est un endroit où le lien
 peut se perdre** — la question « qu'est-ce que cette approbation lie exactement ? »
 doit donc être reposée à chaque étape, et non tranchée une fois pour le système.
+Remarque aussi ce que chaque correctif liait : d'abord les arguments, puis l'identité
+de l'outil, puis les arguments *en dessous d'un seuil*. Chacun énonçait quelque chose
+de vrai d'un cas plus étroit que la promesse. **Une garantie assortie d'une réserve
+est une garantie sur la réserve.**
 
 ## Checklist de fin
 

@@ -1011,6 +1011,81 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   **Note: choosing a thumbnail is an artefact audit too** — the first candidate looked ideal in
   the timeline and was full of hallucinated text (`SARARO?I3IPE CA?I681A00023`); generated video
   invents writing that LOOKS like data, and the thumbnail is the one frame everybody sees.
-- **Next — open threads (documented, not started):** calibration→policy wiring;
-  the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
-  tests; calibration output 0600 + KDF. (The "reference docs have no drift alarm" thread is CLOSED by v0.23.6.) Same per-layer checkpoint rhythm.
+- **v0.23.8 (fixes)** = **an approval that binds the ACTION, and a fence with no cheaper
+  path.** Two findings from the 2026-08-28 external review, verified against the code and
+  fixed TOGETHER because they compose into one exfiltration path. (1) A whole-plan approval
+  displayed concrete arguments but execution was capped by tool NAME, and plan mode
+  re-confirmed live args only at `RiskHigh` — while `web_fetch` behind its allowlist gate is
+  `RiskMedium`. An approved fetch to `docs.example` could execute against `evil.example`.
+  Now `execCtx.approvedArgs` holds the payloads the plan DISPLAYED (compared canonically, so
+  key order is not drift) and any drifted call re-prompts **whatever its risk level** —
+  quieter than the review's stopgap (re-approve all medium), because running exactly what was
+  shown needs no prompt. **Case the review missed: an argument-less plan step binds NOTHING**
+  (it displayed no action), else a lazy planner defeats the mechanism by omitting arguments.
+  (2) Tool results now arrive fenced in `<tool_output tool="…">` with the same sentence as the
+  memory fence (one shared const). Recalled memory was fenced but `recall_memory` — which
+  needs NO approval — returned the same text unfenced. **The agent's own refusals stay
+  unfenced**: that is this system speaking, and telling the model to distrust its own
+  guardrail would be backwards; the fence sits at the single return site carrying a value
+  from outside. Reflection learns from the UNFENCED text. Lesson 14 gains its **third
+  instance** (EN+FR). **Keepers: a guarantee with a qualifier is a guarantee about the
+  qualifier** — "arguments are bound" meant *above RiskHigh*, and the tool that mattered sat
+  below. And **a test can hold a hole open**: `TestPlannedPlanModeMediumRiskCoveredByPlan`
+  asserted the gap as intended behaviour; a green test proves the code does what someone once
+  meant, not that the meaning was right.
+- **Next — open threads.** Same per-layer checkpoint rhythm. Ordered by what a failure
+  would cost, not by effort. *(Closed: "reference docs have no drift alarm" → v0.23.6;
+  `agent.go` split → v0.22.5.)*
+
+  **A. Remaining findings from the 2026-08-28 review** (all verified against the code):
+  1. **`scripts/initial_setup.sh` bypasses the supply chain** — `curl -sL` with no
+     checksum and no `-f`, a mutable HuggingFace `main` URL, plus `go get`/`go mod tidy`.
+     The canonical `make deps` verifies exact bytes and fails closed. Replace the body
+     with `exec make deps`, or retire it into a lesson. *Never two artefact-fetch paths.*
+  2. **`/forget` has no graph-wide contract** — it deletes one `memories` row; `evidence`
+     has no FKs, and Layer 24's `detail` column holds the REFUSED CLAIM TEXT, so
+     "forgetting" leaves that text at rest. This is a DECISION before it is a fix
+     (privacy erasure vs auditable tombstone) and probably wants **ADR 0006**.
+  3. **Reflection shutdown admission/drain race** — `Close` publishes `closing` *before*
+     taking `closeMu`, so a sender already parked in the select can enqueue after the
+     worker has drained and exited: the job is lost and `reflectWG.Done` never runs, so a
+     later `Quiesce` hangs. `-race` cannot see a liveness race. Needs admission stopped
+     under exclusive state before the drain signal, plus a barrier-controlled interleaving
+     test. *(Introduced by v0.22.3's own fix for the panic — narrow the window, do not
+     re-open it.)*
+  4. **Release tag validation is a glob, not SemVer** — `v[0-9]*.[0-9]*.[0-9]*` accepts
+     `v1abc.2.3`. Anchor the expression and compare the tag to `internal/version`.
+  5. **A newer schema is not rejected** — an older binary opens a database migrated by a
+     newer one and writes to a schema it does not understand. Fail startup with an
+     actionable message; add the future-version migration test.
+  6. **Two doc drifts `docs-assert` does not see** — the README Iteration-5 table stops at
+     Layer 23 (Layer 24 shipped in v0.23.0), and `docs/lessons/README.md` says "00–24" while
+     listing 25. Fix both, then add the two assertions: the layer table must cover every
+     shipped layer, and the status line must agree with the directory listing.
+  7. **Startup diagnostics for malformed config** — invalid numeric/duration env values
+     silently fall back to defaults, so a typo in a retention, confidence or timeout
+     setting looks like an accepted setting.
+
+  **B. Longer-lead engineering** (real, deferred by agreement 2026-08-28):
+  - **Fuzz targets** for the hostile-input surfaces: dotenv and YAML parsing, SSE/tool-call
+     assembly, URL/IP handling in the SSRF guard, FTS5 `matchExpression`, sandbox argument
+     plumbing. None exist today.
+  - **Benchmarks** for recall at realistic memory counts (vector, FTS5, and the RRF fusion),
+     plus migration and FTS rebuild cost. Retrieval scaling has no measured baseline.
+  - **Digest-pin base images** (builder, distroless runtime, and the `alpine:3.20` sandbox
+     image) so a clean rebuild cannot move without a source change; document the refresh.
+  - **`cmd/*` coverage is 0%** — provider selection, shutdown/drain ordering, exit codes,
+     generated-file permissions. Also `internal/render` (the reasoning/answer ANSI state
+     machine) and console approval rendering.
+  - **A CI job that REQUIRES sandbox capabilities** — hosted CI sets `TALUNOR_REQUIRE=ext,fts5`,
+     so namespace and OCI backend tests can still skip there. Lesson 22's problem, in CI.
+  - **A configurable LLM turn deadline** and a per-turn correlation id, to diagnose stalled
+     or expensive provider calls.
+
+  **C. Layers, when the corrections are done:**
+  - **Evidence independence** (vision §15) — `EvidenceCredibility` reasons per provenance
+     *class*, so fifty restatements of one source count fifty times. This is what blocks
+     contested claims from moving from one bit to a scale. **The strongest next layer.**
+  - Retraction, so a belief can be vindicated and not only contested (ADR 0005's asymmetry).
+  - calibration→policy wiring; the executed plan as a learning source; calibration output
+     0600 + a real KDF.

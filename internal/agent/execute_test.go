@@ -165,7 +165,9 @@ func TestPlannedPlanModeDenyHighRiskStops(t *testing.T) {
 }
 
 // TestPlannedPlanModeMediumRiskCoveredByPlan: a medium-risk step (an arg-gated
-// tool, like web_fetch) rides on the whole-plan approval — no per-step re-prompt.
+// tool, like web_fetch) rides on the whole-plan approval — no per-step re-prompt —
+// PROVIDED the live arguments are the ones the plan displayed. That proviso is the
+// whole contract; the drift case is the test below.
 func TestPlannedPlanModeMediumRiskCoveredByPlan(t *testing.T) {
 	store := testStore(t)
 	var ran bool
@@ -537,5 +539,80 @@ func TestPolicyModifiedRederivesRiskForTheSubstitutedTool(t *testing.T) {
 	}
 	if !otherRan {
 		t.Error("the approved substituted tool should have run")
+	}
+}
+
+// TestPlannedPlanModeMediumRiskArgumentDriftReapproves is the regression test for
+// the approval-binding gap an external review found: the prompt renders the plan's
+// concrete arguments and calls them the actions being consented to, but execution
+// was capped by tool NAME alone. `web_fetch` under its allowlist gate is
+// RiskMedium, and plan mode only re-prompted at RiskHigh — so a plan displaying a
+// fetch to host A could execute a fetch to host B under the earlier approval.
+//
+// This is Lesson 14's defect a third time, at a third altitude: v0.13.1 bound the
+// tool name but not the arguments, v0.22.2 bound neither once the policy swapped
+// the tool, and here the binding held only above a risk threshold the network tool
+// sits below.
+func TestPlannedPlanModeMediumRiskArgumentDriftReapproves(t *testing.T) {
+	store := testStore(t)
+	var ran bool
+	// The plan displays host A. The model emits host B.
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "arg_gated", Args: `{"host":"evil.example"}`}}}},
+		{{Content: "done"}},
+	}}
+	pl := &plan.Plan{Goal: "fetch the docs", Steps: []plan.PlanStep{
+		{ID: "s1", Type: plan.StepTool, Tool: "arg_gated",
+			Arguments: json.RawMessage(`{"host":"docs.example"}`), Rationale: "fetch"},
+		{ID: "s2", Type: plan.StepFinal, Rationale: "answer"},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(argGatedTool{ran: &ran})
+	cfg.Planner = fakePlanner{pl: pl}
+	cfg.ApprovalMode = ApprovalPlan
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	approvals, _, _ := drainPlanned(t, ag, true)
+
+	// The whole-plan approval, then a live re-prompt because the destination moved.
+	if len(approvals) < 2 {
+		t.Fatalf("approvals = %v; a call whose arguments drift from the plan must re-prompt", approvals)
+	}
+	var reprompted bool
+	for _, a := range approvals[1:] {
+		if a == "arg_gated" {
+			reprompted = true
+		}
+	}
+	if !reprompted {
+		t.Errorf("approvals = %v; want a live re-prompt for the drifted call", approvals)
+	}
+}
+
+// TestPlannedArgumentlessStepBindsNothing: a plan step that displays no arguments
+// has shown the human no action, so every call to that tool counts as drift. The
+// human approved a tool, not a thing done with it.
+func TestPlannedArgumentlessStepBindsNothing(t *testing.T) {
+	store := testStore(t)
+	var ran bool
+	prov := &scriptedProvider{steps: [][]llm.Chunk{
+		{{ToolCalls: []llm.ToolCall{{ID: "c1", Name: "arg_gated", Args: `{"host":"anything"}`}}}},
+		{{Content: "done"}},
+	}}
+	pl := &plan.Plan{Goal: "fetch", Steps: []plan.PlanStep{
+		{ID: "s1", Type: plan.StepTool, Tool: "arg_gated", Rationale: "fetch something"},
+		{ID: "s2", Type: plan.StepFinal, Rationale: "answer"},
+	}}
+	cfg := DefaultConfig()
+	cfg.Tools = tools.NewRegistry(argGatedTool{ran: &ran})
+	cfg.Planner = fakePlanner{pl: pl}
+	cfg.ApprovalMode = ApprovalPlan
+	cfg.Extractor = DisableReflection()
+	ag := New(store, prov, cfg)
+
+	approvals, _, _ := drainPlanned(t, ag, true)
+	if len(approvals) < 2 {
+		t.Errorf("approvals = %v; an argument-less plan step binds nothing and must re-prompt", approvals)
 	}
 }

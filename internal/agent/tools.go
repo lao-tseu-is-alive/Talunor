@@ -23,7 +23,12 @@ import (
 // above that risk still re-prompts with its *live* arguments; a policy denial
 // always holds. It returns the observation and done=true if the context was
 // cancelled while waiting (the caller should stop).
-func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCall, exec execCtx) (obs string, done bool) {
+// It returns TWO strings: `obs` is what the model sees — a tool's output arrives
+// fenced as untrusted data — and `raw` is the unfenced text, which is what
+// reflection learns from. The agent's own refusals are not fenced: they are this
+// system speaking, not data from elsewhere, and telling the model to distrust its
+// own guardrail's explanation would be exactly wrong.
+func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCall, exec execCtx) (obs, raw string, done bool) {
 	p := plan.NewToolCallPlan(tc.Name, json.RawMessage(tc.Args))
 	step := p.Steps[0]
 
@@ -31,11 +36,11 @@ func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCa
 	if err != nil {
 		// A policy that cannot decide does not get to run the tool.
 		a.trace("policy.error", "name", tc.Name, "err", err)
-		return fmt.Sprintf("error: policy evaluation failed, tool not run: %v", err), false
+		return fmt.Sprintf("error: policy evaluation failed, tool not run: %v", err), "", false
 	}
 	if d.Denied() {
 		a.trace("policy.deny", "name", tc.Name, "reason", d.Reason)
-		return fmt.Sprintf("error: policy denied this tool call (%s)", d.Reason), false
+		return fmt.Sprintf("error: policy denied this tool call (%s)", d.Reason), "", false
 	}
 
 	// A policy may rewrite the step before it runs (e.g. force a safer argument
@@ -61,23 +66,23 @@ func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCa
 	if name != tc.Name {
 		if exec.allowTools != nil && !exec.allowTools[name] {
 			a.trace("policy.modify.blocked", "from", tc.Name, "to", name, "reason", "outside the approved plan")
-			return fmt.Sprintf("error: the policy rewrote this call to %q, which the approved plan does not allow", name), false
+			return fmt.Sprintf("error: the policy rewrote this call to %q, which the approved plan does not allow", name), "", false
 		}
 		sub := plan.NewToolCallPlan(name, args)
 		d2, err := a.policy.Evaluate(ctx, sub, sub.Steps[0])
 		if err != nil {
 			a.trace("policy.error", "name", name, "err", err)
-			return fmt.Sprintf("error: policy evaluation failed, tool not run: %v", err), false
+			return fmt.Sprintf("error: policy evaluation failed, tool not run: %v", err), "", false
 		}
 		if d2.Denied() {
 			a.trace("policy.deny", "name", name, "reason", d2.Reason)
-			return fmt.Sprintf("error: policy denied this tool call (%s)", d2.Reason), false
+			return fmt.Sprintf("error: policy denied this tool call (%s)", d2.Reason), "", false
 		}
 		// One rewrite only. A policy that keeps redirecting does not get to run
 		// anything — there would be no stable effect left to approve.
 		if d2.Modified != nil && d2.Modified.Tool != "" && d2.Modified.Tool != name {
 			a.trace("policy.modify.blocked", "from", name, "to", d2.Modified.Tool, "reason", "second rewrite")
-			return "error: the policy rewrote this tool call twice, tool not run", false
+			return "error: the policy rewrote this tool call twice, tool not run", "", false
 		}
 		if d2.Modified != nil {
 			args = d2.Modified.Arguments
@@ -85,19 +90,33 @@ func (a *Agent) runTool(ctx context.Context, out chan<- llm.Chunk, tc llm.ToolCa
 		d = d2 // risk and approval now describe the tool that will ACTUALLY run.
 	}
 
-	if d.NeedsApproval() && d.RiskLevel >= exec.reapproveAtOrAbove {
+	// A call the policy wants approved is re-prompted when it is risky enough OR when
+	// its arguments departed from the approved plan. The second half is what makes a
+	// whole-plan approval bind the ACTION and not merely the tool: the prompt showed
+	// a destination, so a different destination is a different thing to consent to.
+	drifted := exec.argsDrifted(name, args)
+	if drifted {
+		a.trace("plan.args.drift", "name", name, "args", oneLine(string(args), 120))
+	}
+	if d.NeedsApproval() && (drifted || d.RiskLevel >= exec.reapproveAtOrAbove) {
 		req := llm.NewApprovalRequest(name, string(args))
 		if !a.send(ctx, out, llm.Chunk{Approval: req}) {
-			return "", true
+			return "", "", true
 		}
 		if !req.Decision(ctx) {
 			if ctx.Err() != nil {
-				return "", true
+				return "", "", true
 			}
-			return "error: the user denied permission to run this tool", false
+			return "error: the user denied permission to run this tool", "", false
 		}
 	}
-	return a.tools.Execute(ctx, name, args), false
+	// The one place a value from OUTSIDE this process enters the conversation.
+	// Fence it: `web_fetch` returns remote text and `recall_memory` returns stored
+	// text verbatim, so an instruction planted in either would otherwise arrive as
+	// an ordinary tool message. Automatic recall was already fenced; applying the
+	// mitigation to one path and not the other left the cheaper path open.
+	result := a.tools.Execute(ctx, name, args)
+	return fencedObservation(name, result), result, false
 }
 
 // toolSpecs converts the registry's definitions into the provider's tool specs.

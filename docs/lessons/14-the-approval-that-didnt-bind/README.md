@@ -234,6 +234,7 @@ altitude changed:
 |---|---|---|
 | v0.13.1 (fixed in v0.13.2) | the tool's **name** | its **arguments** |
 | v0.22.2 (fixed in v0.22.3) | *nothing*, once the policy substituted the tool | name **and** arguments |
+| v0.23.7 (fixed in v0.23.8) | the name — and the arguments **only above `RiskHigh`** | the arguments of anything below it, including every `web_fetch` |
 
 The fix asks both questions again, about the tool that will actually run: is it
 inside `exec.allowTools`, and what does the policy score *it* at? Two regression
@@ -242,10 +243,27 @@ tests pin it (`TestPolicyModifiedCannotEscapeThePlanCap`,
 FAIL against the pre-fix code, because a regression test that passes before the fix
 guards nothing.
 
-The transferable point is not "we had the bug twice". It is that **every place a
-decision is carried forward is a place the binding can be lost** — so the question
+**Then a third time, found by an external review.** Plan mode re-confirmed live
+arguments only at `RiskHigh` — and `web_fetch` under its allowlist gate is
+`RiskMedium`. So an approved plan displaying a fetch to `docs.example` could execute
+a fetch to `evil.example`: the tool was capped, the risk threshold was respected, and
+the destination — the only part that mattered — was never bound. A test even asserted
+the behaviour, which is how a hole stays open: it had been *written down as intended*.
+
+The fix stopped patching the threshold and bound the thing itself. `execCtx` now
+carries the argument payloads the plan **displayed**, and a call whose arguments
+drift from them re-prompts whatever its risk level. Note the direction that buys:
+running exactly what was shown needs *no* extra prompt, because the human already saw
+it. A step the plan left argument-less binds nothing at all — it displayed no action,
+so there is nothing to have consented to.
+
+The transferable point is not "we had the bug three times". It is that **every place
+a decision is carried forward is a place the binding can be lost** — so the question
 "what exactly does this approval bind?" has to be re-asked at each hop, not answered
-once for the system.
+once for the system. Notice also what each fix bound: first the arguments, then the
+tool identity, then the arguments *below a threshold*. Each was a true statement about
+a narrower case than the promise. **A guarantee with a qualifier is a guarantee about
+the qualifier.**
 
 ## Completion checklist
 

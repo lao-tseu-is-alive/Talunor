@@ -86,14 +86,16 @@ func (a *Agent) runPlanned(ctx context.Context, msgs []llm.Message, input string
 	exec := execCtx{}
 	switch a.cfg.ApprovalMode {
 	case ApprovalPlan:
-		// The plan approval covers low/medium-risk steps; high-risk steps (e.g. the
-		// shell) still re-prompt with the arguments the executor actually chose,
-		// which may differ from those the approved plan displayed.
+		// The plan approval covers steps the executor runs AS DISPLAYED; high-risk
+		// steps (e.g. the shell) re-prompt regardless, and so does any step whose
+		// live arguments drift from the ones the human saw — see execCtx.approvedArgs.
 		exec.allowTools = toolSetOf(pl)
+		exec.approvedArgs = approvedArgsOf(pl)
 		exec.reapproveAtOrAbove = plan.RiskHigh
 	case ApprovalStep:
 		// Belt and braces: approve the plan AND re-confirm every risky step live.
 		exec.allowTools = toolSetOf(pl)
+		exec.approvedArgs = approvedArgsOf(pl)
 		exec.reapproveAtOrAbove = plan.RiskLow
 	case ApprovalHighRisk:
 		// The plan is advisory: no whole-plan prompt, and the per-call policy gate
@@ -251,6 +253,24 @@ func toolSetOf(pl *plan.Plan) map[string]bool {
 		}
 	}
 	return set
+}
+
+// approvedArgsOf collects, per tool, the argument payloads the plan DISPLAYED — the
+// ones the human actually saw before approving. execCtx.argsDrifted compares live
+// calls against them, so the approval binds the action rather than the tool class.
+//
+// A step with no arguments contributes nothing: an argument-less step displays no
+// action, so there is nothing for a later call to match, and every call to that tool
+// re-prompts. That is the honest reading of what was approved.
+func approvedArgsOf(pl *plan.Plan) map[string][]string {
+	args := make(map[string][]string)
+	for _, s := range pl.Steps {
+		if s.Type != plan.StepTool || s.Tool == "" || len(s.Arguments) == 0 {
+			continue
+		}
+		args[s.Tool] = append(args[s.Tool], canonicalJSON(s.Arguments))
+	}
+	return args
 }
 
 // planHasToolStep reports whether the plan calls any tool (a pure think/final plan

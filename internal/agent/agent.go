@@ -14,7 +14,9 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -75,6 +77,54 @@ type execCtx struct {
 	// ultimately chooses. RiskLow (the zero value) means "always re-prompt when the
 	// policy asks" — the pre-planner behaviour. The policy's deny always holds.
 	reapproveAtOrAbove plan.RiskLevel
+	// approvedArgs binds the whole-plan approval to the ARGUMENTS it displayed, not
+	// just to the tool names. It maps a tool to the canonical forms of the argument
+	// payloads the approved plan showed for it; non-nil only under a plan approval.
+	//
+	// Why it exists: the approval prompt renders the plan's concrete arguments and
+	// calls it the set of actions being consented to, but execution was capped by
+	// tool NAME alone. `web_fetch` under its allowlist gate is RiskMedium, and plan
+	// mode only re-prompted at RiskHigh — so a plan displaying a fetch to host A
+	// could execute a fetch to host B under the earlier approval. The destination,
+	// the part that actually matters, was never bound.
+	//
+	// A call whose arguments are NOT in this set is DRIFT: the human consented to
+	// something else, so it re-prompts with the live arguments whatever its risk
+	// level. A step the plan left argument-less binds nothing, so any call to it
+	// counts as drift — the human approved a tool, not an action.
+	approvedArgs map[string][]string
+}
+
+// argsDrifted reports whether a live call departs from what the approved plan
+// displayed. False when no plan approval is in force (nothing to drift from).
+// Arguments are compared CANONICALLY — re-marshalled from the parsed JSON — so key
+// order and whitespace do not read as a deviation.
+func (e execCtx) argsDrifted(tool string, args json.RawMessage) bool {
+	if e.approvedArgs == nil {
+		return false
+	}
+	live := canonicalJSON(args)
+	for _, approved := range e.approvedArgs[tool] {
+		if approved == live {
+			return false
+		}
+	}
+	return true
+}
+
+// canonicalJSON normalises an argument payload for comparison. Unparseable input
+// falls back to its trimmed text: a payload we cannot read is compared as-is rather
+// than silently treated as equal to anything.
+func canonicalJSON(raw json.RawMessage) string {
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return strings.TrimSpace(string(raw))
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return strings.TrimSpace(string(raw))
+	}
+	return string(b)
 }
 
 // Config tunes an Agent.

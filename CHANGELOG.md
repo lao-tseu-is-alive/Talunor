@@ -17,6 +17,83 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.8] - 2026-08-28 — An approval that binds the action, and a fence with no cheaper path
+
+Two findings from an external technical review (`reports/report_20260828_gpt-5.md`),
+verified against the code before being accepted. They are fixed together because they
+compose: each is tolerable alone, and together they are a complete exfiltration path.
+
+### Fixed
+
+- **A whole-plan approval now binds the ARGUMENTS it displayed, not just the tool
+  name.** The approval prompt renders the plan's concrete arguments and calls them the
+  actions being consented to — but execution was capped by tool name, and plan mode
+  re-confirmed live arguments only at `RiskHigh`. `web_fetch` behind its allowlist gate
+  is `RiskMedium`. So an approved plan showing a fetch to `docs.example` could execute a
+  fetch to `evil.example`: the tool was capped, the risk threshold respected, and the
+  destination — the only part that mattered — bound by nothing.
+
+  `execCtx.approvedArgs` now carries the payloads the plan displayed, compared
+  canonically (re-marshalled JSON, so key order is not a deviation). A call whose
+  arguments drift re-prompts **whatever its risk level**.
+
+  Note the direction this buys: running exactly what was shown needs *no* extra prompt,
+  because the human already saw it. The review's suggested stopgap — re-approve every
+  medium-risk call — would have prompted on the compliant path too. Binding the action
+  is both the safer and the quieter fix.
+
+  **A case the review did not raise:** a plan step with *no* arguments has displayed no
+  action, so it binds nothing and every call to that tool counts as drift. Without that,
+  a lazy planner would defeat the whole mechanism by omitting arguments.
+
+- **Every tool result now reaches the model fenced as untrusted data.** Automatically
+  recalled memory was fenced; tool results were appended raw. Since `recall_memory`
+  returns stored text verbatim *and needs no approval*, the same poisoned memory was
+  fenced on one path and unfenced on the cheaper one — and `web_fetch` returned remote
+  text the same way. A mitigation applied to one path and not the other is barely a
+  mitigation: an attacker uses the path without it.
+
+  Output now arrives in `<tool_output tool="…">` carrying the same sentence as the
+  memory fence (extracted into one shared constant — two names for one hazard would be
+  worse than none).
+
+  **The agent's own refusals are deliberately NOT fenced.** "policy denied this tool
+  call" is this system speaking, not data from elsewhere; telling the model to distrust
+  its own guardrail's explanation would be exactly backwards. The fence is applied at
+  the single return site that carries a value from outside the process. Reflection
+  learns from the **unfenced** text — a fact should not carry the scaffolding that
+  delivered it.
+
+### Documentation
+
+- **Lesson 14 gains its third instance** (EN + FR). v0.13.1 bound the tool's name but
+  not its arguments; v0.22.2 bound neither once the policy substituted the tool; v0.23.7
+  bound the arguments *only above a risk threshold the network tool sits below*. The
+  lesson now carries the pattern the three share.
+
+### Lessons learned
+
+- **A guarantee with a qualifier is a guarantee about the qualifier.** Each of the three
+  approval fixes was a true statement about a narrower case than the promise: "the
+  arguments are bound" meant *above `RiskHigh`*, and the tool whose argument matters most
+  sits below it. When a safety claim needs a condition attached, the condition is the
+  claim — and it should be read as adversarially as the feature itself.
+- **A test can hold a hole open.** `TestPlannedPlanModeMediumRiskCoveredByPlan` asserted
+  that medium-risk calls receive no live prompt. It was written deliberately, it passed,
+  and it made the gap look like a decision. The test survives — its arguments match what
+  the plan displayed, so it now documents the *correct* semantics — but the episode is
+  worth remembering: **a green test proves the code does what someone once intended, not
+  that the intention was right.**
+- **Findings that compose deserve to be fixed together.** The review lists them
+  separately and mentions the combination in passing. Read together they are one
+  mechanism: unfenced tool output carries an instruction, the instruction names a
+  destination, and the unbound approval lets that destination through. Fixing one and
+  scheduling the other would have left the path open while both tickets read "in progress".
+- **The fence had to be applied precisely, not uniformly.** The quick version wraps
+  everything `runTool` returns. That would have marked the agent's own refusals as
+  untrusted — a small thing that inverts their meaning. Uniformity is not the same as
+  consistency.
+
 ## [0.23.7] - 2026-08-28 — docs/video/ gets its own README, and a thumbnail
 
 Housekeeping around the video assets added in v0.23.6.

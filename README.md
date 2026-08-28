@@ -298,13 +298,15 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.7** — **`docs/video/` gets its own README, and a
-> thumbnail.** Housekeeping on the video assets: why the directory exists, the
-> publishing steps, and an honest list of what the current cut omits (4:53 instead of
-> 7:00, no two-shelves beat, no call to action). The thumbnail is a real frame from the
-> video — chosen after opening every candidate, because the first one that looked ideal
-> in the timeline turned out to be full of hallucinated text. The previous release
-> (v0.23.6) is the substantive one: `make docs-assert`.
+> Current version: **v0.23.8** — **an approval that binds the action, and a fence with
+> no cheaper path.** Two findings from an external review, fixed together because they
+> compose into one exfiltration path. A whole-plan approval displayed concrete arguments
+> but bound only the tool name below `RiskHigh` — and `web_fetch` sits at `RiskMedium`,
+> so an approved fetch to `docs.example` could execute against `evil.example`. It now
+> binds the **arguments it displayed**; running exactly what was shown still needs no
+> extra prompt. And every tool result now arrives fenced as untrusted data: recalled
+> memory was fenced, but `recall_memory` — which needs no approval — returned the same
+> text unfenced. A mitigation with a cheaper path around it is barely a mitigation.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;
