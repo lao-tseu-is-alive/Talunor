@@ -53,12 +53,9 @@ jobs:
         run: |
           echo "BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
           # github.sha is the DISPATCHING ref's commit, which is not the tag's on a
-          # manual run — stamp the image with what was actually checked out. Both
-          # forms are needed: the short one labels the binary, the full one feeds
-          # docker/metadata-action, whose type=sha would otherwise also read
-          # github.sha and tag the image with a commit it was not built from.
+          # manual run — stamp the image with what was actually checked out. This
+          # feeds both the COMMIT build-arg and the sha- image tag below.
           echo "BUILD_COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Setup Docker buildx
         # docker/setup-buildx-action v3 — pinned to commit SHA (supply-chain).
@@ -132,18 +129,29 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Every pattern is pinned to the RESOLVED tag, never to the ref that
-          # triggered the run — on a manual re-publish those differ.
-          #
           # `latest` is deliberately restricted to the automatic path. Re-publishing
-          # an older version is a REPAIR, not a release: without this guard, running
-          # a dispatch for v0.23.2 moves `latest` backwards off v0.23.3, and anyone
-          # pulling :latest silently downgrades. Publishing a version and repairing
-          # one are not the same operation, and the tag set has to say so.
+          # an older version is a REPAIR, not a release: without this guard, a
+          # dispatch for v0.23.2 moves `latest` backwards off the newest version and
+          # anyone pulling :latest silently downgrades.
+          #
+          # It MUST be done through `flavor`, not through a tags rule. In auto mode
+          # (the default) metadata-action emits `latest` on its own as soon as a
+          # type=semver pattern matches; a `type=raw,value=latest,enable=false` rule
+          # adds a disabled duplicate and leaves that default untouched. v0.23.4
+          # shipped exactly that mistake and the workflow went green while still
+          # tagging `latest` on a repair.
+          flavor: |
+            latest=${{ github.event_name == 'push' }}
+          # Both patterns are pinned to what was RESOLVED and CHECKED OUT, never to
+          # the ref that triggered the run — on a manual re-publish those differ.
+          #
+          # The sha tag goes through type=raw because `type=sha` accepts only
+          # enable/priority/prefix/suffix/format: a `value=` on it is SILENTLY
+          # IGNORED and the action falls back to github.sha. That was the other half
+          # of the v0.23.4 mistake — an option that does not exist fails quietly.
           tags: |
             type=semver,pattern={{version}},value=${{ steps.target.outputs.tag }}
-            type=sha,value=${{ env.BUILD_SHA }}
-            type=raw,value=latest,enable=${{ github.event_name == 'push' }}
+            type=raw,value=sha-${{ env.BUILD_COMMIT }}
 
       - name: Build and push Docker image
         # docker/build-push-action v5 — pinned to commit SHA (supply-chain).

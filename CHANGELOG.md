@@ -17,6 +17,60 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.5] - 2026-08-28 — An option that does not exist fails quietly
+
+`v0.23.4` fixed three defects found by inspecting artefacts instead of run
+conclusions. Its four workflows went green. Then the repair it enabled was run for
+real, and the buildx command line was read:
+
+```
+--tag ghcr.io/lao-tseu-is-alive/talunor:0.23.2
+--tag ghcr.io/lao-tseu-is-alive/talunor:latest          ← the guard did nothing
+--tag ghcr.io/lao-tseu-is-alive/talunor:sha-3b8fb04     ← still the dispatching ref
+```
+
+**Two of v0.23.4's three fixes had no effect at all.** Only the `COMMIT` build-arg
+one worked. The workflow file on `main` was exactly as intended, the run was green,
+and the artefact was still wrong — because both fixes assumed an option grammar
+instead of checking it.
+
+### Fixed
+
+- **`type=sha` does not accept `value`.** Its attributes are `enable`, `priority`,
+  `prefix`, `suffix`, `format` — nothing else. `type=sha,value=${{ env.BUILD_SHA }}`
+  was parsed, the unknown attribute **silently dropped**, and the action fell back to
+  `github.sha`. The sha tag now goes through `type=raw,value=sha-${{ env.BUILD_COMMIT }}`,
+  where `value` is supported. `BUILD_SHA` is removed — it was never read.
+- **`latest` comes from `flavor`, not from the tag list.** In `auto` mode (the
+  default) metadata-action emits `latest` by itself as soon as a `type=semver` pattern
+  matches. Adding `type=raw,value=latest,enable=false` created a disabled duplicate
+  and left that default running. It is now
+  `flavor: latest=${{ github.event_name == 'push' }}`, which is the switch that
+  actually governs it.
+
+### Lessons learned
+
+- **An unknown option in a third-party action is not an error — it is a silence.**
+  A typo in Go fails to compile; a wrong flag in a shell script usually fails loudly.
+  `type=sha,value=…` did neither: it was accepted, ignored, and replaced by a default
+  that looked plausible. When configuring something you do not compile, *the absence of
+  a complaint is not evidence that the option was understood*.
+- **v0.23.4's own lesson caught v0.23.4.** That release ended with "a green pipeline
+  says the steps ran, not that the artefact is right", and the only reason this was
+  found is that the rule was then applied to the fix itself — by reading the `--tag`
+  arguments buildx actually received. A lesson written and not re-applied to the next
+  change is decoration; this one earned its keep within a day.
+- **"Grep for what should no longer exist" needs the right target.** v0.23.4 introduced
+  that rule and passed its own check: `github.sha` no longer appeared in the build-args.
+  But the defect was not a leftover reference — it was a *silently inert* new one. The
+  check should also be *"grep the output for what should no longer be produced"*, which
+  for a container publish means reading the tag list, not the config.
+- **Three attempts to get one tag set right.** Worth stating plainly rather than
+  smoothing over: v0.23.3 pinned the semver pattern, v0.23.4 fixed the build-arg and
+  believed it had fixed two more, v0.23.5 actually fixed them. Each round was verified
+  against a real artefact, which is the only reason there was a round three rather than
+  a wrong image nobody noticed.
+
 ## [0.23.4] - 2026-08-27 — Three defects a green pipeline could not have shown
 
 `v0.23.3` added `workflow_dispatch` so a version could be re-published without

@@ -298,14 +298,14 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.4** — **three defects a green pipeline could not have
-> shown.** v0.23.3's manual re-publish was used for real, to repair the release an
-> Actions outage had swallowed. It worked — and inspecting the *artefacts* rather than
-> the run conclusions found three things wrong that never turned a workflow red: the
-> pushed image was stamped with the dispatching commit rather than the one it was built
-> from (the workflow builds twice; only the first build had been fixed), `type=sha`
-> tagged it likewise, and **`latest` moved backwards** onto the older version. Repairing
-> a release is not the same operation as making one, and the tag set now says so.
+> Current version: **v0.23.5** — **an option that does not exist fails quietly.**
+> v0.23.4's three fixes went green; running the repair for real and reading the buildx
+> `--tag` arguments showed that **two of them had done nothing.** `type=sha` accepts no
+> `value` attribute — it was parsed, silently dropped, and replaced by the dispatching
+> commit — and `latest` is emitted by metadata-action's `flavor` default, which a
+> disabled tag rule does not touch. Both now use the mechanism that actually governs
+> them. The rule that caught it is the previous release's own: read the artefact, not
+> the run conclusion.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

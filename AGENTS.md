@@ -968,6 +968,20 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   nothing in CI compares an artefact to what it claims to be, so read it (`docker pull`, grep
   build-args from logs, open the release). And after a pattern edit, **grep for what should no
   longer exist** (`grep -n 'github.sha' .github/workflows/`), not for the new form.
+- **v0.23.5 (ci)** = **an option that does not exist fails quietly.** v0.23.4's three fixes
+  went green; running the repair for real and reading buildx's `--tag` arguments showed
+  **two of them had no effect**: `--tag …:latest` and `--tag …:sha-3b8fb04` were still being
+  passed. (1) **`type=sha` accepts NO `value` attribute** (only enable/priority/prefix/
+  suffix/format) — it was parsed, the unknown attribute silently dropped, and the action fell
+  back to `github.sha`. Now `type=raw,value=sha-${{ env.BUILD_COMMIT }}`; `BUILD_SHA` removed
+  (never read). (2) **`latest` comes from `flavor`, not the tags list** — in auto mode
+  metadata-action emits it as soon as a `type=semver` matches, so a
+  `type=raw,value=latest,enable=false` rule just added a disabled duplicate. Now
+  `flavor: latest=${{ github.event_name == 'push' }}`. **Rule: in config you do not compile,
+  the absence of a complaint is NOT evidence the option was understood.** And v0.23.4's own
+  lesson is what caught it — "grep for what should no longer exist" must target the OUTPUT
+  (the tag list), not just the config. Three rounds to get one tag set right; each verified
+  against a real artefact, which is why there was a round three instead of a silent wrong image.
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
   tests; calibration output 0600 + KDF. Same per-layer checkpoint rhythm.
