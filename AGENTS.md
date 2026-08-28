@@ -1001,6 +1001,16 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   whole history, in a project whose pitch is "clone it and read the history". **Subtitles are a
   claim surface**: the raw whisper pass inverted a safety claim by dropping a negation — four
   corrections made against re-cut audio before keeping the file.
+- **v0.23.7 (docs)** = **`docs/video/README.md` + a thumbnail.** Context for the directory
+  (three generated artefacts about this project and what auditing them taught), the publishing
+  steps, and **what the current cut OMITS** — 4:53 not 7:00, no two-shelves beat, no CTA —
+  stated rather than glossed, with the two steering instructions that would fix a regeneration.
+  Thumbnail extracted from the video (the `APPROVED` parcel labelled "delete all files") plus a
+  three-line hook; 1280x720, ~120 KB, text-free variant included. `.mp4`s moved from `docs/` to
+  `docs/video/`, still ignored (`*.mp4` has no slash, so it applies at any depth — verified).
+  **Note: choosing a thumbnail is an artefact audit too** — the first candidate looked ideal in
+  the timeline and was full of hallucinated text (`SARARO?I3IPE CA?I681A00023`); generated video
+  invents writing that LOOKS like data, and the thumbnail is the one frame everybody sees.
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
   tests; calibration output 0600 + KDF. (The "reference docs have no drift alarm" thread is CLOSED by v0.23.6.) Same per-layer checkpoint rhythm.

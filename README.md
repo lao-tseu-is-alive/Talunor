@@ -298,15 +298,13 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.6** — **the reference docs get the alarm the lessons
-> already had.** New `make docs-assert` re-derives what `docs/architecture.md` claims
-> *and* — the direction nothing guarded — requires **every accepted ADR to be cited
-> there**. That is what was missing: ADR 0004 existed while the mental-model page had
-> never heard of it. Run against the page as it stood two releases ago, the check fails
-> on four missing ADRs. Also ships `docs/video-brief.md` (a source document written for
-> the ear, every caveat a main clause) and the subtitles/description for the project
-> video — with four corrections made against re-cut audio, one of which was a dropped
-> negation that inverted a safety claim.
+> Current version: **v0.23.7** — **`docs/video/` gets its own README, and a
+> thumbnail.** Housekeeping on the video assets: why the directory exists, the
+> publishing steps, and an honest list of what the current cut omits (4:53 instead of
+> 7:00, no two-shelves beat, no call to action). The thumbnail is a real frame from the
+> video — chosen after opening every candidate, because the first one that looked ideal
+> in the timeline turned out to be full of hallucinated text. The previous release
+> (v0.23.6) is the substantive one: `make docs-assert`.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

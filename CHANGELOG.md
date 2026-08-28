@@ -17,6 +17,42 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.7] - 2026-08-28 — docs/video/ gets its own README, and a thumbnail
+
+Housekeeping around the video assets added in v0.23.6.
+
+### Added
+
+- **`docs/video/README.md`** — why the directory exists (three generated artefacts
+  about this project, and what auditing them taught), what each file is, the
+  publishing steps in order, and — the part worth keeping honest — **what the current
+  cut omits**: it runs 4:53 instead of 7:00, drops the two-shelves beat, and drops the
+  call to action. Stated rather than glossed, with the two steering instructions that
+  would fix a regeneration.
+- **A thumbnail**, extracted from the video itself rather than invented: the parcel
+  stamped `APPROVED` whose label reads *"delete all files"*, with a three-line hook set
+  in the left margin. 1280×720, ~120 KB. A text-free variant is included for anyone who
+  wants to caption it elsewhere.
+
+### Changed
+
+- The `.mp4` files moved from `docs/` into `docs/video/`, so everything about the video
+  sits together. They remain git-ignored — the pattern is `*.mp4` without a slash, so
+  it applies at any depth (verified rather than assumed).
+
+### Lessons learned
+
+- **Choosing a thumbnail is another artefact audit.** The first candidate frame looked
+  ideal in the timeline and turned out to be full of hallucinated text —
+  `SARARO?I3IPE CA?I681A00023`, `JPBSIE SLIOGING ECRIPTION`. Generated video invents
+  writing that *looks* like data, and a thumbnail is the one frame everybody sees. Every
+  candidate had to be opened and read, not scrubbed past.
+- **A directory that holds a decision should explain it.** `docs/video/` contains files
+  that are tracked and files that deliberately are not, and the reason (43 MB against
+  26 MB of history, in a project that asks people to clone the history) is invisible
+  from a listing. Someone will eventually wonder why the video is missing; the README is
+  cheaper than that conversation.
+
 ## [0.23.6] - 2026-08-28 — The reference docs get the alarm the lessons already had
 
 Two things, both consequences of the video episode.

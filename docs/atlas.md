@@ -224,11 +224,15 @@ Talunor/
 │   ├── assertions.sh         # `make docs-assert`: re-derives the claims architecture.md makes,
 │   │                         #   and requires every ACCEPTED ADR to be cited there. Added after
 │   │                         #   that page described a replaced trust model for three releases.
-│   ├── video/                #   Publishing assets for the project video (text only; the .mp4
-│   │                         #   itself is git-ignored — 43 MB against 26 MB of history).
-│   │   ├── talunor-anatomy-of-a-loop.en.srt          # Subtitles, corrected against the audio.
-│   │   └── talunor-anatomy-of-a-loop.description.txt # YouTube description + chapters; carries
-│   │                         #     the call to action the edit dropped.
+│   ├── video/                #   Publishing assets for the project video. The .mp4 files live
+│   │                         #   here too but are GIT-IGNORED (43 MB vs 26 MB of history).
+│   │   ├── README.md         #     Context, publishing steps, and what the current cut omits.
+│   │   ├── talunor-anatomy-of-a-loop.en.srt          # Subtitles, corrected against the audio
+│   │   │                     #     (a raw pass had dropped a negation and inverted a claim).
+│   │   ├── talunor-anatomy-of-a-loop.description.txt # YouTube description + chapters; carries
+│   │   │                     #     the call to action the edit dropped.
+│   │   ├── thumbnail-anatomy-of-a-loop.jpg       # 1280x720, a real frame plus a three-line hook.
+│   │   └── thumbnail-anatomy-of-a-loop.plain.jpg #   Same frame, no text.
 │   ├── video-brief.md        # Source doc for a video/talk about Talunor, written FOR the ear:
 │   │                         #   every caveat a main clause, every claim anchored to a symbol or
 │   │                         #   command. Exists because reference docs summarise badly (v0.23.4).
