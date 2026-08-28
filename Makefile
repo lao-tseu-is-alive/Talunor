@@ -62,7 +62,7 @@ LDFLAGS     := -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(B
 # Container image (local builds). IMAGE overridable; nerdctl for Rancher Desktop.
 IMAGE ?= talunor:local
 
-.PHONY: deps doctor build test release-check capabilities atlas-check readme-check changelog-check lessons-check lessons-assert tidy clean distclean \
+.PHONY: deps doctor build test release-check capabilities atlas-check readme-check changelog-check lessons-check lessons-assert docs-assert tidy clean distclean \
         docker-build docker-run nerdctl-build nerdctl-run
 
 ## deps: download the SQLite extensions and the embedding model into ext/
@@ -132,6 +132,8 @@ release-check: deps
 	@$(MAKE) --no-print-directory lessons-check
 	@echo "==> lesson claims still hold against the source"
 	@$(MAKE) --no-print-directory lessons-assert
+	@echo "==> reference docs still match the code (and cite every accepted ADR)"
+	@$(MAKE) --no-print-directory docs-assert
 	@echo "release-check: OK"
 
 ## capabilities: state what this host can actually exercise, so a green suite is
@@ -231,6 +233,16 @@ lessons-check:
 	done < "$$tmp"; rm -f "$$tmp"; \
 	[ "$$fail" = 0 ] || { echo "lessons-check: FAILED"; exit 1; }; \
 	echo "lessons-check: OK"
+
+## docs-assert: re-derive the claims the REFERENCE docs make, and check that every
+## accepted ADR is actually in the mental model. lessons-assert covers docs/lessons;
+## nothing covered docs/architecture.md — which is how it described a trust model
+## ADR 0004 had replaced, for three releases, until a generated video narrated the
+## stale claim back. Two directions: doc→code (the claim is still true) and
+## code→doc (a decision the code took is not missing from the page).
+docs-assert:
+	@test -x docs/assertions.sh || { echo "docs-assert: docs/assertions.sh missing or not executable"; exit 1; }
+	@docs/assertions.sh
 
 ## lessons-assert: re-derive the claims a lesson asks the reader to REPRODUCE.
 ## lessons-check guards structure (tags/links/paths) and is blind to prose — which

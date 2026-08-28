@@ -1,0 +1,61 @@
+You don't make an AI trustworthy by asking it nicely. You build walls it cannot walk through — then you go looking for the doors you left in them.
+
+▶ START HERE — read the whole thing from version one:
+
+    git clone https://github.com/lao-tseu-is-alive/Talunor
+    cd Talunor
+    git checkout v0.1.0        # detached HEAD, read-only
+
+Two hundred lines. That's where this began. Every layer since is a tagged release with a written lesson explaining what was non-obvious — 26 of them, in English and French. Walk forward from there:
+https://github.com/lao-tseu-is-alive/Talunor/tree/main/docs/lessons
+
+—
+
+Talunor is a small AI agent that runs in your terminal, on your machine. Its memory is one local database file. It is built small on purpose: it exists as a course, so you can read all of it and check the guarantees yourself.
+
+This video traces one turn through the loop — and stops twice at places where a wall turned out to have a door:
+
+• An approval that bound the tool's NAME but not its ARGUMENTS. You could approve "list my files" and something else could arrive at execution. Nothing crashed; it was found by reading the code.
+
+• A refusal that vanished. When a new claim contradicted a stored fact and lost, the system threw the claim away — correctly refusing, and silently forgetting anyone had asked. For four releases that looked exactly like a system working.
+
+Both are fixed, and both are written up in public, because a guardrail nobody has attacked is a guess.
+
+—
+
+WHAT IT IS NOT (the part most project videos skip)
+
+• Not a production framework. One worked example, built to be read. Don't depend on it.
+• The strong sandbox is the container one. The simpler Linux-namespaces backend has NO seccomp filter — a speed bump, not a boundary. Don't run hostile code behind it, and note it's the one you silently get if no container runtime answers.
+• Fencing untrusted text is a mitigation, not a wall. The model still reads it.
+• "A tool observed it" is a promise no built-in tool makes yet — today, facts learned from tool output are marked as inference.
+• A belief can be contested, never vindicated. Nothing clears the flag.
+
+—
+
+GO DEEPER
+
+Repository — https://github.com/lao-tseu-is-alive/Talunor
+The 26-lesson course (EN/FR) — https://github.com/lao-tseu-is-alive/Talunor/tree/main/docs/lessons
+Architecture, the mental model — https://github.com/lao-tseu-is-alive/Talunor/blob/main/docs/architecture.md
+Decision records (ADRs) — https://github.com/lao-tseu-is-alive/Talunor/tree/main/docs/decisions
+
+Two lessons that match the two scars in this video:
+Lesson 14, "The approval that didn't bind"
+Lesson 25, "The scar that never bled"
+
+Written in Go. SQLite with in-process embeddings. Runs offline against a local model.
+
+—
+
+CHAPTERS
+
+0:00 Asking nicely is not a guarantee
+0:33 A small machine you can read
+0:58 One turn, end to end
+1:46 The gate: allow, ask, or refuse
+2:16 The door in the wall — an approval that bound the wrong thing
+2:50 A memory that can be wrong
+3:13 The refusal that vanished
+3:52 What this is not
+4:27 Reliability is a small number of places where freedom stops

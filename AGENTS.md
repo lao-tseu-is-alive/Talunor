@@ -982,6 +982,25 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   lesson is what caught it — "grep for what should no longer exist" must target the OUTPUT
   (the tag list), not just the config. Three rounds to get one tag set right; each verified
   against a real artefact, which is why there was a round three instead of a silent wrong image.
+- **v0.23.6 (docs/tooling)** = **the reference docs get the alarm the lessons already had.**
+  New **`make docs-assert`** (`docs/assertions.sh`, in `release-check`) — the guard named as an
+  open thread in v0.22.4, v0.23.2 AND v0.23.4 without being built. It checks **two directions**:
+  *claim→code* (subject checked before authority; `contested` derived + no migration adds a
+  stored column; decay base-2 and lazy; no builtin claims `Verified`; OCI drops all caps; SSRF
+  in the dialer `Control` hook) and — **the missing one** — *code→doc*: **every ACCEPTED ADR
+  must be cited by `architecture.md`, in both languages.** Proven against the historical bug:
+  run on the page as it stood at `v0.23.1` it fails on four missing ADR refs, ADR 0004 among
+  them; it would have blocked v0.22.0 until the mental model mentioned the decision that
+  release introduced. **The generalisable point: every drift alarm here checks that what a doc
+  SAYS is still true; none checked that what the code has DECIDED reached the docs. A page can
+  be wholly accurate and three layers behind, and claim-by-claim verification will never
+  notice, because the missing part makes no claim.** Also ships `docs/video-brief.md` (source
+  doc written FOR THE EAR — every caveat a main clause, every claim anchored, nothing on screen
+  invented; documents its own trial) and `docs/video/` (subtitles + YouTube description
+  carrying the CTA the edit dropped). The `.mp4` stays git-ignored: 43 MB vs 26 MB for the
+  whole history, in a project whose pitch is "clone it and read the history". **Subtitles are a
+  claim surface**: the raw whisper pass inverted a safety claim by dropping a negation — four
+  corrections made against re-cut audio before keeping the file.
 - **Next — open threads (documented, not started):** calibration→policy wiring;
   the executed plan as a learning source; `agent.go` (~1150 lines) mechanical split; `cmd/*` lifecycle
-  tests; calibration output 0600 + KDF. Same per-layer checkpoint rhythm.
+  tests; calibration output 0600 + KDF. (The "reference docs have no drift alarm" thread is CLOSED by v0.23.6.) Same per-layer checkpoint rhythm.

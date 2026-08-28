@@ -17,6 +17,65 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.6] - 2026-08-28 — The reference docs get the alarm the lessons already had
+
+Two things, both consequences of the video episode.
+
+### Added
+
+- **`make docs-assert`** (`docs/assertions.sh`, wired into `release-check`) — the guard
+  that was named as an open thread in v0.22.4, v0.23.2 and v0.23.4 without ever being
+  built. `docs/architecture.md` is billed as the project's mental model and spent three
+  releases describing a trust model ADR 0004 had replaced. Nothing could catch it:
+  `atlas-check` verifies a file is *listed*, `readme-check` pins one version string,
+  `lessons-assert` covers `docs/lessons/` only. It surfaced by accident, when a
+  generated video narrated the stale claim back.
+
+  It checks in **two directions**, and the second is the point:
+  - **claim → code**, like `lessons-assert`: the subject is checked before authority,
+    `contested` is derived and no migration adds a stored column, decay is base-2 and
+    lazy, no builtin claims `Verified`, the OCI backend drops all capabilities, the
+    SSRF check is in the dialer `Control` hook.
+  - **code → doc**: *every accepted ADR must be cited by `architecture.md`, in both
+    languages.* This is the direction that was missing. ADR 0004 existed while the page
+    had never heard of it — a decision the code has taken and the mental model has not
+    is exactly how a reference doc goes quietly out of date.
+
+  Verified against the historical bug: run on `architecture.md` as it stood at
+  `v0.23.1`, it fails with four missing ADR references, ADR 0004 among them. It would
+  have blocked `v0.22.0` until the page mentioned the decision that release introduced.
+
+- **`docs/video-brief.md`** — the source document for a video or talk about Talunor,
+  written *for the ear*: every caveat a main clause (a summariser propagates sentences,
+  not intentions), every claim anchored to a symbol or command, nothing on screen
+  invented. It documents its own trial: the first render kept all five limitation
+  sentences but came in at 4:53 instead of 7:00, dropping the two-shelves beat and the
+  call to action.
+- **`docs/video/`** — publishing assets for that video: subtitles (`.srt`) corrected
+  against the audio, and a YouTube description that carries the call to action the edit
+  dropped, plus chapters taken from real timestamps. Text only; the `.mp4` stays
+  git-ignored — 43 MB against 26 MB for the entire repository history, in a project
+  whose pitch is "clone it and read the history".
+- `scripts/transcribe-media.sh` gains the negation trap in its header (below).
+
+### Lessons learned
+
+- **A guard named three times and never built is not a plan.** This one was written
+  into three consecutive CHANGELOGs as an open thread. What finally forced it was not
+  discipline but an accident — a generated summary reading the stale doc aloud. Worth
+  noticing: *the thing that caught the drift was outside the project*, because nothing
+  inside it was looking.
+- **The direction nobody guards is code → doc.** Every drift alarm here checks that
+  what a document says is still true. None checked that what the code has *decided* has
+  reached the documents. A page can be entirely accurate and still be three layers
+  behind, and no claim-by-claim verification will ever notice, because the missing part
+  makes no claim.
+- **Subtitles are a claim surface too.** The raw whisper transcript rendered the fence
+  sentence as *"acts as a wall because the model is still forced to read the text"* —
+  the inverse of what was said, a dropped negation. Shipped as subtitles that would
+  have published the opposite of a safety claim, in writing, indexable. Four
+  corrections were made against re-cut audio before the file was kept.
+
 ## [0.23.5] - 2026-08-28 — An option that does not exist fails quietly
 
 `v0.23.4` fixed three defects found by inspecting artefacts instead of run

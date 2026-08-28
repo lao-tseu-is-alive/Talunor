@@ -298,14 +298,15 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.5** — **an option that does not exist fails quietly.**
-> v0.23.4's three fixes went green; running the repair for real and reading the buildx
-> `--tag` arguments showed that **two of them had done nothing.** `type=sha` accepts no
-> `value` attribute — it was parsed, silently dropped, and replaced by the dispatching
-> commit — and `latest` is emitted by metadata-action's `flavor` default, which a
-> disabled tag rule does not touch. Both now use the mechanism that actually governs
-> them. The rule that caught it is the previous release's own: read the artefact, not
-> the run conclusion.
+> Current version: **v0.23.6** — **the reference docs get the alarm the lessons
+> already had.** New `make docs-assert` re-derives what `docs/architecture.md` claims
+> *and* — the direction nothing guarded — requires **every accepted ADR to be cited
+> there**. That is what was missing: ADR 0004 existed while the mental-model page had
+> never heard of it. Run against the page as it stood two releases ago, the check fails
+> on four missing ADRs. Also ships `docs/video-brief.md` (a source document written for
+> the ear, every caveat a main clause) and the subtitles/description for the project
+> video — with four corrections made against re-cut audio, one of which was a dropped
+> negation that inverted a safety claim.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

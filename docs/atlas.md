@@ -221,6 +221,17 @@ Talunor/
 │   ├── atlas.md           #   THIS FILE — the repository map.
 │   ├── architecture.md    #   The mental model: one-turn flow + package DAG (Mermaid) + load-bearing decisions.
 │   ├── architecture.fr.md #   French translation of architecture.md (bilingual, EN canonical).
+│   ├── assertions.sh         # `make docs-assert`: re-derives the claims architecture.md makes,
+│   │                         #   and requires every ACCEPTED ADR to be cited there. Added after
+│   │                         #   that page described a replaced trust model for three releases.
+│   ├── video/                #   Publishing assets for the project video (text only; the .mp4
+│   │                         #   itself is git-ignored — 43 MB against 26 MB of history).
+│   │   ├── talunor-anatomy-of-a-loop.en.srt          # Subtitles, corrected against the audio.
+│   │   └── talunor-anatomy-of-a-loop.description.txt # YouTube description + chapters; carries
+│   │                         #     the call to action the edit dropped.
+│   ├── video-brief.md        # Source doc for a video/talk about Talunor, written FOR the ear:
+│   │                         #   every caveat a main clause, every claim anchored to a symbol or
+│   │                         #   command. Exists because reference docs summarise badly (v0.23.4).
 │   ├── epistemic-reasoning-vision.md    # Research vision (EN): an epistemically traceable cognitive
 │   │                                  #   architecture — claims with genealogy, not bare values. Not a roadmap.
 │   ├── epistemic-reasoning-vision.fr.md #   French original of the vision document.

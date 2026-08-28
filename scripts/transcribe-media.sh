@@ -28,6 +28,19 @@
 #   3. When something is wrong, ask where it came FROM before fixing the
 #      artefact. It is often the doc.
 #
+# One trap in the method itself
+#   A whole-file transcript DROPS WORDS, and a dropped negation inverts the claim.
+#   A real case: a narration saying "acts as a mitigation; it cannot function as a
+#   wall, because the model still reads it" came back from a full pass as "acts as
+#   a wall because the model is still forced to read it" — the opposite, and nothing
+#   flagged it. Re-transcribing that window alone recovered the truth.
+#
+#   So before judging any single sentence, re-cut its window and run it on its own:
+#     WHISPER_FORMAT=srt scripts/transcribe-media.sh video.mp4     # get timestamps
+#     ffmpeg -ss 74 -t 20 -i video.mp4 -vn -ar 16000 -ac 1 -c:a pcm_s16le seg.wav
+#     scripts/transcribe-media.sh seg.wav
+#   A check with a silent failure mode of its own produces confident wrong findings.
+#
 # Requirements
 #   - ffmpeg               (audio extraction; any container ffmpeg can read)
 #   - whisper.cpp's CLI    https://github.com/ggml-org/whisper.cpp

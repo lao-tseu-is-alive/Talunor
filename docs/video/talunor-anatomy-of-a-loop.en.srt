@@ -1,0 +1,227 @@
+1
+00:00:00,000 --> 00:00:05,220
+Today, the standard way to make an AI assistant behave is to ask it nicely.
+
+2
+00:00:05,880 --> 00:00:12,220
+We try to govern the system by typing careful instructions into a prompt, hoping it follows the rules.
+
+3
+00:00:12,840 --> 00:00:16,220
+But a language model is a text generator working in probabilities.
+
+4
+00:00:16,960 --> 00:00:25,660
+Your instruction acts as a suggestion, and the exact same text box that carries your instructions can easily carry a conflicting command from someone else.
+
+5
+00:00:26,240 --> 00:00:28,560
+Asking provides no guarantee of safety.
+
+6
+00:00:29,080 --> 00:00:32,880
+Effective security requires a physical, unbreakable lock.
+
+7
+00:00:33,420 --> 00:00:34,760
+This brings us to Talunor.
+
+8
+00:00:35,260 --> 00:00:40,820
+It is a working AI agent that runs entirely in a local terminal, built small on purpose.
+
+9
+00:00:41,400 --> 00:00:47,540
+It exists as an educational project to demonstrate exactly what a real, readable lock looks like in code.
+
+10
+00:00:48,140 --> 00:00:51,140
+You do not make an AI trustworthy by asking it nicely.
+
+11
+00:00:51,660 --> 00:00:54,920
+You build hard, deterministic walls it cannot walk through.
+
+12
+00:00:55,040 --> 00:00:57,720
+And then you go looking for the doors you left in them.
+
+13
+00:00:58,160 --> 00:01:02,420
+We can map the exact path of a query through this machine's five parts.
+
+14
+00:01:02,500 --> 00:01:05,496
+Senses, remembers, thinks, acts, and learns.
+
+15
+00:01:05,496 --> 00:01:11,060
+The remembers phase pulls relevant past facts into your prompt.
+
+16
+00:01:11,060 --> 00:01:19,740
+Because this recalled text can hide malicious instructions, it's placed inside a strict boundary, labeled as untrusted data.
+
+17
+00:01:19,740 --> 00:01:23,212
+This memory fence acts as a mitigation.
+
+18
+00:01:23,212 --> 00:01:28,420
+It cannot function as a wall, because the AI model is still forced to read the text inside.
+
+19
+00:01:28,420 --> 00:01:31,360
+Fencing reduces risk during perception.
+
+20
+00:01:31,360 --> 00:01:38,300
+But to physically stop the AI from executing a dangerous command, the system requires a much harder boundary downstream.
+
+21
+00:01:38,300 --> 00:01:46,860
+That brings us to the moment the model decides it needs to calculate a number, check the clock, or run a shell command.
+
+22
+00:01:46,860 --> 00:01:51,280
+This gate between the thinks and acts nodes is the absolute boundary.
+
+23
+00:01:51,280 --> 00:01:53,420
+The AI itself cannot execute anything.
+
+24
+00:01:53,420 --> 00:01:55,420
+It can only generate text to ask for a tool.
+
+25
+00:01:55,420 --> 00:02:05,980
+A piece of plain, non-AI code, the policy gate, reads that request and decides between three exits: allow, ask, or refuse.
+
+26
+00:02:05,980 --> 00:02:16,540
+For any action carrying risk, the policy gate hits the brakes and passes the execution decision directly back to you for explicit, manual approval.
+
+27
+00:02:16,540 --> 00:02:21,580
+This step appeared completely secure, until someone read the code and found a blind spot.
+
+28
+00:02:22,220 --> 00:02:27,660
+Your human approval successfully locked down the tool's name, but it ignored the specific arguments.
+
+29
+00:02:28,300 --> 00:02:34,220
+You could approve a command to list your files, and a completely different set of instructions could arrive at execution.
+
+30
+00:02:35,020 --> 00:02:37,100
+The architectural fix is visible.
+
+31
+00:02:37,100 --> 00:02:43,180
+The system now forces a secondary re-approval check using the exact, literal arguments that are about to be run.
+
+32
+00:02:43,980 --> 00:02:49,660
+A hard boundary is entirely useless if it is locking down the wrong variable at the exact moment of execution.
+
+33
+00:02:50,380 --> 00:02:59,980
+We find a similar lesson back in the memory system: facts are permanently stamped based on their origin, whether the user stated it, a tool observed it, or the model inferred it.
+
+34
+00:03:00,540 --> 00:03:06,860
+When a new claim arrives that contradicts an established fact, the system weighs the authority of those origins.
+
+35
+00:03:07,420 --> 00:03:13,420
+If the newcomer lacks the standing to overwrite the truth, the agent correctly refuses the new information.
+
+36
+00:03:13,980 --> 00:03:17,980
+For four software versions, this functioned exactly as designed.
+
+37
+00:03:17,980 --> 00:03:20,300
+The system rejected the bad data.
+
+38
+00:03:20,300 --> 00:03:28,460
+But by successfully blocking the claim, the agent immediately destroyed the text, erasing the only record that a conflict ever occurred.
+
+39
+00:03:28,460 --> 00:03:32,220
+The database was perfectly protected against a bad claim winning.
+
+40
+00:03:32,220 --> 00:03:36,940
+In exchange, it became entirely blind to repeated attempts to manipulate it.
+
+41
+00:03:36,940 --> 00:03:39,020
+The ledger now works differently.
+
+42
+00:03:39,020 --> 00:03:41,420
+Refused claims are no longer deleted.
+
+43
+00:03:41,420 --> 00:03:46,460
+Instead, they are permanently logged alongside the established fact as contested counter-evidence.
+
+44
+00:03:47,020 --> 00:03:52,780
+Resilience depends on transforming a blocked threat into a permanent record of contested evidence.
+
+45
+00:03:52,780 --> 00:03:55,820
+Which brings us to the strict limitations of this project.
+
+46
+00:03:55,820 --> 00:03:58,700
+Talunor is an educational example built to be read.
+
+47
+00:03:58,700 --> 00:04:03,580
+It is not a production framework, and you should not depend on it.
+
+48
+00:04:03,580 --> 00:04:06,220
+Its local backend is merely a speed bump.
+
+49
+00:04:06,860 --> 00:04:13,340
+If you want true sandbox security to run hostile code, you must use a strong container runtime.
+
+50
+00:04:14,060 --> 00:04:17,580
+Fencing untrusted text is a mitigation, not a wall.
+
+51
+00:04:18,380 --> 00:04:22,140
+Built-in tools do not guarantee absolute observation yet.
+
+52
+00:04:22,140 --> 00:04:26,620
+And a belief marked as contested within the system can never be fully vindicated.
+
+53
+00:04:27,500 --> 00:04:33,660
+Reliability here stems from a small number of places where the AI's freedom definitively stops.
+
+54
+00:04:34,220 --> 00:04:37,660
+Written in ordinary lines of code that you can evaluate for yourself.
+
+55
+00:04:38,540 --> 00:04:41,660
+Building theoretical walls around an AI is the easy part.
+
+56
+00:04:42,220 --> 00:04:46,380
+The real work is actively hunting for the hidden doors you left behind.
+
+57
+00:04:46,380 --> 00:04:49,500
+And having the honesty to publish those mistakes in public.
