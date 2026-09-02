@@ -1104,6 +1104,25 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   runs the gate and meets the assertion learns what it is for. And **documentation reveals
   its own holes only when it starts giving directions** — telling readers to open a PR is
   what made the missing CONTRIBUTING.md obvious.
+- **v0.23.12 (fix)** = **an absence assertion is only as good as the improbability of its
+  needle.** `TestEncryptDecryptRoundTrip` had been flaky since Layer 14 at a MEASURED
+  **13 failures in 400 runs**, reddening two `release-check` runs during v0.23.11 alone.
+  It asserted `!strings.Contains(string(enc), "hi")` — a **two-character needle** in an
+  envelope that is a magic line plus random base64, which contains `hi` ~3% of the time.
+  Now three needles from the plaintext (`suite: enc`, `scenarios:`, `expect:`), each
+  carrying a **`:`** — a character in neither the base64 alphabet nor `encMagic` — so a
+  false positive is **impossible by construction**, not merely improbable. Verified BOTH
+  ways, because a check that cannot fail is worse than a flaky one: 1000 consecutive runs
+  clean, and a mutation making `EncryptSuite` emit the plaintext is still caught (all
+  three needles fire). Suite swept for the same shape: seven other absence-shaped
+  `Contains` assertions all use long, distinctive needles against DETERMINISTIC output —
+  a singleton, not a pattern. **Keepers: the fix is not "make the needle longer"** (that
+  only buys smaller odds) but *choose a needle the data under test CANNOT produce* —
+  prefer impossible to unlikely. **A flaky test is a claim that decays into noise**: nine
+  layers learned to re-run instead of to read it, and the cost was never the red run but
+  the habit of disbelieving a guard. And **the measurement is what made it actionable** —
+  it was dismissed as "probably flaky" until it was run 400 times and the rate written
+  down; *a defect nobody has quantified stays an opinion.*
 - **Next — open threads.** Same per-layer checkpoint rhythm. Ordered by what a failure
   would cost, not by effort. *(Closed: "reference docs have no drift alarm" → v0.23.6;
   `agent.go` split → v0.22.5.)*
@@ -1137,8 +1156,9 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
      silently fall back to defaults, so a typo in a retention, confidence or timeout
      setting looks like an accepted setting.
 
-  8. **`TestEncryptDecryptRoundTrip` is flaky — 13 failures in 400 runs** (found while
-     gating v0.23.10). It checks for a plaintext leak with
+  8. ~~`TestEncryptDecryptRoundTrip` is flaky — 13 failures in 400 runs~~ — **CLOSED
+     v0.23.12** (needle now impossible in base64, verified by mutation + 1000 runs; the
+     suite was swept and this was a singleton). It checked for a plaintext leak with
      `strings.Contains(string(enc), "hi")`, a **two-character needle in random base64**,
      which hits by chance and reddens a release for nothing. Latent since Layer 14, so
      CI has been rolling ~3% false failures without anyone connecting the occurrences.

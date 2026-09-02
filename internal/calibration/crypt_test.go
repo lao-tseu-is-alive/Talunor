@@ -17,8 +17,16 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 	if !IsEncrypted(enc) {
 		t.Fatal("output should be recognised as encrypted")
 	}
-	if strings.Contains(string(enc), "hi") {
-		t.Error("plaintext leaked into ciphertext envelope")
+	// The envelope is the magic line plus base64, so a leak check must use a needle
+	// the base64 alphabet CANNOT produce — otherwise it tests the odds instead of
+	// the code. This assertion used to look for "hi", two characters that random
+	// base64 contains roughly 3% of the time: it reddened releases for nothing for
+	// nine layers. Each needle below carries a ':', which is in neither the base64
+	// alphabet nor encMagic, so a false positive is impossible by construction.
+	for _, needle := range []string{"suite: enc", "scenarios:", "expect:"} {
+		if strings.Contains(string(enc), needle) {
+			t.Errorf("plaintext leaked into ciphertext envelope (found %q)", needle)
+		}
 	}
 	s, err := ParseMaybeEncrypted(enc, "s3cr3t")
 	if err != nil {

@@ -298,15 +298,14 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.11** — **a stuck reader, a nameable binary, and the page that
-> says where a patch goes.** `talunor --version` now prints the build identity and exits,
-> answered before any database or provider is touched — found while verifying the previous
-> release, whose tarball could only be identified with `strings`. A **`CONTRIBUTING.md`**
-> says where a pull request goes (course exercise → your fork; project fix → here) and
-> **points at `AGENTS.md` instead of restating it**. And Lesson 06's exercise finally has a
-> worked solution — on the `solutions/06-unit-convert` branch, deliberately off `main`,
-> where `make release-check` fails on purpose so the answer never sits next to the
-> question.
+> Current version: **v0.23.12** — **an absence assertion is only as good as the
+> improbability of its needle.** `TestEncryptDecryptRoundTrip` had been flaky since Layer
+> 14 at a measured 13 failures in 400 runs: it checked for a plaintext leak with a
+> **two-character needle** searched in random base64, which hits by chance. It now uses
+> needles carrying a `:` — a character neither base64 nor the envelope's magic can
+> produce — so a false positive is **impossible by construction** rather than merely
+> unlikely. Verified both ways: 1000 clean runs, and a deliberately leaking
+> `EncryptSuite` is still caught.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

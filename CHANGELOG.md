@@ -17,6 +17,46 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.12] - 2026-09-02 — An absence assertion is only as good as the improbability of its needle
+
+`TestEncryptDecryptRoundTrip` had been flaky since Layer 14 (v0.14.0) at a measured
+**13 failures in 400 runs**, and it reddened two `release-check` runs during the previous
+release alone. Open thread **A8**, closed.
+
+### Fixed
+
+- **The plaintext-leak check no longer tests the odds instead of the code.** It asserted
+  `!strings.Contains(string(enc), "hi")` — a **two-character needle** searched in an
+  envelope that is a magic line plus random base64. Random base64 contains `hi` about 3%
+  of the time, so the test failed when nothing was wrong. It now searches for three
+  needles taken from the plaintext (`suite: enc`, `scenarios:`, `expect:`), each carrying
+  a **`:`** — a character in neither the base64 alphabet nor `encMagic`, so **a false
+  positive is impossible by construction** rather than merely improbable.
+
+  Verified in both directions, because a check that cannot fail is worse than a flaky
+  one: **1000 consecutive runs, zero failures** (roughly 30 were expected before), and a
+  mutation that makes `EncryptSuite` emit the plaintext into the envelope is still caught
+  — all three needles fire.
+
+  The rest of the suite was swept for the same shape. Seven other absence-shaped
+  `strings.Contains` assertions exist; all search long, distinctive needles in
+  **deterministic** output (`"pivot_root"`, `"should-not-print"`, `"initializing"`), so
+  none can false-positive. This was a singleton, not a pattern.
+
+### Lessons learned
+
+- **An absence assertion is only as good as the improbability of its needle.** The fix is
+  not "make the needle longer" — that only buys smaller odds. It is to choose a needle the
+  data under test **cannot produce**: against base64, any character outside its alphabet.
+  *Prefer impossible to unlikely.*
+- **A flaky test is a claim that decays into noise.** This one said "the plaintext does not
+  leak" and, three times in a hundred, said the opposite. Nine layers of releases learned
+  to re-run instead of to read it — the cost was never the red run, it was the habit of
+  disbelieving a guard.
+- **The measurement is what made it actionable.** It was seen, dismissed as "probably
+  flaky", and only became a fixable defect once it was run 400 times and the rate written
+  down. *A defect nobody has quantified stays an opinion.*
+
 ## [0.23.11] - 2026-09-02 — A stuck reader, a nameable binary, and the page that says where a patch goes
 
 Three gaps the previous release exposed rather than closed: Lesson 06 now sends readers
