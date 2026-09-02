@@ -254,6 +254,7 @@ func buildTools(store *memory.Store) *tools.Registry {
 	reg := tools.NewRegistry(
 		tools.Calculator{},
 		tools.Clock{},
+		tools.UnitConvert{},
 		tools.NewRecallMemory(store),
 	)
 	if envBool("TALUNOR_BASH", false) {
