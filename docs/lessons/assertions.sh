@@ -38,6 +38,41 @@ assert() {
 	fi
 }
 
+echo "==> lesson 06 (build your first tool) — the deliberate hole, both arms"
+
+# The lesson hands the reader a skeleton whose `Value float64` cannot tell an
+# absent argument from a legitimate 0 °C, asks them to PREDICT the result, and
+# only then teaches the pointer. A well-meaning reader "fixing" the skeleton
+# would delete the discovery and leave a page that teaches nothing — the same
+# both-arms rule as lesson 25: the flaw must survive, and so must the fix.
+assert "06 the skeleton still carries the flaw (Value float64, non-pointer)" \
+	'grep -qE "^ *Value float64 .json:\"value\"." docs/lessons/06-build-your-first-tool/README.md &&
+	 grep -qE "^ *Value float64 .json:\"value\"." docs/lessons/06-build-your-first-tool/README.fr.md'
+assert "06 the schema still claims required (that is what json ignores)" \
+	'grep -q "\"required\": \[\"value\", \"from\"\]" docs/lessons/06-build-your-first-tool/README.md &&
+	 grep -q "\"required\": \[\"value\", \"from\"\]" docs/lessons/06-build-your-first-tool/README.fr.md'
+assert "06 the fix is taught (Value *float64) in both languages" \
+	'grep -qE "Value \*float64" docs/lessons/06-build-your-first-tool/README.md &&
+	 grep -qE "Value \*float64" docs/lessons/06-build-your-first-tool/README.fr.md'
+
+# The exercise is only an exercise while the answer is absent from the repo.
+assert "06 unit_convert is still NOT implemented upstream" \
+	'! test -f internal/tools/unitconvert.go && ! grep -rq "UnitConvert" internal/ cmd/'
+
+# Claims the lesson makes about the code the reader is told to open.
+assert "06 the four Tool methods the lesson quotes are still the interface" \
+	'sed -n "/^type Tool interface/,/^}/p" internal/tools/tool.go |
+	   grep -c -E "^[[:space:]]+(Name|Description|Schema|Execute)\(" | grep -q "^4$"'
+assert "06 a returned error still becomes an \"error:\" observation, not a fatal" \
+	'sed -n "/func (r \*Registry) Execute/,/^}/p" internal/tools/tool.go | grep -q "\"error: \" + err.Error()"'
+assert "06 builtins are still composed at tools.NewRegistry in cmd/talunor" \
+	'grep -q "tools.NewRegistry(" cmd/talunor/main.go'
+assert "06 the mixed test-package claim is still true (external AND internal exist)" \
+	'head -1 internal/tools/tools_test.go | grep -q "^package tools_test$" &&
+	 head -1 internal/tools/webfetch_test.go | grep -q "^package tools$"'
+assert "06 atlas-check really walks git ls-files (the failure the lesson promises)" \
+	'sed -n "/^atlas-check:/,/^$/p" Makefile | grep -q "git ls-files"'
+
 echo "==> lesson 15 (don't trust the review) — the five claims, re-derived"
 
 # C1 — "the project is CGO-free, using modernc.org/sqlite". False: cgo driver.
