@@ -67,6 +67,16 @@ assert "06 the worked-solution branch the lesson links to still exists" \
 	 git rev-parse -q --verify origin/solutions/06-unit-convert >/dev/null ||
 	 git rev-parse -q --verify refs/remotes/origin/solutions/06-unit-convert >/dev/null'
 
+# The fork instructions are the one path the maintainer CANNOT execute (GitHub refuses
+# to fork a repo into its owner's account), so the lesson says so and points at the
+# report issue. Nothing offline can prove the path works; what CAN be guarded is that
+# the admission survives an edit — dropping it would restore the false confidence.
+assert "06 the unverified-fork-path note survives, in both languages" \
+	'grep -q "the maintainer cannot run" docs/lessons/06-build-your-first-tool/README.md &&
+	 grep -q "le mainteneur ne peut pas exécuter" docs/lessons/06-build-your-first-tool/README.fr.md'
+assert "06 lesson and CONTRIBUTING point at the same report issue" \
+	'n=$(grep -ohE "Talunor/issues/[0-9]+" docs/lessons/06-build-your-first-tool/README.md docs/lessons/06-build-your-first-tool/README.fr.md CONTRIBUTING.md | sort -u | wc -l); [ "$n" = 1 ]'
+
 # Claims the lesson makes about the code the reader is told to open.
 assert "06 the four Tool methods the lesson quotes are still the interface" \
 	'sed -n "/^type Tool interface/,/^}/p" internal/tools/tool.go |

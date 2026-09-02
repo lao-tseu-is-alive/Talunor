@@ -340,6 +340,13 @@ gh pr create --repo <ton-user>/Talunor --base main --head learning/unit-convert-
 > `gh pr create` vise le dépôt **amont** par défaut quand il détecte un fork. Le `--repo`
 > explicite n'est pas décoratif.
 
+**Une note honnête sur ces quatre commandes.** Ce sont les seules instructions de ce cours
+que le mainteneur ne peut pas exécuter : GitHub interdit de forker son propre dépôt. Le
+comportement de `--repo` ci-dessus est vérifié contre la documentation de `gh`, mais le
+parcours de bout en bout n'a pas été exécuté depuis un autre compte. S'il diverge chez toi,
+dis-le dans l'[issue #3](https://github.com/lao-tseu-is-alive/Talunor/issues/3) — c'est une
+vraie contribution, et elle ne demande aucun Go.
+
 **N'envoie pas `unit_convert` en amont.** Chaque lecteur de cette leçon écrit le même
 outil ; la centième PR identique coûte du temps réel à un mainteneur et n'apporte rien
 que le projet veuille. Ce n'est pas de la fermeture, c'est la première règle de la

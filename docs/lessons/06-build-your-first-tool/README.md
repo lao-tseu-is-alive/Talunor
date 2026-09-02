@@ -336,6 +336,13 @@ gh pr create --repo <your-user>/Talunor --base main --head learning/unit-convert
 > `gh pr create` targets the **upstream** repository by default when it detects a
 > fork. The explicit `--repo` is not decoration.
 
+**One honest note about these four commands.** They are the only instructions in this
+course that the maintainer cannot run: GitHub does not let an owner fork their own
+repository. The `--repo` behaviour above is verified against `gh`'s own documentation, but
+the end-to-end path has not been executed from another account. If it diverges for you,
+say so in [issue #3](https://github.com/lao-tseu-is-alive/Talunor/issues/3) — that is a
+real contribution, and it needs no Go.
+
 **Do not send `unit_convert` upstream.** Every reader of this lesson writes the same
 tool; the hundredth identical PR costs a maintainer real time and adds nothing the
 project wants. This is not gatekeeping, it is the first rule of contributing:

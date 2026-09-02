@@ -298,14 +298,13 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.13** — **the coach ships, with the rule that would have caught
-> its own mistake.** `docs/lessons/COACH.md` (and its French twin) is an optional prompt
-> that turns an LLM assistant into a Socratic tutor for this course. It carries the guard
-> the session that inspired it lacked: **every claim about this repository comes with the
-> command that proves it**, and at the end of each lesson the student **falsifies one of
-> the tutor's statements** — Lesson 15 turned on the tutor. A coached run found a real
-> defect in Lesson 06 that no reviewer had, and in the same hour asserted a project
-> convention that does not exist; both facts are on the page.
+> Current version: **v0.23.14** — **the one claim no drift alarm can reach.** Lesson 06
+> tells readers to fork this repository and open a pull request — the only instruction
+> sequence in the course the maintainer structurally cannot run, because GitHub does not
+> let an owner fork their own repository. The lesson now says so where the commands are,
+> and [issue #3](https://github.com/lao-tseu-is-alive/Talunor/issues/3) is a permanently
+> open, bilingual channel for readers to report whether they worked. Two assertions pin
+> that the admission survives an edit, and that every page points at the same issue.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

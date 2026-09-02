@@ -24,6 +24,13 @@ answer must not sit next to the question. The worked solution lives on the
 
 > A patch is judged by what it changes for the maintainer, not by what it cost you.
 
+**A standing request.** The fork instructions in Lesson 06 are the one path here the
+maintainer cannot execute — GitHub does not let an owner fork their own repository. If you
+work that lesson, report back in
+[issue #3](https://github.com/lao-tseu-is-alive/Talunor/issues/3) whether the commands
+worked as written. It needs no Go, and it verifies a claim no drift alarm in this
+repository can reach.
+
 ## Before you open it
 
 1. **Open an issue first**, stating the problem, before writing the fix. The cheapest

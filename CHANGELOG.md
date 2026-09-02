@@ -17,6 +17,46 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.14] - 2026-09-02 — The one claim no drift alarm can reach
+
+Lesson 06 tells readers to fork this repository and open a pull request. It is the only
+instruction sequence in the course that the maintainer **structurally cannot execute**:
+GitHub does not let an owner fork their own repository. Six drift alarms re-derive what
+this project's documents claim, and none of them can reach this one — the proof lives on
+someone else's machine and account.
+
+### Added
+
+- **[Issue #3](https://github.com/lao-tseu-is-alive/Talunor/issues/3)** — a bilingual,
+  permanently open thread asking readers who work Lesson 06 whether the fork and PR
+  commands worked as written. It states in its first line that **it is meant to stay
+  open**, so a long-open date reads as a standing channel rather than neglected work, and
+  it separates what was verified (`gh pr create` targets the upstream repo by default —
+  from `gh`'s own documentation, not from recollection) from what was not (the end-to-end
+  run from another account). Labelled `good first issue`: answering needs no Go, which
+  makes it the most accessible contribution here.
+- **An honest note in Lesson 06** (EN + FR), at the four commands themselves, and a
+  standing request in `CONTRIBUTING.md`. Discoverability is the whole point — an issue
+  nobody is sent to is an issue nobody reads.
+- Two assertions. The first pins that the admission **survives an edit**, in both
+  languages: dropping it would silently restore the false confidence, which is the failure
+  mode this project keeps meeting. The second checks that the lesson (both languages) and
+  `CONTRIBUTING.md` point at the **same** issue number — verified by mutation, changing one
+  file's number fails the gate.
+
+### Lessons learned
+
+- **A guard has a reach, and this repository had never named the far edge of it.**
+  `lessons-assert` re-derives claims from code, `docs-assert` compares documents to
+  artefacts — both assume the evidence is on this machine. A claim whose proof requires
+  another person's GitHub account is outside every alarm here, and the only instrument
+  available for it is a reader who ran the path. *When no guard can reach a claim, the
+  honest move is to say so where the claim is made, and open a channel for the answer.*
+- **What can be guarded is the admission, not the fact.** Nothing offline can prove the
+  fork instructions work. What an assertion *can* pin is that the page still tells the
+  reader those instructions are unverified — which is the part a future well-meaning edit
+  would quietly delete.
+
 ## [0.23.13] - 2026-09-02 — The coach ships, with the rule that would have caught its own mistake
 
 A coached run of Lesson 06 found a defect no reviewer had. The same session asserted a

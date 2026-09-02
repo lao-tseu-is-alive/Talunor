@@ -1143,9 +1143,36 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   reader's vigilance** — "be critical of the tutor" is advice, "show the command or label
   it a belief" is a rule the tutor executes; the same distinction between a documented
   intention and an enforced one that this project keeps rediscovering.
+- **v0.23.14 (docs)** = **the one claim no drift alarm can reach.** Lesson 06 tells readers
+  to fork this repo and open a PR — the only instruction sequence in the course the
+  maintainer **structurally cannot execute** (GitHub refuses to fork a repo into its
+  owner's account; an assistant working here is blocked the same way). **Issue #3** is a
+  bilingual, PERMANENTLY OPEN thread asking readers who worked the lesson whether the
+  commands ran as written; its first line says it is meant to stay open, so a long-open
+  date reads as a standing channel and not neglected work. It separates what WAS verified
+  (`gh pr create` targets upstream by default — from `gh pr create --help`, not from
+  recollection) from what was NOT (the end-to-end run from another account). Labelled
+  `good first issue`: answering needs no Go. The lesson (EN+FR) carries an honest note at
+  the four commands and `CONTRIBUTING.md` a standing request — discoverability is the
+  point, an issue nobody is sent to is an issue nobody reads. Two assertions: the
+  admission must SURVIVE AN EDIT in both languages, and lesson + CONTRIBUTING must cite
+  the SAME issue number (verified by mutation). **Keepers: a guard has a reach, and this
+  repo had never named its far edge** — `lessons-assert` re-derives from code,
+  `docs-assert` compares document to artefact, and BOTH assume the evidence is on this
+  machine; a claim whose proof needs another person's account is outside every alarm here,
+  and the only instrument for it is a reader who ran the path. **And what can be guarded
+  is the ADMISSION, not the fact** — nothing offline proves the instructions work, but an
+  assertion can pin that the page still says they are unverified, which is exactly what a
+  well-meaning future edit would delete.
 - **Next — open threads.** Same per-layer checkpoint rhythm. Ordered by what a failure
   would cost, not by effort. *(Closed: "reference docs have no drift alarm" → v0.23.6;
   `agent.go` split → v0.22.5.)*
+
+  **A0. Standing, not closeable — [issue #3](https://github.com/lao-tseu-is-alive/Talunor/issues/3):**
+  whether Lesson 06's fork + PR instructions work from a reader's account. Outside every
+  drift alarm (the proof is on another machine and account) and not fixable by the
+  maintainer or an assistant. Do NOT close it as stale; fold reports into the lesson when
+  they arrive.
 
   **A. Remaining findings from the 2026-08-28 review** (all verified against the code):
   1. ~~`scripts/initial_setup.sh` bypasses the supply chain~~ — **CLOSED v0.23.9.** — `curl -sL` with no
