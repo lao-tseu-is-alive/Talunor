@@ -298,14 +298,14 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.12** — **an absence assertion is only as good as the
-> improbability of its needle.** `TestEncryptDecryptRoundTrip` had been flaky since Layer
-> 14 at a measured 13 failures in 400 runs: it checked for a plaintext leak with a
-> **two-character needle** searched in random base64, which hits by chance. It now uses
-> needles carrying a `:` — a character neither base64 nor the envelope's magic can
-> produce — so a false positive is **impossible by construction** rather than merely
-> unlikely. Verified both ways: 1000 clean runs, and a deliberately leaking
-> `EncryptSuite` is still caught.
+> Current version: **v0.23.13** — **the coach ships, with the rule that would have caught
+> its own mistake.** `docs/lessons/COACH.md` (and its French twin) is an optional prompt
+> that turns an LLM assistant into a Socratic tutor for this course. It carries the guard
+> the session that inspired it lacked: **every claim about this repository comes with the
+> command that proves it**, and at the end of each lesson the student **falsifies one of
+> the tutor's statements** — Lesson 15 turned on the tutor. A coached run found a real
+> defect in Lesson 06 that no reviewer had, and in the same hour asserted a project
+> convention that does not exist; both facts are on the page.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

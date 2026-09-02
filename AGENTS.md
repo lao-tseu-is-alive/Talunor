@@ -1123,6 +1123,26 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   the habit of disbelieving a guard. And **the measurement is what made it actionable** —
   it was dismissed as "probably flaky" until it was run 400 times and the rate written
   down; *a defect nobody has quantified stays an opinion.*
+- **v0.23.13 (docs)** = **the coach ships, with the rule that would have caught its own
+  mistake.** `docs/lessons/COACH.md` + `COACH.fr.md` — an optional prompt turning an LLM
+  assistant into a Socratic tutor for the course (one lesson at a time, two tracks Go +
+  agentic, hint ladders, retrieval practice, read-at-the-tag discipline, never writes code
+  for the student). It ships **because of its guards, not despite its win**: **§1a — every
+  claim about this repository comes with its command** (else say "I believe, but have not
+  checked" and label it interpretation), naming the real incident — a session told a
+  student `package tools_test` was "the project convention" when the package is mixed;
+  plausible, useful, false, and a three-second `head -3` would have caught it — and
+  **Phase H — falsify one of your own claims**, every lesson, preferably one the student
+  accepted without checking (Lesson 15 turned on the tutor). The framing states that **a
+  transcript is an artefact to audit, not evidence of what was learned**: the session's
+  write-up was produced by the tutor about its own performance and reported its own false
+  claim as a correction. Course index (EN+FR) + atlas updated. **Keepers: a tool that found
+  a defect is not thereby trustworthy** — the same hour produced a confident falsehood, so
+  shipping it WITH its guard is the honest form and shipping it on the strength of the win
+  would have been the sales pitch. And **the guard belongs in the prompt, not in the
+  reader's vigilance** — "be critical of the tutor" is advice, "show the command or label
+  it a belief" is a rule the tutor executes; the same distinction between a documented
+  intention and an enforced one that this project keeps rediscovering.
 - **Next — open threads.** Same per-layer checkpoint rhythm. Ordered by what a failure
   would cost, not by effort. *(Closed: "reference docs have no drift alarm" → v0.23.6;
   `agent.go` split → v0.22.5.)*

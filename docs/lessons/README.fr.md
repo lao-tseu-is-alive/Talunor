@@ -133,3 +133,13 @@ son propre tag) :
 
 Prends ton temps. Le but n'est pas la vitesse — c'est d'être capable d'*expliquer*
 comment chaque pièce fonctionne et pourquoi elle a été construite ainsi.
+
+## Optionnel — le travailler avec un coach
+
+[**COACH.fr.md**](COACH.fr.md) est un prompt à coller dans un assistant LLM avec ce dépôt
+ouvert : il t'accompagne leçon par leçon au lieu de faire un exposé, en te demandant ce que
+tu prédis avant que tu regardes. Deux règles y comptent plus que les autres — le coach doit
+montrer la **commande** derrière chaque affirmation qu'il fait sur ce code, et à la fin de
+chaque leçon tu **falsifies une de ses phrases**. Un tuteur produit des affirmations
+assurées bien plus vite qu'une page écrite, et sans aucune alarme de dérive derrière.
+Sers-t'en, et vérifie-le.

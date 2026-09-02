@@ -255,6 +255,10 @@ Talunor/
 │   └── lessons/           #   Hands-on course: a guided path through the tag-by-tag history.
 │       │                  #     Each lesson is fully bilingual: README.md (EN, canonical) + README.fr.md (FR).
 │       ├── README.md      #     Course index + prerequisites + the two-badge convention.
+│       ├── COACH.md       #     Optional coaching prompt: paste into an LLM to work the course
+│       │                  #     Socratically. Requires the command behind every claim, and has
+│       │                  #     you falsify one of the tutor's statements per lesson (Lesson 15
+│       │                  #     turned on the tutor). COACH.fr.md is the French twin.
 │       ├── assertions.sh  #     The course contract: re-derives the claims lessons ask readers to
 │       │                  #       reproduce (make lessons-assert, in release-check) — prose drift
 │       │                  #       lessons-check is blind to.

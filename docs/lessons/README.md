@@ -126,3 +126,12 @@ them; Lesson 00 explains why, and each historical lesson maps its own tag):
 
 Take your time. The goal isn't speed — it's being able to *explain* how each piece
 works and why it was built that way.
+
+## Optional — work it with a coach
+
+[**COACH.md**](COACH.md) is a prompt you can paste into an LLM assistant with this
+repository open: it coaches you lesson by lesson instead of lecturing, asking what you
+predict before you look. Two rules in it matter more than the rest — the coach must show
+the **command** behind every claim it makes about this codebase, and at the end of each
+lesson you **falsify one of its statements**. A tutor produces confident sentences far
+faster than a written page and has no drift alarm behind it. Use it, and check it.

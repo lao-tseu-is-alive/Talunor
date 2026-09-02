@@ -17,6 +17,50 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.13] - 2026-09-02 — The coach ships, with the rule that would have caught its own mistake
+
+A coached run of Lesson 06 found a defect no reviewer had. The same session asserted a
+"project convention" that does not exist. Both outcomes come from the same property — a
+tutor generates confident sentences much faster than a written page — so the prompt ships
+with the guard the session lacked.
+
+### Added
+
+- **`docs/lessons/COACH.md`** (+ **`COACH.fr.md`**) — an optional coaching prompt to paste
+  into an LLM assistant with the repository open. Socratic protocol, two learning tracks
+  (Go and agentic architecture), one lesson at a time, hint ladders, retrieval practice,
+  and the course's own discipline of reading a lesson **at its tag**.
+
+  Two rules are the point of shipping it rather than leaving it in a scratch file:
+
+  - **§1a — every claim about this repository comes with its command.** If the coach
+    cannot produce the command, it must say "I believe, but have not checked" and mark the
+    statement as interpretation. The rule names the real incident that motivated it: a
+    session told a student `package tools_test` was "the project convention", when the
+    package is mixed. Plausible, useful, false, and a three-second `head -3` would have
+    caught it.
+  - **Phase H — falsify one of your own claims**, every lesson, preferably one the student
+    accepted without checking. Lesson 15 is about not believing confident text; a tutor
+    that cannot be checked would be that lesson's counter-example.
+
+  The framing section is equally explicit that **a transcript is an artefact to audit, not
+  evidence of what was learned** — the session's own write-up was produced by the tutor
+  about its own performance, and reported its false claim as a correction.
+
+- The course index (EN + FR) gains an **"Optional — work it with a coach"** section, and
+  `docs/atlas.md` the two files.
+
+### Lessons learned
+
+- **A tool that found a defect is not thereby trustworthy.** The coached session earned
+  its place by finding something real, and in the same hour produced a confident falsehood
+  in a course that devotes a lesson to that exact failure. Shipping it *with* its guard is
+  the honest form; shipping it on the strength of the win would have been the sales pitch.
+- **The guard belongs in the prompt, not in the reader's vigilance.** "Be critical of the
+  tutor" is advice; "show the command or label it a belief" is a rule the tutor executes.
+  The difference is the same one this project keeps rediscovering between a documented
+  intention and an enforced one.
+
 ## [0.23.12] - 2026-09-02 — An absence assertion is only as good as the improbability of its needle
 
 `TestEncryptDecryptRoundTrip` had been flaky since Layer 14 (v0.14.0) at a measured
