@@ -298,15 +298,15 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.9** — **four corrections, and the guard that should have
-> caught two of them.** `scripts/initial_setup.sh` fetched the native extensions with
-> no checksum verification while `make deps` pins every byte — a discoverable path that
-> loaded **unverified native code**; it now delegates. Release tags are matched with an
-> anchored SemVer expression instead of a shell glob (which accepted `v1abc.2.3`) and
-> checked against `internal/version`. A database migrated by a newer build is refused
-> rather than silently written to. And two status-line drifts are fixed **with the two
-> `docs-assert` assertions that would have caught them** — comparing documents against
-> artefacts, not prose.
+> Current version: **v0.23.10** — **Lesson 06 keeps its flaw on purpose.** A coached run
+> of the lesson found a defect in the teaching material: its skeleton decodes `value` into
+> a `float64` while its own schema declares it `required`, so `{"from":"c"}` decodes clean
+> and the tool answers `32 f` — a confident conversion of a temperature nobody sent, in the
+> course whose whole subject is that gap. The flaw is now **deliberate and announced**:
+> predict, reproduce, then reach for the pointer that separates *absent* from *zero*. The
+> lesson also gains the `Go guarantees / the model decides` table and, at last, **what to
+> do with the patch you just wrote** — including running `make release-check` knowing
+> `atlas-check` will catch the file you added to the project but not to the map of it.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

@@ -1053,6 +1053,33 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   comparison (document vs ARTEFACT — the directory listing, the roadmap's own record), not
   more claim checks. *When a guard misses something, ask what KIND of statement it cannot
   see.* Third time this cycle that config read as a stricter language than it is.
+- **v0.23.10 (docs)** = **Lesson 06 keeps its flaw on purpose — and the course's first
+  pull request.** A COACHED RUN of the lesson (a reader working it with an LLM tutor) found
+  a defect no reviewer had: the skeleton decodes `value` into a `float64` while its own
+  `Schema()` declares `"required": ["value","from"]`, so `{"from":"c"}` decodes clean,
+  `Value` stays at the zero value, and the tool answers **`32 f`** — a confident conversion
+  of a temperature nobody sent, while the completion checklist asked for "missing value →
+  error", which that skeleton cannot express. **The flaw was worth keeping; only its silence
+  was the defect** — it is now announced as deliberate, preceded by a PREDICTION question and
+  a throwaway test, then the pointer separating *absent* from *zero* (`From` gets none: reach
+  for a pointer where the zero value is legal, not by reflex). Added: the `Go guarantees /
+  the model decides` table (tied to Lesson 14 — *a guarantee with a qualifier*), registration
+  as a SEPARATE guarantee (green tests ≠ a callable tool), and **"Proposing your patch"** —
+  the PR goes to the reader's OWN fork, `unit_convert` must not come upstream, `gh pr create`
+  targets upstream by default on a fork, and `make release-check` is run KNOWING `atlas-check`
+  will fail on the file added to the project but not to the map of it. Nine assertions on
+  Lesson 25's both-arms rule (the flaw must SURVIVE and the fix must be TAUGHT, both
+  languages), verified by mutation. Also corrected: `package tools_test` is a reasoned choice,
+  not "the project convention" the session claimed — the package is honestly mixed.
+  **Keepers: a lesson that hands out a flawed template teaches the flaw either way** — the
+  only choice is whether the reader discovers it under guidance or ships it. **A coached run
+  is a drift detector AND a claim generator**: it found the hole, then asserted a convention
+  that does not exist, and its own write-up (by the tutor, about the tutor) reported that as a
+  correction — *a transcript is an artefact to audit, not evidence of what was learned*. And
+  **a contribution path documented but never once exercised is a worked example, not a test**,
+  so this release arrives as a PULL REQUEST (squash-merged, `main` stays linear) — with its
+  limit now known: **GitHub does not let an owner fork their own repository**, so the fork
+  half of these instructions cannot be rehearsed here without a second account or an org.
 - **Next — open threads.** Same per-layer checkpoint rhythm. Ordered by what a failure
   would cost, not by effort. *(Closed: "reference docs have no drift alarm" → v0.23.6;
   `agent.go` split → v0.22.5.)*
@@ -1085,6 +1112,15 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   7. **Startup diagnostics for malformed config** — invalid numeric/duration env values
      silently fall back to defaults, so a typo in a retention, confidence or timeout
      setting looks like an accepted setting.
+
+  8. **`TestEncryptDecryptRoundTrip` is flaky — 13 failures in 400 runs** (found while
+     gating v0.23.10). It checks for a plaintext leak with
+     `strings.Contains(string(enc), "hi")`, a **two-character needle in random base64**,
+     which hits by chance and reddens a release for nothing. Latent since Layer 14, so
+     CI has been rolling ~3% false failures without anyone connecting the occurrences.
+     Same shape as Lesson 06's own subject: *the test is not wrong about what it wants,
+     it is wrong about what it can distinguish.* Fix the needle (a long, distinctive
+     marker), and check the suite for other short-substring assertions.
 
   **B. Longer-lead engineering** (real, deferred by agreement 2026-08-28):
   - **Fuzz targets** for the hostile-input surfaces: dotenv and YAML parsing, SSE/tool-call

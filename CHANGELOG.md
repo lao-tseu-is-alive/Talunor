@@ -17,6 +17,80 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.10] - 2026-09-02 — Lesson 06 keeps its flaw on purpose
+
+A coached run of Lesson 06 — a reader working the lesson with an LLM tutor, playing it
+straight — found a defect in the teaching material, which is the best thing a lesson can
+do. The lesson is rewritten around the defect instead of shipping it silently, and it
+finally answers the question it never asked: what is the reader supposed to *do* with the
+code they just wrote?
+
+### Fixed
+
+- **Lesson 06's skeleton could not express its own checklist.** It decodes `value` into a
+  `float64` while its `Schema()` declares `"required": ["value", "from"]`. `encoding/json`
+  enforces no schema, so `{"from":"c"}` decodes clean, `Value` stays at the zero value,
+  and the tool answers `32 f` — a confident, well-formatted conversion of a temperature
+  nobody sent. Meanwhile the completion checklist asked for "missing value → error", which
+  that skeleton cannot express. **The flaw was worth keeping; only its silence was the
+  defect.** It is now introduced as deliberately incomplete, preceded by a prediction
+  question and a throwaway test, and followed by the pointer that separates *absent* from
+  *zero*. `From` deliberately gets none — reach for a pointer where the zero value is a
+  legal input, not by reflex.
+
+### Added
+
+- **The `Go guarantees / the model decides` table**, tied to Lesson 14 one floor down: a
+  schema that says `required` and an `Execute` that assumes it was honoured is a guarantee
+  about the qualifier, not about the input.
+- **Registration as a separate guarantee.** Green tests prove the conversions are right;
+  they prove nothing about the agent being able to *call* the tool. Dead code keeps every
+  test passing.
+- **"Proposing your patch"** — the part the lesson never had. The PR goes to the reader's
+  **own fork**; `unit_convert` must not come upstream (the hundredth identical PR costs a
+  maintainer real time — *a patch is judged by what it changes for the maintainer, not by
+  what it cost you*); `gh pr create` targets upstream by default on a fork; and
+  `make release-check` is run **knowing it will fail** on
+  `atlas: not referenced: internal/tools/unitconvert.go`. Nothing is broken — a drift alarm
+  noticed that a file was added to the project but not to the map of the project.
+- **Nine assertions in `docs/lessons/assertions.sh`**, on Lesson 25's both-arms rule: the
+  flaw must survive **and** the fix must be taught, in both languages. Verified by mutation
+  — a well-meaning "fix" of the skeleton fails `release-check`, and so does a
+  `unitconvert.go` merged upstream, which would quietly turn the exercise into a reading.
+
+### Changed
+
+- `package tools_test` is now presented as a **reasoned choice, not a house rule**. The
+  coached session asserted it was "the project convention"; the package is honestly mixed
+  (`tools_test.go` external, `bash_test.go` and `webfetch_test.go` internal, and one of
+  those two touches nothing unexported). The reader is told to check with
+  `head -3 internal/tools/*_test.go`.
+
+### Lessons learned
+
+- **A lesson that hands out a flawed template teaches the flaw either way.** The only
+  choice is whether the reader discovers it under guidance or ships it. Three releases of
+  readers were handed a tool that silently invents a temperature, in the course whose whole
+  subject is the gap between what software guarantees and what a model is merely asked to
+  do — the example was sitting in the exercise, unnamed.
+- **A coached run is a drift detector, and a claim generator.** It found the skeleton hole
+  no reviewer had. It also asserted a project convention that does not exist, in a course
+  that devotes Lesson 15 to falsifying exactly that kind of confident sentence — and the
+  session's own write-up, produced by the tutor about its own performance, reported it as a
+  correction. *A transcript is an artefact to audit, not evidence of what was learned.*
+- **A contribution path documented but never once exercised is a worked example, not a
+  test** — v0.22.0's own side-discovery, applied to a page. This release is therefore the
+  first change here to arrive as a pull request (squash-merged, so `main` stays linear),
+  so that the flow the lesson prescribes has been run at least once before a reader is
+  told to run it. Its limit is now known too: **GitHub does not let an owner fork their own
+  repository**, so the maintainer cannot rehearse the fork half of these instructions
+  without a second account or an org.
+- **Found in passing, not fixed here:** `TestEncryptDecryptRoundTrip` is flaky at
+  **13 failures in 400 runs**. It checks for a plaintext leak with
+  `strings.Contains(string(enc), "hi")` — a two-character needle in random base64, which
+  hits by chance. It is the same shape as the lesson: *the test is not wrong about what it
+  wants, it is wrong about what it can distinguish.* Latent since Layer 14; its own patch.
+
 ## [0.23.9] - 2026-08-28 — Four corrections, and the guard that should have caught two of them
 
 The XS tier of the 2026-08-28 review. Small, independent, no behaviour change for a
