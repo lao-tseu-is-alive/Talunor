@@ -26,6 +26,9 @@ Talunor/
 ├── CHANGELOG.md              # Version-by-version build log; each release carries a "lessons learned".
 ├── AGENTS.md                 # Contributor guide (AI/human): architecture, conventions, release ritual, gotchas.
 ├── CLAUDE.md                 # Symlink → AGENTS.md, so Claude Code auto-loads the guide every session.
+├── CONTRIBUTING.md           # Where a PR goes (course exercise → your fork; project fix → here) + the gate.
+│                             #   Points at AGENTS.md rather than restating it: a second copy of a
+│                             #   mechanism becomes an older, weaker version of it.
 ├── LICENSE                   # Project license.
 ├── go.mod / go.sum           # Go module definition and dependency checksums (Go 1.27, cgo).
 │

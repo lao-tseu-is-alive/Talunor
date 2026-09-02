@@ -298,15 +298,15 @@ See [`.env_sample`](.env_sample) for a copy-paste starting point.
 
 ## What's new
 
-> Current version: **v0.23.10** — **Lesson 06 keeps its flaw on purpose.** A coached run
-> of the lesson found a defect in the teaching material: its skeleton decodes `value` into
-> a `float64` while its own schema declares it `required`, so `{"from":"c"}` decodes clean
-> and the tool answers `32 f` — a confident conversion of a temperature nobody sent, in the
-> course whose whole subject is that gap. The flaw is now **deliberate and announced**:
-> predict, reproduce, then reach for the pointer that separates *absent* from *zero*. The
-> lesson also gains the `Go guarantees / the model decides` table and, at last, **what to
-> do with the patch you just wrote** — including running `make release-check` knowing
-> `atlas-check` will catch the file you added to the project but not to the map of it.
+> Current version: **v0.23.11** — **a stuck reader, a nameable binary, and the page that
+> says where a patch goes.** `talunor --version` now prints the build identity and exits,
+> answered before any database or provider is touched — found while verifying the previous
+> release, whose tarball could only be identified with `strings`. A **`CONTRIBUTING.md`**
+> says where a pull request goes (course exercise → your fork; project fix → here) and
+> **points at `AGENTS.md` instead of restating it**. And Lesson 06's exercise finally has a
+> worked solution — on the `solutions/06-unit-convert` branch, deliberately off `main`,
+> where `make release-check` fails on purpose so the answer never sits next to the
+> question.
 
 **Where the project stands.** Iterations 1–3 gave Talunor its memory, a streaming
 provider, a ReAct **tool loop**, a **policy engine** and an optional **planner**;

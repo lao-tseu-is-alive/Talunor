@@ -17,6 +17,56 @@ changed but the *lessons learned* while getting there.
   before it runs), semantic deviation detection, and automatic light re-planning
   when a step surprises — each a small layer / lesson of its own.
 
+## [0.23.11] - 2026-09-02 — A stuck reader, a nameable binary, and the page that says where a patch goes
+
+Three gaps the previous release exposed rather than closed: Lesson 06 now sends readers
+to open a pull request, but the project had no `CONTRIBUTING.md`; the exercise had no
+solution anywhere, so a stuck reader had nothing; and verifying the shipped binary's
+version needed `strings` on it.
+
+### Added
+
+- **`talunor --version`** (`-version` too) prints the build identity and exits. It is
+  answered **before** anything else in `main` — identifying a binary must not depend on a
+  database, a model or a provider being reachable. Found while verifying the v0.23.10
+  release artefact: the published tarball could only be identified by running `strings`
+  over it, in a project whose own rule is *verify the artefact, not the run*.
+- **`CONTRIBUTING.md`** — where a PR goes (course exercise → your fork; project fix →
+  here), the gate, commit style, and the two rules that surprise people: a layer owes a
+  **bilingual lesson**, and documented claims are **re-derived** by the assertion scripts.
+  It deliberately **points at `AGENTS.md` instead of restating it** — v0.23.9's lesson
+  applied to itself: a second copy of a mechanism becomes an older, weaker version of it.
+- **A worked solution for Lesson 06**, on its own branch `solutions/06-unit-convert`, with
+  a `SOLUTION.md` that explains why it is *not* on `main` and why `make release-check`
+  **fails there on purpose** (the `06 unit_convert is still NOT implemented upstream`
+  assertion, plus `atlas-check`). The lesson gains an **"If you get stuck"** section that
+  sends the reader there *after* the prediction step — that one only works once.
+- A tenth Lesson 06 assertion: the solution branch must still be reachable. It is a
+  **document-vs-artefact** check (v0.23.9's shape), not a claim re-derived from code —
+  nothing in the source can answer "does the branch this page links to exist?".
+
+### Changed
+
+- `.gitignore` now covers the French Episode 1 source documents in `docs/video/`.
+
+### Lessons learned
+
+- **A course exercise with no solution anywhere is a design choice, and it has a cost.**
+  The table tests *are* a corrigé for a reader who gets that far; the reader who does not
+  had nothing. Putting the answer on `main` would have destroyed the exercise for everyone
+  to help the few — a branch costs one `git fetch` and keeps the discovery intact. *The
+  fix for "some readers get stuck" is a path they must choose to take, not a shortcut in
+  the main one.*
+- **A branch that deliberately fails `release-check` is worth more than a passing one
+  here.** `SOLUTION.md` states the two failures and names them as the guard working. A
+  reader who runs the gate and sees red learns what the assertion is for — better than
+  never meeting it.
+- **The gap a page leaves is invisible until something walks through it.** v0.23.10 told
+  readers to open a pull request and pointed them at `AGENTS.md`, an agent-oriented working
+  agreement, because there was nothing else to point at. Writing the instruction is what
+  made the missing page obvious — *documentation reveals its own holes only when it starts
+  giving directions.*
+
 ## [0.23.10] - 2026-09-02 — Lesson 06 keeps its flaw on purpose
 
 A coached run of Lesson 06 — a reader working the lesson with an LLM tutor, playing it

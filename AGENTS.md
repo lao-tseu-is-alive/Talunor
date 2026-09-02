@@ -1080,6 +1080,30 @@ gotchas). `qwen2.5-coder:14b` is a faster non-thinking alternative for smokes.
   so this release arrives as a PULL REQUEST (squash-merged, `main` stays linear) — with its
   limit now known: **GitHub does not let an owner fork their own repository**, so the fork
   half of these instructions cannot be rehearsed here without a second account or an org.
+- **v0.23.11 (docs/tooling)** = **a stuck reader, a nameable binary, and the page that
+  says where a patch goes** — three gaps v0.23.10 EXPOSED rather than closed. (1)
+  **`talunor --version`** (`-version` too), answered BEFORE anything else in `main`:
+  identifying a binary must not depend on a database, a model or a provider being
+  reachable. Found while verifying the v0.23.10 artefact — the published tarball could
+  only be identified by running `strings` over it, in a project whose own rule is *verify
+  the artefact, not the run*. (2) **`CONTRIBUTING.md`**: where a PR goes (course exercise →
+  your fork; project fix → here), the gate, commit style, and the two rules that surprise
+  people (a layer owes a BILINGUAL LESSON; documented claims are RE-DERIVED by the
+  assertion scripts). It **points at `AGENTS.md` instead of restating it** — v0.23.9's
+  lesson applied to itself. (3) **A worked solution for Lesson 06 on its own branch**
+  `solutions/06-unit-convert`, with a `SOLUTION.md` explaining why it is NOT on `main` and
+  why `make release-check` **fails there on purpose** (the
+  `06 unit_convert is still NOT implemented upstream` assertion + `atlas-check`); the
+  lesson gains **"If you get stuck"**, placed after the prediction step because that one
+  only works once. A tenth 06 assertion guards the branch's existence — a
+  **document-vs-artefact** check (v0.23.9's shape), since no source file can answer "does
+  the branch this page links to exist?". **Keepers: a course exercise with no solution
+  anywhere is a design choice with a cost** — the fix for "some readers get stuck" is a
+  path they must CHOOSE to take, not a shortcut in the main one. **A branch that
+  deliberately fails `release-check` is worth more here than a passing one**: a reader who
+  runs the gate and meets the assertion learns what it is for. And **documentation reveals
+  its own holes only when it starts giving directions** — telling readers to open a PR is
+  what made the missing CONTRIBUTING.md obvious.
 - **Next — open threads.** Same per-layer checkpoint rhythm. Ordered by what a failure
   would cost, not by effort. *(Closed: "reference docs have no drift alarm" → v0.23.6;
   `agent.go` split → v0.22.5.)*

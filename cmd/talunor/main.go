@@ -46,7 +46,14 @@ func main() {
 	plain := flag.Bool("plain", false, "use the plain line-based REPL instead of the TUI")
 	list := flag.Int("list", 0, "dump the most recent N stored memories and exit")
 	reembed := flag.Bool("reembed", false, "re-embed every stored memory with the current model, then exit")
+	showVersion := flag.Bool("version", false, "print the build identity and exit")
 	flag.Parse()
+	// Answered before anything else: identifying a binary must not depend on a
+	// database, a model or a provider being reachable.
+	if *showVersion {
+		fmt.Println(version.String())
+		return
+	}
 	if err := run(*plain, *list, *reembed); err != nil {
 		fmt.Fprintln(os.Stderr, "talunor: "+err.Error())
 		os.Exit(1)

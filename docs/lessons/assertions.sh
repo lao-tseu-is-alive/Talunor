@@ -59,6 +59,14 @@ assert "06 the fix is taught (Value *float64) in both languages" \
 assert "06 unit_convert is still NOT implemented upstream" \
 	'! test -f internal/tools/unitconvert.go && ! grep -rq "UnitConvert" internal/ cmd/'
 
+# The solution branch the lesson sends a stuck reader to must still be reachable —
+# a document-vs-artefact check (v0.23.9's shape), not a claim re-derived from code.
+# A fresh clone has it as a remote ref; a maintainer's checkout may have it local.
+assert "06 the worked-solution branch the lesson links to still exists" \
+	'git rev-parse -q --verify solutions/06-unit-convert >/dev/null ||
+	 git rev-parse -q --verify origin/solutions/06-unit-convert >/dev/null ||
+	 git rev-parse -q --verify refs/remotes/origin/solutions/06-unit-convert >/dev/null'
+
 # Claims the lesson makes about the code the reader is told to open.
 assert "06 the four Tool methods the lesson quotes are still the interface" \
 	'sed -n "/^type Tool interface/,/^}/p" internal/tools/tool.go |

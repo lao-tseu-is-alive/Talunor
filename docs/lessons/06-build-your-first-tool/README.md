@@ -288,6 +288,25 @@ the model emits a `ToolCall` → `reactLoop` → `runTool` → `policy.Evaluate`
 `Registry.Execute` → your `Execute` → an observation with `RoleTool` → a new call to
 the provider. Deterministic everywhere except the two ends.
 
+## If you get stuck
+
+There is a worked solution, on its own branch:
+
+```bash
+git fetch origin solutions/06-unit-convert
+git diff HEAD origin/solutions/06-unit-convert -- internal/tools/
+```
+
+Read it **after** you have tried, and ideally after you have answered the prediction
+question — that one only works once. It lives off `main` on purpose: on `main` the
+answer would sit next to the question, and `make release-check` refuses it (the
+assertion `06 unit_convert is still NOT implemented upstream`). The branch's
+`SOLUTION.md` says why, and why `release-check` deliberately **fails** there.
+
+Your version does not have to match it. Two things are worth comparing: that `Value`
+is a `*float64` while `From` is not, and that your table carries **both** `0 c` and a
+missing `value`.
+
 ## The principle
 
 > Adding a capability by **extension** (a new `Tool`) is safer than **modifying**

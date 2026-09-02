@@ -291,6 +291,25 @@ Suis le chemin complet une fois : `Registry.Defs()` → `Agent.toolSpecs()` →
 `policy.Evaluate` → `Registry.Execute` → ton `Execute` → une observation avec `RoleTool`
 → un nouvel appel au provider. Déterministe partout, sauf aux deux extrémités.
 
+## Si tu bloques
+
+Il existe un corrigé, sur sa propre branche :
+
+```bash
+git fetch origin solutions/06-unit-convert
+git diff HEAD origin/solutions/06-unit-convert -- internal/tools/
+```
+
+Lis-le **après** avoir essayé, et idéalement après avoir répondu à la question de
+prédiction — celle-là ne fonctionne qu'une fois. Il vit hors de `main` volontairement :
+sur `main`, la réponse serait à côté de la question, et `make release-check` la refuse
+(l'assertion `06 unit_convert is still NOT implemented upstream`). Le `SOLUTION.md` de
+la branche explique pourquoi, et pourquoi `release-check` y **échoue** délibérément.
+
+Ta version n'a pas à être identique. Deux choses méritent la comparaison : que `Value`
+soit un `*float64` alors que `From` n'en est pas un, et que ta table porte **à la fois**
+`0 c` et une `value` manquante.
+
 ## Le principe
 
 > Ajouter une capacité par **extension** (un nouveau `Tool`) est plus sûr que de
